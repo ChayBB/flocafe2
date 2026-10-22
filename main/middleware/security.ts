@@ -1,0 +1,584 @@
+import { Request, Response, NextFunction } from 'express';
+import expressRateLimit from 'express-rate-limit';
+import { createHash } from 'node:crypto';
+import { getDatabase, isKdsEnabled, now, parseDbTimestamp } from '../db';
+
+interface RateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+
+interface RateLimitOptions {
+  windowMs?: number;
+  max?: number;
+  message?: string;
+  skipSuccessfulRequests?: boolean;
+  /** When false, private/LAN IPs are NOT exempt — use for auth endpoints. Default: true. */
+  bypassPrivateIp?: boolean;
+}
+
+const DEFAULT_WINDOW_MS = 60 * 1000; // 1 minute
+const DEFAULT_MAX = 100;
+
+/** Canonicalizes an IP address for rate-limit bucketing so equivalent forms share budget. */
+export function normalizeIpForRateLimit(ip: string): string {
+  const lower = ip.toLowerCase();
+  return lower.startsWith('::ffff:') ? lower.substring(7) : lower;
+}
+
+/** In-memory rate limiter for local Express API keyed by canonicalized IP. */
+export function rateLimit(options: RateLimitOptions = {}) {
+  const windowMs = options.windowMs ?? DEFAULT_WINDOW_MS;
+  const max = options.max ?? DEFAULT_MAX;
+  const message = options.message ?? 'Too many requests, please try again later.';
+
+  const requests = new Map<string, RateLimitRecord>();
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const rawIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const ip = normalizeIpForRateLimit(rawIp);
+
+    // Bound in-memory table: sweep expired entries once past threshold.
+    if (requests.size > 1000) {
+      for (const [key, value] of requests.entries()) {
+        if (value.resetAt <= now) requests.delete(key);
+      }
+    }
+
+    // Bypass rate limit for local/private/Tailscale IPs unless bypassPrivateIp is false.
+    const bypassPrivateIp = options.bypassPrivateIp !== false;
+    if (bypassPrivateIp && isAllowedPrivateIp(ip)) {
+      return next();
+    }
+
+    let record = requests.get(ip);
+    if (!record || record.resetAt <= now) {
+      record = { count: 0, resetAt: now + windowMs };
+      requests.set(ip, record);
+    }
+
+    record.count += 1;
+
+    res.setHeader('RateLimit-Limit', String(max));
+    res.setHeader('RateLimit-Remaining', String(Math.max(0, max - record.count)));
+    res.setHeader('RateLimit-Reset', new Date(record.resetAt).toISOString());
+
+    if (record.count > max) {
+      return res.status(429).json({ error: message });
+    }
+
+    if (options.skipSuccessfulRequests) {
+      const originalSend = res.send.bind(res);
+      res.send = (body: any) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          record!.count = Math.max(0, record!.count - 1);
+        }
+        return originalSend(body);
+      };
+    }
+
+    next();
+  };
+}
+
+let sharedLoginAuthRateLimiter: ReturnType<typeof expressRateLimit> | null = null;
+let sharedLoginAuthRateLimiterEnvMax: string | undefined = undefined;
+
+/** Shared volume rate limiter across default login endpoints (:3001, :3002, :3003). */
+export function loginAuthRateLimit(options: { max?: number } = {}) {
+  const envMax = process.env.FLO_AUTH_RATE_LIMIT_MAX;
+  if (!options.max) {
+    if (!sharedLoginAuthRateLimiter || sharedLoginAuthRateLimiterEnvMax !== envMax) {
+      sharedLoginAuthRateLimiterEnvMax = envMax;
+      const parsedEnvMax = envMax ? parseInt(envMax, 10) : undefined;
+      sharedLoginAuthRateLimiter = expressRateLimit({
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        limit: Number.isFinite(parsedEnvMax) ? parsedEnvMax! : 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { error: 'Too many authentication attempts. Please try again later.' },
+      });
+    }
+    return sharedLoginAuthRateLimiter;
+  }
+  const parsedEnvMax = envMax ? parseInt(envMax, 10) : undefined;
+  return expressRateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: options.max ?? (Number.isFinite(parsedEnvMax) ? parsedEnvMax : 10),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many authentication attempts. Please try again later.' },
+  });
+}
+
+export function resetSharedLoginAuthRateLimiter(): void {
+  sharedLoginAuthRateLimiter = null;
+  sharedLoginAuthRateLimiterEnvMax = undefined;
+}
+
+/** Stricter rate limiter for authentication endpoints; private/LAN IPs are not exempt. */
+export function authRateLimit(options: { max?: number } = {}) {
+  const envMax = process.env.FLO_AUTH_RATE_LIMIT_MAX
+    ? parseInt(process.env.FLO_AUTH_RATE_LIMIT_MAX, 10)
+    : undefined;
+  return expressRateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: options.max ?? (Number.isFinite(envMax) ? envMax : 10),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many authentication attempts. Please try again later.' },
+  });
+}
+
+// ── Shared Failed-Login Lockout (Install-wide across all login surfaces) ───────
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+export const FAILED_LOGIN_MAX_ATTEMPTS = 5;
+export const FAILED_LOGIN_LOCKOUT_MINUTES = 15;
+
+export function checkLoginRateLimit(ip: string): { allowed: boolean; waitMinutes?: number } {
+  const canonicalIp = normalizeIpForRateLimit(ip);
+  const nowMs = Date.now();
+  let record = loginAttempts.get(canonicalIp);
+
+  if (record) {
+    if (record.lockedUntil > nowMs) {
+      const waitMinutes = Math.ceil((record.lockedUntil - nowMs) / 60000);
+      return { allowed: false, waitMinutes };
+    }
+    // If lock expired, reset
+    if (record.lockedUntil > 0 && record.lockedUntil <= nowMs) {
+      record = { count: 0, lockedUntil: 0 };
+      loginAttempts.set(canonicalIp, record);
+    }
+  }
+  return { allowed: true };
+}
+
+export function incrementFailedLogin(ip: string): number {
+  const canonicalIp = normalizeIpForRateLimit(ip);
+  const record = loginAttempts.get(canonicalIp) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= FAILED_LOGIN_MAX_ATTEMPTS) {
+    record.lockedUntil = Date.now() + FAILED_LOGIN_LOCKOUT_MINUTES * 60000;
+  }
+  loginAttempts.set(canonicalIp, record);
+  return Math.max(0, FAILED_LOGIN_MAX_ATTEMPTS - record.count);
+}
+
+export function resetSuccessfulLogin(ip: string): void {
+  const canonicalIp = normalizeIpForRateLimit(ip);
+  loginAttempts.delete(canonicalIp);
+}
+
+export function clearLoginRateLimits(): void {
+  loginAttempts.clear();
+}
+
+// ── Shared Manager PIN Rate Limiting & Concurrency Accounting ─────────────────
+export const PIN_MAX_ATTEMPTS = 5;
+export const PIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+const pinAttempts = new Map<string, { count: number; resetAt: number }>();
+const pinVerificationLocks = new Map<string, Promise<void>>();
+
+export function checkPinRateLimit(key: string): boolean {
+  const nowMs = Date.now();
+  if (pinAttempts.size > 500) {
+    for (const [k, v] of pinAttempts.entries()) {
+      if (nowMs > v.resetAt) pinAttempts.delete(k);
+    }
+  }
+  const entry = pinAttempts.get(key);
+  if (!entry || nowMs > entry.resetAt) {
+    pinAttempts.set(key, { count: 1, resetAt: nowMs + PIN_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= PIN_MAX_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
+
+export function isPinRateLimited(key: string): boolean {
+  const entry = pinAttempts.get(key);
+  if (!entry || Date.now() > entry.resetAt) {
+    pinAttempts.delete(key);
+    return false;
+  }
+  return entry.count >= PIN_MAX_ATTEMPTS;
+}
+
+export function clearPinRateLimit(key: string): void {
+  pinAttempts.delete(key);
+}
+
+export function resetPinRateLimitForTests(): void {
+  pinAttempts.clear();
+  pinVerificationLocks.clear();
+}
+
+/**
+ * Serializes PIN verification for the given rateLimitKey to ensure that
+ * simultaneous invalid requests do not execute redundant bcrypt computations
+ * in parallel before the failure counter is updated.
+ */
+export async function withPinVerificationLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const previous = pinVerificationLocks.get(key) || Promise.resolve();
+  let resolveCurrent!: () => void;
+  const current = new Promise<void>((resolve) => {
+    resolveCurrent = resolve;
+  });
+  pinVerificationLocks.set(key, current);
+
+  try {
+    await previous.catch(() => {});
+    return await fn();
+  } finally {
+    resolveCurrent();
+    if (pinVerificationLocks.get(key) === current) {
+      pinVerificationLocks.delete(key);
+    }
+  }
+}
+
+/** Shared rate limiter for static/SPA file serving with private IP bypass. */
+export function staticRouteRateLimit(options: { windowMs?: number; limit?: number } = {}) {
+  return expressRateLimit({
+    windowMs: options.windowMs ?? 60 * 1000,
+    limit: options.limit ?? 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req: Request) => isAllowedPrivateIp(req.ip || req.socket.remoteAddress || ''),
+  });
+}
+
+interface UserAuthCacheEntry {
+  isActive: boolean;
+  role: string;
+  tokensValidAfter: string | null;
+  expiresAt: number;
+}
+
+// Short cache TTL bounds how long deactivated/role-changed user JWTs persist.
+const USER_AUTH_CACHE_TTL_MS = 30 * 1000;
+const USER_AUTH_CACHE_PRUNE_INTERVAL_MS = USER_AUTH_CACHE_TTL_MS;
+
+const userAuthCache = new Map<string, UserAuthCacheEntry>();
+let lastUserAuthCachePruneAt = 0;
+
+/** Caches user active status, current role, and tokens_valid_after timestamp. */
+export function getUserAuthStatus(
+  userId: string,
+  options: { fresh?: boolean } = {},
+): { isActive: boolean; role: string; tokensValidAfter: string | null } | null {
+  const now = Date.now();
+  if (options.fresh) userAuthCache.delete(userId);
+  if (
+    userAuthCache.size > 1000 &&
+    now - lastUserAuthCachePruneAt >= USER_AUTH_CACHE_PRUNE_INTERVAL_MS
+  ) {
+    for (const [k, v] of userAuthCache.entries()) {
+      if (v.expiresAt <= now) userAuthCache.delete(k);
+    }
+    lastUserAuthCachePruneAt = now;
+  }
+
+  const cached = userAuthCache.get(userId);
+  if (!options.fresh && cached && cached.expiresAt > now) {
+    return {
+      isActive: cached.isActive,
+      role: cached.role,
+      tokensValidAfter: cached.tokensValidAfter,
+    };
+  }
+
+  const db = getDatabase();
+  const user = db
+    .prepare('SELECT is_active, role, tokens_valid_after FROM users WHERE id = ?')
+    .get(userId) as
+    | { is_active: number; role: string; tokens_valid_after: string | null }
+    | undefined;
+
+  if (!user) {
+    userAuthCache.delete(userId);
+    return null;
+  }
+
+  const entry: UserAuthCacheEntry = {
+    isActive: user.is_active === 1,
+    role: user.role,
+    tokensValidAfter: user.tokens_valid_after,
+    expiresAt: now + USER_AUTH_CACHE_TTL_MS,
+  };
+  userAuthCache.set(userId, entry);
+  return { isActive: entry.isActive, role: entry.role, tokensValidAfter: entry.tokensValidAfter };
+}
+
+/** Forces next requireAuth check for user to re-read DB instead of cache. */
+export function invalidateUserAuthCache(userId: string): void {
+  userAuthCache.delete(userId);
+}
+
+export function clearUserAuthCache(): void {
+  userAuthCache.clear();
+  lastUserAuthCachePruneAt = 0;
+}
+
+/** True if token iat predates user tokens_valid_after (e.g. after password/PIN change). */
+export function isTokenStale(
+  iat: number | undefined,
+  tokensValidAfter: string | null | undefined,
+): boolean {
+  if (!tokensValidAfter || typeof iat !== 'number') return false;
+  // tokens_valid_after is stored in UTC; compare at second resolution.
+  const tokensValidAfterSeconds = Math.floor(parseDbTimestamp(tokensValidAfter).getTime() / 1000);
+  return iat < tokensValidAfterSeconds;
+}
+
+// In-memory fallback and persistent hash store for token revocations.
+const revokedTokens = new Set<string>();
+const MAX_IN_MEMORY_REVOKED_TOKENS = 5000;
+const REVOCATION_CLEANUP_INTERVAL_MS = 60 * 1000;
+let lastRevocationCleanupAt = 0;
+
+function hashRevokedToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function cleanupExpiredRevocations(db: ReturnType<typeof getDatabase>, nowMs: number): void {
+  if (nowMs - lastRevocationCleanupAt < REVOCATION_CLEANUP_INTERVAL_MS) return;
+  db.prepare('DELETE FROM revoked_tokens WHERE expires_at <= ?').run(nowMs);
+  lastRevocationCleanupAt = nowMs;
+}
+
+export function revokeToken(token: string, verifiedExpiresAtMs?: number): void {
+  if (!token || typeof token !== 'string') return;
+
+  if (!revokedTokens.has(token)) {
+    if (revokedTokens.size >= MAX_IN_MEMORY_REVOKED_TOKENS) {
+      const firstToken = revokedTokens.values().next().value;
+      if (firstToken !== undefined) revokedTokens.delete(firstToken);
+    }
+    revokedTokens.add(token);
+  }
+
+  const expiresAt =
+    typeof verifiedExpiresAtMs === 'number' && Number.isFinite(verifiedExpiresAtMs)
+      ? verifiedExpiresAtMs
+      : null;
+  if (expiresAt === null || expiresAt <= Date.now()) return;
+
+  try {
+    const db = getDatabase();
+    const nowMs = Date.now();
+    cleanupExpiredRevocations(db, nowMs);
+    db.prepare(`
+      INSERT INTO revoked_tokens (token_hash, expires_at, revoked_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(token_hash) DO UPDATE SET
+        expires_at = excluded.expires_at,
+        revoked_at = excluded.revoked_at
+    `).run(hashRevokedToken(token), expiresAt, now());
+  } catch (error) {
+    // The in-memory fallback still blocks the token in this process. Normal
+    // authenticated requests already fail when the database is unavailable.
+    console.error('[Auth] Could not persist token revocation:', error);
+  }
+}
+
+export function isTokenRevoked(token: string): boolean {
+  if (!token || typeof token !== 'string') return true;
+  if (revokedTokens.has(token)) return true;
+
+  try {
+    const db = getDatabase();
+    const nowMs = Date.now();
+    cleanupExpiredRevocations(db, nowMs);
+    const row = db
+      .prepare('SELECT 1 AS revoked FROM revoked_tokens WHERE token_hash = ? AND expires_at > ?')
+      .get(hashRevokedToken(token), nowMs) as { revoked: number } | undefined;
+    return row?.revoked === 1;
+  } catch (error) {
+    // Fail closed: database query failure denies rather than allows token.
+    console.error('[Auth] Token revocation lookup failed; rejecting token:', error);
+    return true;
+  }
+}
+
+export function clearInMemoryRevokedTokens(): void {
+  revokedTokens.clear();
+}
+
+export function clearRevokedTokens(): void {
+  clearInMemoryRevokedTokens();
+  try {
+    getDatabase().prepare('DELETE FROM revoked_tokens').run();
+  } catch {
+    // Test cleanup may run after the database has already been closed.
+  }
+}
+
+/** Role-based authorization middleware (must follow requireAuth). */
+export function requireRole(...roles: readonly string[]) {
+  return (req: Request, res: Response, next: () => void) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!roles.includes(user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}
+
+/** Gates authenticated KDS REST endpoints behind the kds_enabled setting. */
+export function requireKdsEnabled(req: Request, res: Response, next: () => void) {
+  if (!isKdsEnabled()) {
+    return res.status(403).json({ error: 'KDS is disabled for this business' });
+  }
+  next();
+}
+
+/** Gates KDS pairing endpoints behind kds_enabled, returning 404 when disabled. */
+export function requireKdsEnabledOr404(req: Request, res: Response, next: () => void) {
+  if (!isKdsEnabled()) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+}
+
+import { URL } from 'url';
+import * as net from 'net';
+
+/** Checks if IP address is private, local, or Tailscale IP. */
+export function isAllowedPrivateIp(ip: string): boolean {
+  const version = net.isIP(ip);
+  if (!version) return false;
+
+  // IPv6: loopback is local; IPv4-mapped IPv6 is normalized to IPv4.
+  if (version === 6) {
+    if (ip === '::1') return true;
+    const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return mapped ? isAllowedPrivateIp(mapped[1]) : false;
+  }
+
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4) return false;
+  const [a, b] = parts;
+
+  // Localhost (127.0.0.0/8)
+  if (a === 127) return true;
+  // Private Class A (10.0.0.0/8)
+  if (a === 10) return true;
+  // Private Class B (172.16.0.0/12)
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // Private Class C (192.168.0.0/16)
+  if (a === 192 && b === 168) return true;
+
+  // Tailscale CGNAT (100.64.0.0/10)
+  if (a === 100 && b >= 64 && b <= 127) return true;
+
+  return false;
+}
+
+/** Expands an IPv6 literal (with an optional trailing dotted-quad) into its 8 hextets. */
+function expandIpv6Groups(ip: string): number[] | null {
+  let text = ip;
+  const dotted = text.match(/^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (dotted) {
+    const octets = dotted[2].split('.').map(Number);
+    if (octets.some((n) => n > 255)) return null;
+    const hi = ((octets[0] << 8) | octets[1]).toString(16);
+    const lo = ((octets[2] << 8) | octets[3]).toString(16);
+    text = `${dotted[1]}${hi}:${lo}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parseSide = (side: string): number[] | null => {
+    if (side === '') return [];
+    const groups: number[] = [];
+    for (const piece of side.split(':')) {
+      if (!/^[0-9a-f]{1,4}$/.test(piece)) return null;
+      groups.push(parseInt(piece, 16));
+    }
+    return groups;
+  };
+  const left = parseSide(halves[0]);
+  const right = parseSide(halves[1] ?? '');
+  if (left === null || right === null) return null;
+  const explicit = left.length + right.length;
+  if (explicit > 8) return null;
+  if (halves.length === 1) return explicit === 8 ? left : null;
+  return [...left, ...Array(8 - explicit).fill(0), ...right];
+}
+
+/** Checks if an IP address is disallowed as an outbound fetch target for SSRF protection. */
+export function isBlockedSsrfTarget(ip: string): boolean {
+  const version = net.isIP(ip);
+  if (version === 4) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+    const [a, b] = parts;
+    if (a === 0) return true; // 0.0.0.0/8 - "this network"
+    if (a === 10) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT / Tailscale
+    if (a === 127) return true; // loopback
+    if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 0) return true; // IETF protocol assignments
+    if (a === 192 && b === 168) return true; // private
+    if (a === 198 && (b === 18 || b === 19)) return true; // benchmark
+    if (a >= 224) return true; // multicast (224-239) + reserved (240-255)
+    return false;
+  }
+  if (version === 6) {
+    const normalized = ip.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return true; // loopback / unspecified
+    if (/^fe[89ab]/.test(normalized)) return true; // link-local fe80::/10
+    if (/^f[cd]/.test(normalized)) return true; // unique local fc00::/7
+    // IPv4-embedded IPv6 — validate the embedded IPv4 against the same blocklist,
+    // whichever notation carries it. WHATWG URL canonicalizes ::ffff:127.0.0.1
+    // and 0:0:0:0:0:ffff:127.0.0.1 to ::ffff:7f00:1, so a dotted-quad-only
+    // check never fires for a URL-supplied host.
+    const groups = expandIpv6Groups(normalized);
+    if (groups) {
+      const isZeros = (from: number, to: number) => groups.slice(from, to).every((g) => g === 0);
+      const embedded = `${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
+      const ipv4Mapped = isZeros(0, 5) && groups[5] === 0xffff; // ::ffff:0:0/96
+      const ipv4Compatible = isZeros(0, 6); // ::/96 (IPv4-compatible, deprecated)
+      const nat64 = groups[0] === 0x64 && groups[1] === 0xff9b && isZeros(2, 6); // 64:ff9b::/96
+      if (ipv4Mapped || ipv4Compatible || nat64) return isBlockedSsrfTarget(embedded);
+    }
+    return false;
+  }
+  return true; // unparseable — fail closed
+}
+
+export const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+
+    try {
+      const parsedOrigin = new URL(origin);
+      const hostname = parsedOrigin.hostname;
+
+      if (hostname === 'localhost' || hostname.endsWith('.local') || isAllowedPrivateIp(hostname)) {
+        return callback(null, true);
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    } catch (err) {
+      callback(new Error('Invalid origin format'));
+    }
+  },
+};
+
+/** Validates password complexity: >= 8 chars with uppercase, lowercase, and digit. */
+export function validatePassword(password: string): boolean {
+  if (!password || password.length < 8) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  return true;
+}

@@ -1,0 +1,561 @@
+# ---------------------------------------------------------------
+# FloCafe — CI Validation
+# ---------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read # required-checks-gate reads this workflow's runs to name the push that superseded it
+  contents: read
+  pull-requests: read
+
+jobs:
+  # 1. Dependency Review (Security)
+  dependency-review:
+    name: Security & Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # 2. Path Filtering
+  changes:
+    name: Path Filtering
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      kds: ${{ steps.filter.outputs.kds }}
+      db: ${{ steps.filter.outputs.db }}
+      uninstaller: ${{ steps.filter.outputs.uninstaller }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            frontend: ['frontend/**', 'package.json', 'package-lock.json', '.github/workflows/ci.yml']
+            backend: ['main/**', 'shared/**', 'scripts/**', 'dev-server.js', 'kill-ports.js', 'tests/**', 'package.json', 'package-lock.json', 'tsconfig.json', '.oxlintrc.json', '.oxfmtrc.json', 'scripts/ci/check-lint-budget.cjs', 'lint-staged.config.mjs', '.husky/**', '.github/workflows/ci.yml']
+            kds: ['main/kds-server.ts', 'main/services/kds.ts', 'main/routes/kds.ts', 'tests/kds-*.test.ts']
+            db: ['main/db.ts', 'main/migrations/**', 'tests/fixtures/upgrade-snapshots/**', 'tests/upgrade-path.test.ts']
+            uninstaller: ['scripts/uninstallers/**', 'tests/windows-uninstaller.Tests.ps1', 'tests/run-windows-uninstaller-tests.cjs', 'package.json', 'package-lock.json', '.github/workflows/ci.yml']
+            docs: ['docs/**', '*.md', 'DOCUMENTATION.md', '.markdownlint-cli2.jsonc', 'scripts/docs/**', 'frontend/**/*.md', '.github/pull_request_template.md']
+
+  # 3. Tax Safety Net
+  # This deliberately runs independently of path filtering so every push to
+  # main gets a visible status for the no-category-means-no-tax invariant.
+  tax-category-invariant:
+    name: Tax invariant — uncategorized products remain zero-tax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Uncategorized products must never charge legacy fallback tax
+        run: npm run test:tax-engine
+
+  # 4. Linux Baseline
+  linux-baseline:
+    name: Lint & Build Validation (Linux)
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.kds == 'true' || needs.changes.outputs.db == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate default test-script coverage
+        run: npm run test:script-coverage
+
+      - name: Rebuild native modules
+        run: npx @electron/rebuild -f -w better-sqlite3
+
+      - name: Backend lint and TypeScript compilation
+        run: |
+          npm run lint:backend &
+          PID_LINT=$!
+          npx tsc --noEmit &
+          PID_TSC=$!
+          wait $PID_LINT || exit 1
+          wait $PID_TSC || exit 1
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # Authoritative formatting gate: the whole touched file, against the pull request base
+      # (or the pushed range), so legacy formatting debt outside the change stays out of scope.
+      - name: Frontend lint, formatting, and lint warning budget
+        run: |
+          (cd frontend && npm run lint) &
+          PID_FELINT=$!
+          node scripts/ci/check-changed-format.cjs &
+          PID_FMT=$!
+          npm run lint:budget &
+          PID_BUDGET=$!
+          wait $PID_FELINT || exit 1
+          wait $PID_FMT || exit 1
+          wait $PID_BUDGET || exit 1
+
+      - name: Build frontend
+        run: cd frontend && npx cross-env NEXT_BUILD_MODE=desktop npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  # 4b. Linux Core Test Suite (sharded)
+  # `npm test` runs ~180 suites serially. Run the suites as 4 round-robin shards
+  # on separate runners — they run in parallel with the build/lint job above,
+  # cutting merge-ready time to under 3 minutes. Shards MUST be separate runners:
+  # several auth suites interfere when run concurrently on one machine.
+  linux-tests:
+    name: Core Test Suite (Shard ${{ matrix.shard_number }}/4)
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.kds == 'true' || needs.changes.outputs.db == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+        include:
+          - shard: 0
+            shard_number: 1
+          - shard: 1
+            shard_number: 2
+          - shard: 2
+            shard_number: 3
+          - shard: 3
+            shard_number: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules
+        run: npx @electron/rebuild -f -w better-sqlite3
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Payment method split checks (npm pretest)
+        if: matrix.shard == 0
+        run: node scripts/run-test.cjs npm run test:payment-methods-split
+
+      # These two suites live in npm pretest, which the shard runner
+      # intentionally does not execute; run them here so a schema or catalog
+      # API regression fails the PR instead of only a local `npm test`.
+      - name: Product variant schema and catalog API checks (npm pretest)
+        if: matrix.shard == 0
+        run: node scripts/run-test.cjs npm run test:product-variants-db && node scripts/run-test.cjs npm run test:product-variants-api
+
+      - name: Core test suite (shard ${{ matrix.shard }})
+        # The suite list is derived from package.json's "test" script at run
+        # time, so shard coverage cannot drift from a hand-maintained list.
+        run: xvfb-run -a --server-args='-screen 0 1280x800x24' env SHARD_TOTAL=4 SHARD_INDEX=${{ matrix.shard }} node scripts/ci/run-test-shard.cjs
+
+  # 5. Playwright E2E Sharded Workers
+  e2e-playwright-worker:
+    name: Playwright E2E (Shard ${{ matrix.shard }}/4)
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.kds == 'true' || needs.changes.outputs.db == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules
+        run: npx @electron/rebuild -f -w better-sqlite3 || npm rebuild better-sqlite3
+
+      - name: Build main backend process
+        run: npm run build
+
+      - name: Cache Next.js build
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: frontend/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/src/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-
+
+      - name: Build frontend
+        run: npm run build:frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install chromium
+
+      - name: Run renderer and printer regression suites
+        if: matrix.shard == 1
+        run: npm run test:release-regressions
+        env:
+          CI: true
+          REQUIRE_VISUAL_EVIDENCE: '1'
+          EVIDENCE_DIR: ${{ runner.temp }}/flocafe-release-regressions
+
+      - name: Run Playwright tests (shard ${{ matrix.shard }}/4)
+        working-directory: frontend
+        # This job is the browser-only layer. The Electron project has its own
+        # config and dedicated native job with an explicit display server.
+        run: npx playwright test --config=playwright.config.ts --project=chromium --shard=${{ matrix.shard }}/4 --grep-invert='FINDING:|a paid order offers a refund, and issuing it settles against the recorded sale|@ci-tier1|@ci-tier2'
+        env:
+          CI: true
+
+      - name: Run verified browser E2E Tier 1 and Tier 2 (shard ${{ matrix.shard }}/4)
+        working-directory: frontend
+        run: npx playwright test --config=playwright.config.ts --project=chromium --retries=0 --shard=${{ matrix.shard }}/4 --grep='@ci-tier1|@ci-tier2' --grep-invert='FINDING:|a paid order offers a refund, and issuing it settles against the recorded sale'
+        env:
+          CI: true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          path: frontend/playwright-report/
+          retention-days: 10
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && matrix.shard == 1
+        with:
+          name: release-regression-evidence
+          path: ${{ runner.temp }}/flocafe-release-regressions/
+          if-no-files-found: ignore
+          retention-days: 10
+
+  # 5b. End-to-End Playwright Tests Gate
+  # Satisfies the required status check in GitHub ruleset ("End-to-End Playwright Tests")
+  # by verifying that all parallel shards completed successfully.
+  e2e-playwright:
+    name: End-to-End Playwright Tests
+    needs: [changes, e2e-playwright-worker]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Verify all Playwright shards passed
+        run: |
+          changes_result="${{ needs.changes.result }}"
+          worker_result="${{ needs.e2e-playwright-worker.result }}"
+          if [ "$changes_result" != "success" ]; then
+            echo "::error::Path Filtering did not succeed (status: $changes_result); its dependents' skipped status cannot be trusted."
+            exit 1
+          fi
+          if [ "$worker_result" = "skipped" ]; then
+            echo "Playwright tests skipped via path filtering."
+            exit 0
+          fi
+          if [ "$worker_result" = "cancelled" ]; then
+            echo "::warning::Playwright E2E worker was cancelled."
+            exit 1
+          fi
+          if [ "$worker_result" != "success" ]; then
+            echo "::error::One or more Playwright E2E shards failed (status: $worker_result)."
+            exit 1
+          fi
+          echo "All Playwright E2E shards completed successfully."
+
+  # 5c. Native Electron E2E
+  # Keep this lifecycle separate from the browser webServer. The native
+  # harness owns its temporary profile, database, ports, and app services.
+  native-e2e-playwright:
+    name: Native Electron Playwright Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.kds == 'true' || needs.changes.outputs.db == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules for Electron
+        run: npx @electron/rebuild -f -w better-sqlite3 || npm rebuild better-sqlite3
+
+      - name: Build main backend process
+        run: npm run build
+
+      - name: Cache Next.js build
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: frontend/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/src/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-
+
+      - name: Build frontend
+        run: npm run build:frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Run native Electron tests under Xvfb
+        # Playwright supplies --no-sandbox for Electron on Linux. Xvfb is the
+        # required visible display; no packaged or modified app is launched.
+        # The harness hides windows by default so local runs do not pop up on a
+        # developer's desktop; CI has no desktop, and the native window-state
+        # and OS-theme tests need a shown window, so opt back in here.
+        run: xvfb-run -a --server-args='-screen 0 1280x800x24' npm run test:e2e:electron
+        env:
+          CI: true
+          FLO_E2E_SHOW_WINDOW: '1'
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: native-playwright-report
+          path: frontend/playwright-report/
+          retention-days: 10
+
+  # 6. Windows Uninstaller Pester Suite
+  windows-uninstaller:
+    name: Windows Uninstaller Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.uninstaller == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # The wrapper only uses Node built-ins and probes the Windows runtime/Pester.
+      # Do not run the application lifecycle or install its dependencies here.
+      - name: Run Windows uninstaller Pester tests
+        run: node tests/run-windows-uninstaller-tests.cjs
+
+  # 6b. Windows Contributor Tooling
+  # The full cross-platform matrix only runs on main, nightly, and dispatch, so Windows-only
+  # tooling breakage (junction handling, CRLF checkouts) reached main twice in a row. This reruns
+  # the contributor tooling suites on the same OS, path-filtered to the files they cover. It is
+  # reported but not yet a required check: the ruleset owns that list.
+  windows-tooling:
+    name: Contributor Tooling (Windows)
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The fixture links this tree in, and resolves the frontend Oxfmt from it.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Oxc contributor checks (pre-commit hook and changed-file gate)
+        run: npm run test:oxc-contributor-checks
+
+  # 7. Documentation Checks
+  # Structural checks (Markdown lint, relative links, index completeness) gate.
+  # The policy half is a ratchet: it reports development-process material and
+  # only warns until the corpus is clean.
+  docs-checks:
+    name: Documentation Checks
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint Markdown and validate relative links and index
+        run: npm run docs:check:structure
+
+      - name: Report documentation policy findings
+        run: npm run docs:check:policy
+
+  # 8. Required Checks Gate
+  # Always report a conclusion so path-filtered skips can satisfy the ruleset's
+  # required check without hiding actual job failures. A newer push cancels the
+  # in-flight run of an older push on the same ref, so this gate also sees
+  # `cancelled` results for work that was never broken. That is reported as
+  # supersession, by name, rather than as a job failure - the conclusion is
+  # unchanged and still fails, because the cancelled push never reported its
+  # required checks.
+  required-checks-gate:
+    name: Required Checks Gate
+    needs: [changes, linux-baseline, e2e-playwright, windows-uninstaller]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # The ref whose runs compete with this one under `concurrency`: the
+      # pull request's source branch, or the pushed branch for a push event.
+      CONCURRENCY_BRANCH: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - name: Verify no required job actually failed
+        run: |
+          # `changes` must actually succeed: its dependents reporting
+          # "skipped" is only trustworthy when it did.
+          offenders=""
+          changes_result="${{ needs.changes.result }}"
+          if [ "$changes_result" != "success" ]; then
+            offenders="$changes_result"
+          fi
+          for result in "${{ needs.linux-baseline.result }}" "${{ needs.e2e-playwright.result }}" "${{ needs.windows-uninstaller.result }}"; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              offenders="$offenders $result"
+            fi
+          done
+          if [ -z "$offenders" ]; then
+            exit 0
+          fi
+
+          # Only a newer push on the same ref explains a whole run of
+          # cancellations, so it is the one case worth naming. Any actual
+          # failure in the run keeps the ordinary failure report.
+          cancelled_only=true
+          for result in $offenders; do
+            if [ "$result" != "cancelled" ]; then
+              cancelled_only=false
+            fi
+          done
+          runs_json="$RUNNER_TEMP/required-checks-runs.json"
+          if [ "$cancelled_only" = true ] \
+            && gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$CONCURRENCY_BRANCH&per_page=20" > "$runs_json"; then
+            # The newest run on this ref other than this one is the push that
+            # superseded it. A re-run of an older run is not: its run number is
+            # lower, and a re-run of this run keeps the same id.
+            newer_push="$(node - "$runs_json" "$GITHUB_RUN_ID" "$GITHUB_RUN_NUMBER" "$CONCURRENCY_BRANCH" <<'NODE'
+          const fs = require('node:fs');
+          const [, , file, runId, runNumber, branch] = process.argv;
+          let payload = {};
+          try {
+            payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch {
+            process.exit(0);
+          }
+          const newer = (payload.workflow_runs || [])
+            .filter((run) => run.head_branch === branch && String(run.id) !== runId && run.run_number > Number(runNumber))
+            .sort((a, b) => b.run_number - a.run_number)[0];
+          if (newer) console.log(`${newer.head_sha} ${newer.html_url}`);
+          NODE
+          )"
+            if [ -n "$newer_push" ]; then
+              echo "::notice::Superseded: a newer push to $CONCURRENCY_BRANCH (${newer_push%% *}) cancelled this run's required checks mid-flight, so nothing here failed."
+              echo "::error::This push was superseded by a newer push and never reported its required checks, so the gate still fails. Read the newer run instead: ${newer_push#* }"
+              exit 1
+            fi
+          fi
+
+          # Report the blocking status, exactly as before. `changes` leads
+          # because its dependents' "skipped" status is only trustworthy when
+          # it succeeded.
+          if [ "$changes_result" != "success" ]; then
+            echo "::error::Path Filtering did not succeed (status: $changes_result); its dependents' skipped status cannot be trusted."
+            exit 1
+          fi
+          for result in $offenders; do
+            echo "::error::A required job did not succeed (status: $result)."
+            break
+          done
+          exit 1

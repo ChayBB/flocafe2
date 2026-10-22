@@ -1,0 +1,528 @@
+import { test, expect } from '@playwright/test';
+import { E2E_BASE_URL as BASE, E2E_KDS_BASE_URL } from './helpers/urls';
+import {
+  emitFixtureWindowState,
+  injectElectronFixture,
+  readFixtureActions,
+  readOpenedMenuEntries,
+} from './helpers/electron-fixture';
+
+/**
+ * Platform test-matrix rows for the custom title-bar work (Refs #457/#462)
+ * that are verifiable against the LAN/browser build:
+ *
+ *  - Browser/LAN at multiple viewports: zero Electron-only title-bar markup
+ *    and unchanged viewport-top sidebar layout (matrix row 4).
+ *  - Sidebar-offset regression from #504: on every dashboard route state
+ *    (expanded and collapsed/rail) at md+ breakpoints, the browser build
+ *    keeps the fixed sidebar pinned to the viewport top, while forcing the
+ *    desktop capability flag offsets it below the 40px title bar (row 5).
+ *
+ * These rows run in plain Chromium against the static export; the Electron
+ * presentation rows live in docs/architecture/desktop-build.md with their own
+ * evidence (unit suites + runtime probes). A single login per test keeps the
+ * shared e2e server's login rate limit (10 POSTs / 15 min) safe.
+ */
+
+const VIEWPORTS = [
+  { name: 'md 1024x768', width: 1024, height: 768 },
+  { name: 'lg 1440x900', width: 1440, height: 900 },
+  { name: 'xl 1920x1080', width: 1920, height: 1080 },
+] as const;
+
+test('browser/LAN has zero title-bar markup and unchanged layout at md+ viewports', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: VIEWPORTS[0].width, height: VIEWPORTS[0].height });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+    const dashboardRoutes = [
+      { name: 'POS', url: `${BASE}/pos` },
+      { name: 'settings', url: `${BASE}/settings` },
+      { name: 'KDS', url: `${E2E_KDS_BASE_URL}/kds` },
+    ];
+    for (const route of dashboardRoutes) {
+      await page.goto(route.url);
+      const label = `${viewport.name} ${route.name}`;
+
+      // Capability-based detection must keep all Electron-only chrome out of
+      // the browser/LAN DOM at every breakpoint.
+      expect(
+        await page.evaluate(() => Boolean(window.electronAPI)),
+        `${label}: capability absent`,
+      ).toBe(false);
+      await expect(page.getByTestId('desktop-title-bar'), label).toHaveCount(0);
+      await expect(page.getByTestId('desktop-drag-surface'), label).toHaveCount(0);
+      await expect(page.getByTestId('desktop-application-menu'), label).toHaveCount(0);
+      await expect(page.locator('.flo-title-bar'), label).toHaveCount(0);
+      await expect(page.locator('.flo-title-bar__fallback-controls'), label).toHaveCount(0);
+      await expect(page.locator('html'), `${label}: no desktop CSS flag`).not.toHaveAttribute(
+        'data-flo-desktop-titlebar',
+      );
+
+      // Unchanged layout contract: the CSS variable that offsets fixed app
+      // chrome below the title bar stays at its browser default.
+      const sidebarBlockStart = await page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--flo-sidebar-block-start')
+          .trim(),
+      );
+      expect(sidebarBlockStart, `${label}: no title-bar offset`).toBe('0px');
+    }
+  }
+});
+
+test('sidebar offset regression (#504): expanded/collapsed states at md+ viewports', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: VIEWPORTS[0].width, height: VIEWPORTS[0].height });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  const assertViewportTopGeometry = async (label: string, viewportHeight: number) => {
+    const sidebar = page.locator('[data-slot="sidebar-container"]');
+    const box = await sidebar.boundingBox();
+    expect(box, `${label}: sidebar has bounds`).not.toBeNull();
+    expect(box!.y, `${label}: sidebar starts at viewport top`).toBe(0);
+    expect(box!.height, `${label}: sidebar spans the viewport`).toBeCloseTo(viewportHeight, 0);
+    const computed = await sidebar.evaluate((element) => ({
+      top: getComputedStyle(element).top,
+      insetBlockStart: getComputedStyle(element).insetBlockStart,
+    }));
+    expect(parseFloat(computed.insetBlockStart), `${label}: block-start inset stays 0`).toBe(0);
+  };
+
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const routes = [
+      { name: 'POS', url: `${BASE}/pos` },
+      { name: 'settings', url: `${BASE}/settings` },
+      { name: 'KDS', url: `${E2E_KDS_BASE_URL}/kds` },
+    ];
+    for (const route of routes) {
+      await page.goto(route.url);
+      const sidebar = page.locator('[data-slot="sidebar-container"]');
+      const sidebarState = sidebar.locator('xpath=ancestor::*[@data-slot="sidebar"]');
+      await expect(sidebar, `${viewport.name} ${route.name}: sidebar renders`).toBeVisible();
+
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: sidebar starts expanded`,
+      ).toHaveAttribute('data-state', 'expanded');
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: expanded sidebar has no collapse mode`,
+      ).toHaveAttribute('data-collapsible', '');
+      await assertViewportTopGeometry(`${viewport.name} ${route.name} expanded`, viewport.height);
+
+      // Collapse to rail (the same toggle #505 had to keep below the bar) and
+      // re-check; Control+b is the app's sidebar shortcut.
+      await page.keyboard.press('Control+b');
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: shortcut collapses sidebar`,
+      ).toHaveAttribute('data-state', 'collapsed');
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: collapsed sidebar uses icon mode`,
+      ).toHaveAttribute('data-collapsible', 'icon');
+      await expect(
+        sidebar,
+        `${viewport.name} ${route.name}: rail stays visible when collapsed`,
+      ).toBeVisible();
+      await assertViewportTopGeometry(`${viewport.name} ${route.name} collapsed`, viewport.height);
+      await page.keyboard.press('Control+b');
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: shortcut expands sidebar`,
+      ).toHaveAttribute('data-state', 'expanded');
+      await expect(
+        sidebarState,
+        `${viewport.name} ${route.name}: expanded sidebar clears collapse mode`,
+      ).toHaveAttribute('data-collapsible', '');
+    }
+  }
+
+  // Desktop-path regression guard (CSS wiring only, capability forced): the
+  // flag must move the fixed sidebar below the 40px bar at md+ widths.
+  const sidebar = page.locator('[data-slot="sidebar-container"]');
+  const forced = await sidebar.evaluate((element) => {
+    const html = document.documentElement;
+    try {
+      html.dataset.floDesktopTitlebar = 'true';
+      const rect = element.getBoundingClientRect();
+      return { y: rect.y, height: rect.height };
+    } finally {
+      delete html.dataset.floDesktopTitlebar;
+    }
+  });
+  expect(forced.y, 'desktop flag offsets sidebar below title bar').toBeCloseTo(40, 0);
+});
+
+test('macOS titlebar safe-area styling reserves leading space for traffic lights', async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/auth/login`);
+  const paddingLeft = await page.evaluate(() => {
+    const html = document.documentElement;
+    const testHeader = document.createElement('header');
+    testHeader.className = 'flo-title-bar';
+    const safeArea = document.createElement('div');
+    safeArea.className = 'flo-title-bar__safe-area';
+    testHeader.appendChild(safeArea);
+    document.body.appendChild(testHeader);
+    try {
+      html.dataset.floPlatform = 'darwin';
+      return getComputedStyle(safeArea).paddingLeft;
+    } finally {
+      delete html.dataset.floPlatform;
+      testHeader.remove();
+    }
+  });
+  expect(paddingLeft, 'macOS safe area reserves 96px for traffic lights').toBe('96px');
+});
+
+test('sidebar renders profile dropup trigger and supports drag rail resizing', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  // Sidebar footer profile dropup trigger renders (the footer also has a
+  // quick theme-toggle button, so scope to the dropdown trigger specifically).
+  const profileButton = page.locator(
+    '[data-sidebar="footer"] button[data-sidebar="menu-button"][data-slot="dropdown-menu-trigger"]',
+  );
+  await expect(profileButton).toBeVisible();
+
+  // Rail has cursor-col-resize
+  const rail = page.locator('[data-sidebar="rail"]');
+  await expect(rail).toHaveClass(/cursor-col-resize/);
+});
+
+test('browser Electron fixture exposes the complete renderer API and explicit initial focus', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, { platform: 'darwin', focused: false });
+  await page.goto(`${BASE}/auth/login`);
+
+  const contract = await page.evaluate(async () => ({
+    keys: Object.keys(window.electronAPI || {}).sort(),
+    focus: document.documentElement.dataset.floWindowFocused,
+    appInfo: await window.electronAPI?.getAppInfo(),
+    updateStatus: await window.electronAPI?.getUpdateStatus(),
+  }));
+  expect(contract.keys).toEqual([
+    'backupDatabase',
+    'checkForUpdates',
+    'dbApplySafeFixes',
+    'dbHealthCheck',
+    'dbInitialize',
+    'downloadUpdate',
+    'getAppInfo',
+    'getApplicationMenu',
+    'getAutoUpdateCheck',
+    'getBetaChannel',
+    'getKdsInfo',
+    'getLogTail',
+    'getMasterPinStatus',
+    'getPrinters',
+    'getSettings',
+    'getStatus',
+    'getUpdateStatus',
+    'getWindowState',
+    'onMenuAction',
+    'onUpdateStatus',
+    'onWindowStateChanged',
+    'openApplicationMenu',
+    'openKdsWindow',
+    'openWhatsAppShare',
+    'pickRestoreFile',
+    'platform',
+    'rasterizeKotDocument',
+    'rasterizePrintDocument',
+    'restartAndInstall',
+    'restoreBackup',
+    'setAutoUpdateCheck',
+    'setBetaChannel',
+    'setSetting',
+    'setThemeEffective',
+    'windowAction',
+    'windowReady',
+  ]);
+  expect(contract.focus).toBe('false');
+  expect(contract.appInfo).toMatchObject({ version: 'e2e', platform: 'darwin' });
+  expect(contract.updateStatus).toMatchObject({ status: 'dev-mode', info: { version: 'e2e' } });
+});
+
+test('browser Electron fixture drives authenticated title-bar and fallback controls', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, {
+    platform: 'win32',
+    titleBarMode: 'html-fallback',
+    focused: true,
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+  await expect(page.locator('[data-slot="sidebar-container"]')).toBeVisible();
+  await expect(page.getByTestId('desktop-title-bar')).toBeVisible();
+  await expect(page.locator('.flo-title-bar__fallback-controls')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-focused', 'true');
+
+  await page.locator('.flo-title-bar__fallback-button').first().click();
+  await expect.poll(() => readFixtureActions(page)).toContain('minimize');
+});
+
+test('browser Electron fixture restores the Windows title-bar application menu', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, { platform: 'win32', focused: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  const menu = page.getByTestId('desktop-application-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('button')).toHaveText([
+    'File',
+    'Edit',
+    'Orders',
+    'Reports',
+    'Settings',
+    'Window',
+    'Help',
+    'Developer',
+  ]);
+
+  // A click reports the entry key and the label's bottom-edge viewport
+  // position. Electron anchors the popup's top-left at that content-bounds-
+  // relative point, so anchoring on the bottom edge drops the submenu below the
+  // label instead of drawing it over the label.
+  const fileButton = menu.getByRole('menuitem', { name: 'File' });
+  const fileBox = await fileButton.boundingBox();
+  await fileButton.click();
+  await expect
+    .poll(async () => (await readOpenedMenuEntries(page)).map((entry) => entry.key))
+    .toEqual(['0']);
+  const [opened] = await readOpenedMenuEntries(page);
+  expect(opened.x).toBeCloseTo(fileBox!.x, 0);
+  expect(opened.y).toBeCloseTo(fileBox!.y + fileBox!.height, 0);
+  expect(Number.isInteger(opened.x), 'popup x coordinate is integer').toBe(true);
+  expect(Number.isInteger(opened.y), 'popup y coordinate is integer').toBe(true);
+
+  // Clicking Edit opens with integer coordinates (guards against Windows float coordinate regression)
+  const editButton = menu.getByRole('menuitem', { name: 'Edit' });
+  await editButton.click();
+  await expect
+    .poll(async () => (await readOpenedMenuEntries(page)).map((entry) => entry.key))
+    .toEqual(['0', '1']);
+  const [, editOpened] = await readOpenedMenuEntries(page);
+  expect(Number.isInteger(editOpened.x), 'Edit popup x coordinate is integer').toBe(true);
+  expect(Number.isInteger(editOpened.y), 'Edit popup y coordinate is integer').toBe(true);
+
+  // The row lives inside the title bar's safe area, so the native caption
+  // buttons on the trailing edge stay clear of it.
+  expect(
+    await menu.evaluate((element) => Boolean(element.closest('.flo-title-bar__safe-area'))),
+  ).toBe(true);
+
+  // The bar itself is a drag region, so every restored label must land inside
+  // an existing no-drag region or it could not be clicked.
+  const regions = await menu
+    .locator('button')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => getComputedStyle(node).getPropertyValue('-webkit-app-region')),
+    );
+  expect(regions.length).toBe(8);
+  expect([...new Set(regions)], 'every menu label is a no-drag region').toEqual(['no-drag']);
+});
+
+test('Windows title-bar menu never overlaps the identity from the minimum window width up and adapts responsively', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, { platform: 'win32', focused: true });
+  // 1024 is the Electron minWidth, so the narrowest a real window can get is
+  // the tightest case for the menu row against the dead-centered identity.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  const menu = page.getByTestId('desktop-application-menu');
+  const identity = page.locator('.flo-title-bar__identity');
+  await expect(menu).toBeVisible();
+  // Dead-center identity remains visible across all breakpoints
+  await expect(identity).toBeVisible();
+
+  // A hydrated long store name can widen the centered identity after the
+  // title-bar observer is mounted, so the menu must recalculate its width.
+  const visibleMenuItems = menu.locator('button:not([data-testid])');
+  const initialVisibleMenuItemCount = await visibleMenuItems.count();
+  await identity.evaluate((element) => {
+    (element as HTMLElement).style.inlineSize = '24rem';
+  });
+  await expect.poll(() => visibleMenuItems.count()).toBeLessThan(initialVisibleMenuItemCount);
+
+  const titleBar = page.getByTestId('desktop-title-bar');
+  const [titleBarBox, menuBox1024, identityBox1024] = await Promise.all([
+    titleBar.boundingBox(),
+    menu.boundingBox(),
+    identity.boundingBox(),
+  ]);
+  expect(
+    menuBox1024!.x + menuBox1024!.width,
+    'menu row ends before the centered identity starts at 1024px',
+  ).toBeLessThanOrEqual(identityBox1024!.x + 1);
+
+  expect(identityBox1024!.y, 'identity is not pushed up out of title bar').toBeGreaterThanOrEqual(
+    titleBarBox!.y + 2,
+  );
+  expect(
+    identityBox1024!.y + identityBox1024!.height,
+    'identity is not pushed down out of title bar',
+  ).toBeLessThanOrEqual(titleBarBox!.y + titleBarBox!.height - 2);
+
+  // At this width the long identity requires overflow, which opens the hidden submenus.
+  const overflowBtn = page.getByTestId('desktop-application-menu-overflow');
+  await expect(overflowBtn).toBeVisible();
+  await overflowBtn.click();
+  await expect
+    .poll(async () =>
+      (await readOpenedMenuEntries(page)).some((entry) => entry.key.startsWith('overflow:')),
+    )
+    .toBe(true);
+
+  // At a very compact width (e.g. 360px), it collapses into the hamburger menu
+  await page.setViewportSize({ width: 360, height: 768 });
+  const hamburgerBtn = page.getByTestId('desktop-application-menu-hamburger');
+  await expect(hamburgerBtn).toBeVisible();
+  await hamburgerBtn.click();
+  await expect
+    .poll(async () =>
+      (await readOpenedMenuEntries(page)).some((entry) => entry.key === 'hamburger'),
+    )
+    .toBe(true);
+
+  await identity.evaluate((element) => {
+    (element as HTMLElement).style.removeProperty('inline-size');
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(identity).toBeVisible();
+  await expect(menu.locator('button')).toHaveCount(8);
+  const [menuBox, identityBox] = await Promise.all([menu.boundingBox(), identity.boundingBox()]);
+  expect(
+    menuBox!.x + menuBox!.width,
+    'menu row ends before the centered identity starts at 1440px',
+  ).toBeLessThanOrEqual(identityBox!.x + 1);
+});
+
+test('macOS keeps the native application menu and renders no title-bar menu row', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, { platform: 'darwin', focused: true });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  await expect(page.getByTestId('desktop-title-bar')).toBeVisible();
+  await expect(page.getByTestId('desktop-application-menu')).toHaveCount(0);
+});
+
+test('macOS native fullscreen removes traffic-light inset and restores on exit (#1153)', async ({
+  page,
+}) => {
+  await injectElectronFixture(page, {
+    platform: 'darwin',
+    focused: true,
+    windowState: { isMaximized: false, isFullScreen: true },
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${BASE}/auth/login`);
+  await page.locator('#email').fill('owner@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/pos/, { timeout: 20000 });
+
+  const titleBar = page.getByTestId('desktop-title-bar');
+  await expect(titleBar).toBeVisible();
+  const safeArea = titleBar.locator('.flo-title-bar__safe-area');
+  await expect(safeArea).toBeVisible();
+
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-fullscreen', 'true');
+  const fullscreenInitialPadding = await safeArea.evaluate(
+    (el) => getComputedStyle(el).paddingLeft,
+  );
+  expect(fullscreenInitialPadding, 'initial fullscreen padding is 12px').toBe('12px');
+
+  await emitFixtureWindowState(page, { isFullScreen: false, isMaximized: false });
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-fullscreen', 'false');
+  const windowedPadding = await safeArea.evaluate((el) => getComputedStyle(el).paddingLeft);
+  expect(windowedPadding, 'normal windowed padding restores 96px inset').toBe('96px');
+
+  await emitFixtureWindowState(page, { isFullScreen: false, isMaximized: true });
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-fullscreen', 'false');
+  const maximizedPadding = await safeArea.evaluate((el) => getComputedStyle(el).paddingLeft);
+  expect(maximizedPadding, 'maximized macOS window retains 96px inset').toBe('96px');
+
+  await emitFixtureWindowState(page, { isFullScreen: true, isMaximized: false });
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-fullscreen', 'true');
+  const reenteredFullscreenPadding = await safeArea.evaluate(
+    (el) => getComputedStyle(el).paddingLeft,
+  );
+  expect(reenteredFullscreenPadding, 're-entering fullscreen removes 96px inset').toBe('12px');
+
+  await emitFixtureWindowState(page, { isFullScreen: false, isMaximized: false });
+  await expect(page.locator('html')).toHaveAttribute('data-flo-window-fullscreen', 'false');
+  const reexitedPadding = await safeArea.evaluate((el) => getComputedStyle(el).paddingLeft);
+  expect(reexitedPadding, 'exiting fullscreen restores 96px inset').toBe('96px');
+
+  for (const nonMacPlatform of ['win32', 'linux'] as const) {
+    const [winPadding, fullPadding] = await page.evaluate((platform) => {
+      const html = document.documentElement;
+      const testHeader = document.createElement('header');
+      testHeader.className = 'flo-title-bar';
+      const testSafeArea = document.createElement('div');
+      testSafeArea.className = 'flo-title-bar__safe-area';
+      testHeader.appendChild(testSafeArea);
+      document.body.appendChild(testHeader);
+      try {
+        html.dataset.floPlatform = platform;
+        html.dataset.floWindowFullscreen = 'false';
+        const pWindowed = getComputedStyle(testSafeArea).paddingLeft;
+        html.dataset.floWindowFullscreen = 'true';
+        const pFullscreen = getComputedStyle(testSafeArea).paddingLeft;
+        return [pWindowed, pFullscreen];
+      } finally {
+        html.dataset.floPlatform = 'darwin';
+        html.dataset.floWindowFullscreen = 'false';
+        testHeader.remove();
+      }
+    }, nonMacPlatform);
+    expect(winPadding, `${nonMacPlatform} windowed padding is 12px`).toBe('12px');
+    expect(fullPadding, `${nonMacPlatform} fullscreen padding is 12px`).toBe('12px');
+  }
+});

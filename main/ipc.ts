@@ -1,0 +1,869 @@
+import { ipcMain, dialog, app, BrowserWindow, Menu, shell } from 'electron';
+import * as path from 'path';
+import * as fs from 'fs';
+import {
+  getDatabase,
+  createBackup,
+  restoreBackup,
+  now,
+  getCurrentSchemaVersion,
+  getSchemaVersionFromBackup,
+  resetDatabaseWithBackup,
+  withDatabaseMaintenanceLock,
+  withDatabaseRequest,
+  isManagedBackupFile,
+} from './db';
+import { clearInMemoryRevokedTokens, clearUserAuthCache } from './middleware/security';
+import { getLocalIP } from './server';
+import { clearJWTSecretCache } from './security/jwt-secret';
+import { getKdsPort } from './kds-server';
+import { authorizeMasterPin, isMasterPinAvailable, isMasterPinSet } from './services/master-pin';
+import {
+  clearRestoreFileSelection,
+  rememberRestoreFileSelection,
+} from './services/restore-file-selection';
+import { runHealthCheck, applySafeFixes } from './services/schema-health';
+import { getStatus as getWhatsAppStatus, sanitizeLogText } from './services/whatsapp';
+import { createKdsWindow, applyWindowControlAction } from './window-options';
+import {
+  isApplicationMenuSender,
+  listApplicationMenuEntries,
+  openApplicationMenuSubmenu,
+} from './application-menu';
+import {
+  isCurrentRendererFrame,
+  markWindowRendererReady,
+  registerRendererDocument,
+} from './window-readiness';
+import { isThemeMode, appendThemeQueryParam } from './title-bar-theme';
+import { isOrdersLayout } from './routes/settings';
+import { googleDrive } from './services/google-drive';
+import { rasterizeKotDocumentForWebUsb, rasterizePrintDocumentForWebUsb } from './printers/thermal';
+import { isKotDocument, isPrintDocument } from '../shared/print/document';
+import { isSafeWhatsAppShareUrl } from './security/url-allowlist';
+import log from 'electron-log/main';
+import { randomUUID } from 'crypto';
+import { cloudSync } from './services/cloud-sync';
+import { readPostHogBootstrap } from './services/posthog';
+
+// Cap on the log content attached to a support ticket (most recent bytes only).
+const LOG_TAIL_MAX_BYTES = 200_000;
+// Cap on renderer-built print HTML accepted for PDF export.
+const MAX_PDF_HTML_BYTES = 2_000_000;
+// Prefer excluding log lines older than this from a support-ticket attachment.
+const LOG_TAIL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// Matches electron-log's default line prefix, e.g. "[2026-09-13 10:15:30.123] [info] ...".
+const LOG_LINE_TIMESTAMP_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/;
+
+// Settings keys the renderer may write without a permission check.
+// Everything else (currency, country, tax_scheme, business profile, ...) is
+// permission-gated on the HTTP API and must stay there.
+const ALLOWED_IPC_KEYS = new Set(['theme_mode', 'orders_layout']);
+
+const SENSITIVE_SETTING_KEYS = new Set([
+  'jwt_secret',
+  'cloud_api_key',
+  'cloud_device_secret',
+  'cloud_deletion_status_token',
+  'cloud_last_error',
+]);
+
+function maskSetting(key: string, value: string): string {
+  if (key === 'cloud_last_error') return value ? 'Cloud service request failed' : '';
+  if (!SENSITIVE_SETTING_KEYS.has(key)) return value;
+  return value ? `****${value.slice(-4)}` : '';
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+const MIN_RASTER_COLUMNS = 32;
+const MAX_RASTER_COLUMNS = 48;
+
+function isValidRasterColumns(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= MIN_RASTER_COLUMNS &&
+    value <= MAX_RASTER_COLUMNS
+  );
+}
+
+const TRUSTED_LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/** Verifies that a URL has http: scheme, no credentials, loopback host, and matches the configured port. */
+export function isTrustedLoopbackUrl(rawUrl: string, port: number): boolean {
+  if (typeof port !== 'number' || !Number.isSafeInteger(port) || port <= 0) {
+    return false;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' || parsed.username || parsed.password) {
+      return false;
+    }
+    const parsedPort = parsed.port ? Number(parsed.port) : 80;
+    if (parsedPort !== port) {
+      return false;
+    }
+    return TRUSTED_LOOPBACK_HOSTNAMES.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Verifies that IPC sender origin is the localhost-served POS renderer. */
+export function isTrustedSender(event: Pick<Electron.IpcMainInvokeEvent, 'sender'>): boolean {
+  try {
+    const url = new URL(event.sender?.getURL?.() ?? '');
+    if (url.protocol !== 'http:' || url.username || url.password) return false;
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+/** Verifies that IPC sender is the active main BrowserWindow, current top-level frame, and exact local app origin. */
+export function isTrustedMainWindowSender(
+  event: Pick<Electron.IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
+  mainWindowOrGetter: BrowserWindow | null | (() => BrowserWindow | null),
+  port: number,
+  browserWindowClass: {
+    fromWebContents: (sender: Electron.WebContents) => BrowserWindow | null;
+  } = BrowserWindow,
+): boolean {
+  if (typeof port !== 'number' || !Number.isSafeInteger(port) || port <= 0) {
+    return false;
+  }
+
+  const mainWindow =
+    typeof mainWindowOrGetter === 'function' ? mainWindowOrGetter() : mainWindowOrGetter;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+
+  if (!event || !event.sender) {
+    return false;
+  }
+
+  let senderWindow: BrowserWindow | null = null;
+  try {
+    senderWindow = browserWindowClass.fromWebContents(event.sender);
+  } catch {
+    return false;
+  }
+  if (!senderWindow || senderWindow !== mainWindow) {
+    return false;
+  }
+
+  let currentFrame: Electron.WebFrameMain | null = null;
+  try {
+    currentFrame = event.sender.mainFrame;
+  } catch {
+    return false;
+  }
+  if (!isCurrentRendererFrame(event.senderFrame, currentFrame)) {
+    return false;
+  }
+
+  const senderUrl = event.sender?.getURL?.() ?? '';
+  if (!isTrustedLoopbackUrl(senderUrl, port)) {
+    return false;
+  }
+
+  const frameUrl = (event.senderFrame as { url?: string } | null | undefined)?.url;
+  if (typeof frameUrl === 'string' && !isTrustedLoopbackUrl(frameUrl, port)) {
+    return false;
+  }
+
+  return true;
+}
+
+type MainWindowGetter = () => BrowserWindow | null;
+type IpcHandler<Args extends unknown[] = unknown[]> = (
+  event: Electron.IpcMainInvokeEvent,
+  ...args: Args
+) => unknown | Promise<unknown>;
+
+/** Preload origin check before Chromium has committed localhost URL. */
+function isEarlyMainWindowSender(
+  event: Pick<Electron.IpcMainEvent, 'sender'>,
+  getMainWindow?: MainWindowGetter,
+): boolean {
+  if (!getMainWindow) return false;
+  try {
+    const url = event.sender?.getURL?.() ?? '';
+    if (url !== '' && url !== 'about:blank') return false;
+    const expectedWindow = getMainWindow();
+    return Boolean(
+      expectedWindow &&
+      !expectedWindow.isDestroyed() &&
+      BrowserWindow.fromWebContents(event.sender) === expectedWindow,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function handle<Args extends unknown[]>(channel: string, listener: IpcHandler<Args>): void {
+  ipcMain.handle(channel, (event: Electron.IpcMainInvokeEvent, ...args: Args) => {
+    if (!isTrustedSender(event)) return { error: 'Unauthorized sender' };
+    return listener(event, ...args);
+  });
+}
+
+export function registerIpcHandlers(
+  shutdownSignal?: AbortSignal,
+  getMainWindow?: MainWindowGetter,
+  showMainWindow: (window: BrowserWindow) => boolean = () => false,
+  getCurrentEffectiveIsDark?: () => boolean,
+): void {
+  ipcMain.on('window-document', (event, documentNonce: unknown) => {
+    let currentFrame: Electron.WebFrameMain | null = null;
+    try {
+      currentFrame = event.sender.mainFrame;
+    } catch {
+      event.returnValue = { success: false, error: 'Invalid document registration' };
+      return;
+    }
+    if (!isCurrentRendererFrame(event.senderFrame, currentFrame)) {
+      event.returnValue = { success: false, error: 'Invalid document registration' };
+      return;
+    }
+    if (!isTrustedSender(event) && !isEarlyMainWindowSender(event, getMainWindow)) {
+      event.returnValue = { error: 'Unauthorized sender' };
+      return;
+    }
+    event.returnValue = registerRendererDocument(documentNonce)
+      ? { success: true }
+      : { success: false, error: 'Invalid document nonce' };
+  });
+
+  // Opens the native picker for "Restore from a file...". It only chooses a
+  // path; the restore itself is authorised over HTTP by the session that holds
+  // database.manage, so this handler performs no destructive step and is not
+  // Master-PIN gated. The picked path is bound to a single-use token.
+  handle('pick-restore-file', async () => {
+    const result = await dialog.showOpenDialog({
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths.length) return { canceled: true };
+    const selection = rememberRestoreFileSelection(result.filePaths[0]);
+    return { canceled: false, path: selection.path, token: selection.token };
+  });
+
+  // Database backup/restore
+  handle('backup-database', async (event, pin?: string) => {
+    const auth = authorizeMasterPin(pin, 'ipc:backup');
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    try {
+      console.log('[IPC] backup-database: Starting...');
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const result = await dialog.showSaveDialog({
+        defaultPath: path.join(app.getPath('documents'), `flo-backup-${timestamp}.db`),
+        filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: 'Cancelled' };
+      }
+
+      const { path: backupPath, schemaVersion } = await createBackup(
+        result.filePath,
+        shutdownSignal,
+      );
+
+      console.log('[IPC] backup-database: Complete:', backupPath);
+      return {
+        success: true,
+        path: backupPath,
+        schemaVersion,
+        message: `Backup saved (Schema v${schemaVersion})`,
+      };
+    } catch (error: unknown) {
+      console.error('[IPC] backup-database: Error:', error);
+      return { success: false, error: getErrorMessage(error) };
+    }
+  });
+
+  handle('restore-backup', async (event, pin?: string, presetBackupPath?: string) => {
+    clearRestoreFileSelection();
+    const auth = authorizeMasterPin(pin, 'ipc:restore');
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    try {
+      // A specific backup (e.g. picked from the Backup History list, #120)
+      // skips the native file picker entirely.
+      let backupPath = presetBackupPath;
+      if (!backupPath) {
+        const result = await dialog.showOpenDialog({
+          filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+          properties: ['openFile'],
+        });
+
+        if (result.canceled || !result.filePaths.length) {
+          return { success: false, error: 'Cancelled' };
+        }
+        backupPath = result.filePaths[0];
+      } else if (!fs.existsSync(backupPath)) {
+        return { success: false, error: 'Backup file no longer exists' };
+      } else if (!isManagedBackupFile(backupPath)) {
+        return { success: false, error: 'Restore source must be a Flo-managed backup file' };
+      }
+
+      const backupVersion = getSchemaVersionFromBackup(backupPath);
+
+      if (backupVersion === null) {
+        return {
+          success: false,
+          error:
+            'Invalid backup file: missing schema version metadata. This backup may have been created with an older version of FloDesktop.',
+        };
+      }
+
+      const versionMismatch = backupVersion !== getCurrentSchemaVersion();
+
+      if (versionMismatch) {
+        const confirmResult = await dialog.showMessageBox({
+          type: 'warning',
+          buttons: ['Restore Anyway', 'Cancel'],
+          defaultId: 1,
+          title: 'Schema Version Mismatch',
+          message: `Backup was created with Schema v${backupVersion}`,
+          detail: `Current database uses Schema v${getCurrentSchemaVersion()}.\n\nRestoring will import data only (common fields) to preserve new database structure.\n\nDo you want to continue?`,
+        });
+
+        if (confirmResult.response !== 0) {
+          return { success: false, error: 'Cancelled' };
+        }
+      }
+
+      await googleDrive.prepareForDatabaseRestore();
+      try {
+        if (versionMismatch) {
+          const restoreResult = await withDatabaseMaintenanceLock(
+            (signal) => restoreBackup(backupPath, false, signal),
+            shutdownSignal,
+          );
+          const cleanup = restoreResult.success ? googleDrive.completeDatabaseRestore() : null;
+          clearUserAuthCache();
+          clearInMemoryRevokedTokens();
+          clearJWTSecretCache();
+          const cleanupPending =
+            restoreResult.cleanupPending === true || cleanup?.cleanupPending === true;
+          return {
+            success: restoreResult.success,
+            mode: restoreResult.mode,
+            backupVersion,
+            currentVersion: getCurrentSchemaVersion(),
+            tablesRestored: restoreResult.tablesRestored,
+            message: restoreResult.success
+              ? `Restored ${restoreResult.tablesRestored} tables (data-only mode due to version mismatch)`
+              : `Restore failed: ${restoreResult.error}`,
+            error: restoreResult.error,
+            cleanupPending,
+          };
+        }
+
+        const restoreResult = await withDatabaseMaintenanceLock(
+          (signal) => restoreBackup(backupPath, true, signal),
+          shutdownSignal,
+        );
+        const cleanup = restoreResult.success ? googleDrive.completeDatabaseRestore() : null;
+        clearUserAuthCache();
+        clearInMemoryRevokedTokens();
+        clearJWTSecretCache();
+        const cleanupPending =
+          restoreResult.cleanupPending === true || cleanup?.cleanupPending === true;
+        return {
+          success: restoreResult.success,
+          mode: restoreResult.mode,
+          backupVersion,
+          currentVersion: getCurrentSchemaVersion(),
+          tablesRestored: restoreResult.tablesRestored,
+          message: restoreResult.success
+            ? 'Database restored successfully'
+            : `Restore failed: ${restoreResult.error}`,
+          error: restoreResult.error,
+          cleanupPending,
+        };
+      } finally {
+        googleDrive.releaseDatabaseRestore();
+      }
+    } catch (error: unknown) {
+      console.error('[IPC] restore-backup: Error:', error);
+      return { success: false, error: getErrorMessage(error) };
+    }
+  });
+
+  // DB health check / master PIN / initialize (menu + tray triggered)
+  handle('db-health-check', async () => {
+    return withDatabaseRequest(async () => {
+      try {
+        return runHealthCheck();
+      } catch (error: unknown) {
+        return { error: getErrorMessage(error) };
+      }
+    });
+  });
+
+  handle('db-apply-safe-fixes', async (event, pin?: string, findingIds?: string[]) => {
+    const auth = authorizeMasterPin(pin, 'ipc:apply-safe-fixes');
+    if (!auth.ok) return { success: false, error: auth.error };
+    return withDatabaseRequest(async () => {
+      try {
+        return applySafeFixes(findingIds);
+      } catch (error: unknown) {
+        return { applied: [], skipped: [], errors: [{ id: 'all', error: getErrorMessage(error) }] };
+      }
+    });
+  });
+
+  handle('master-pin-status', async () => {
+    return { available: isMasterPinAvailable(), isSet: isMasterPinSet() };
+  });
+
+  handle(
+    'db-initialize',
+    async (event, { pin, confirmationPhrase }: { pin?: string; confirmationPhrase?: string }) => {
+      const auth = authorizeMasterPin(pin, 'ipc:initialize');
+      if (!auth.ok) return { success: false, error: auth.error };
+      if (confirmationPhrase !== 'INITIALIZE') {
+        return { success: false, error: 'Confirmation phrase does not match' };
+      }
+
+      let restorePrepared = false;
+      try {
+        // The owner's typed INITIALIZE may discard a Drive restore boundary that can
+        // never resolve on its own; the reset invalidates Drive state either way.
+        await googleDrive.prepareForDatabaseRestore({ discardUnresolvedBoundary: true });
+        restorePrepared = true;
+        const { backupPath } = await resetDatabaseWithBackup(shutdownSignal);
+        const cleanup = googleDrive.completeDatabaseRestore();
+        clearUserAuthCache();
+        clearInMemoryRevokedTokens();
+        clearJWTSecretCache();
+        return { success: true, backupPath, cleanupPending: cleanup.cleanupPending };
+      } catch (error: unknown) {
+        console.error('[IPC] db-initialize: Error:', error);
+        return { success: false, error: getErrorMessage(error) };
+      } finally {
+        if (restorePrepared) googleDrive.releaseDatabaseRestore();
+      }
+    },
+  );
+
+  // Window-control surface for renderer title bar HTML fallback controls.
+  handle('window-action', (event, action: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return { error: 'Window unavailable' };
+    return applyWindowControlAction(win, action);
+  });
+
+  // Application menu for the frameless Windows/Linux title bar. Electron does
+  // not draw a menu bar on a frameless window, so the renderer renders the
+  // top-level labels and main pops the matching submenu from the same Menu
+  // object createMenu() already applied (accelerators keep working). macOS
+  // keeps its authoritative native menu bar and has no title-bar menu.
+  handle('get-application-menu', () => {
+    if (process.platform === 'darwin') return { entries: [] };
+    const menu = Menu.getApplicationMenu() ?? null;
+    return { entries: menu ? listApplicationMenuEntries(menu.items) : [] };
+  });
+
+  handle('open-application-menu', (event, key: unknown, x: unknown, y: unknown) => {
+    if (process.platform === 'darwin') return { error: 'Application menu is native on macOS' };
+    // The popup is a privileged native surface on the main window, so bind it
+    // to that window's own current renderer frame. The trusted-sender check
+    // alone also admits the KDS window, which is served from localhost too.
+    let currentFrame: Electron.WebFrameMain | null = null;
+    try {
+      currentFrame = event.sender.mainFrame;
+    } catch {
+      return { error: 'Unauthorized sender' };
+    }
+    const mainWindow = getMainWindow?.() ?? null;
+    if (
+      !isApplicationMenuSender(mainWindow, {
+        window: BrowserWindow.fromWebContents(event.sender),
+        currentFrame,
+        senderFrame: event.senderFrame,
+      })
+    ) {
+      return { error: 'Unauthorized sender' };
+    }
+    return openApplicationMenuSubmenu(Menu.getApplicationMenu() ?? null, key, mainWindow, x, y);
+  });
+
+  handle('get-window-state', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return { isMaximized: false, isFullScreen: false };
+    return {
+      isMaximized: win.isMaximized(),
+      isFullScreen: win.isFullScreen(),
+    };
+  });
+
+  handle('window-ready', (event, payload: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return { error: 'Window unavailable' };
+    let currentFrame: Electron.WebFrameMain | null = null;
+    try {
+      currentFrame = event.sender.mainFrame;
+    } catch {
+      return { success: false, error: 'Stale or invalid readiness report' };
+    }
+    if (!isCurrentRendererFrame(event.senderFrame, currentFrame)) {
+      return { success: false, error: 'Stale or invalid readiness report' };
+    }
+    // Verify readiness report epoch/nonce before showing window.
+    const reported = payload as { epoch?: unknown; documentNonce?: unknown } | null | undefined;
+    if (!markWindowRendererReady(reported?.epoch, reported?.documentNonce)) {
+      return { success: false, error: 'Stale or invalid readiness report' };
+    }
+    showMainWindow(win);
+    return { success: true };
+  });
+
+  // Settings
+  handle('get-settings', async () => {
+    return withDatabaseRequest(async () => {
+      try {
+        const db = getDatabase();
+        const rows = db.prepare('SELECT key, value FROM settings').all() as {
+          key: string;
+          value: string;
+        }[];
+        const settings: Record<string, string> = {};
+        rows.forEach((row) => {
+          settings[row.key] = maskSetting(row.key, row.value);
+        });
+        return settings;
+      } catch (error: unknown) {
+        return { error: getErrorMessage(error) };
+      }
+    });
+  });
+
+  handle('set-setting', async (event, key: string, value: string) => {
+    return withDatabaseRequest(async () => {
+      try {
+        if (typeof key !== 'string' || typeof value !== 'string' || value.length > 10_000) {
+          return { success: false, error: 'Invalid setting value' };
+        }
+        if (!ALLOWED_IPC_KEYS.has(key)) {
+          return { success: false, error: 'Setting not allowed via IPC' };
+        }
+        if (key === 'theme_mode' && !isThemeMode(value)) {
+          return { success: false, error: 'Invalid theme_mode value' };
+        }
+        if (key === 'orders_layout' && !isOrdersLayout(value)) {
+          return { success: false, error: 'orders_layout must be "split" or "cards"' };
+        }
+        const db = getDatabase();
+        db.prepare('INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)').run(
+          key,
+          value,
+          now(),
+        );
+        return { success: true };
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) };
+      }
+    });
+  });
+
+  // WhatsApp status snapshot for renderer polling on app focus
+  handle('whatsapp-get-status', async () =>
+    withDatabaseRequest(async () => {
+      try {
+        return getWhatsAppStatus();
+      } catch (err: unknown) {
+        return { error: getErrorMessage(err) };
+      }
+    }),
+  );
+
+  handle('whatsapp-open-share', async (_event, rawUrl: unknown) => {
+    if (typeof rawUrl !== 'string' || !isSafeWhatsAppShareUrl(rawUrl)) {
+      return { success: false, error: 'Invalid WhatsApp share URL' };
+    }
+    try {
+      await shell.openExternal(rawUrl);
+      return { success: true };
+    } catch (error: unknown) {
+      console.error('[IPC] WhatsApp share open failed:', sanitizeLogText(error));
+      return { success: false, error: 'Failed to open WhatsApp' };
+    }
+  });
+
+  // Module-level reference to ensure single instance
+  let activeKdsWindow: BrowserWindow | null = null;
+
+  // KDS info
+  handle('get-kds-info', async () => {
+    const localIP = getLocalIP();
+    const port = getKdsPort();
+    return {
+      url: `http://${localIP}:${port}/kds`,
+      wsUrl: `ws://${localIP}:${port}/kds`,
+      localIP,
+      port,
+    };
+  });
+
+  // Window management
+  handle('open-kds-window', async () => {
+    if (activeKdsWindow && !activeKdsWindow.isDestroyed()) {
+      activeKdsWindow.focus();
+      return;
+    }
+
+    const port = getKdsPort();
+    const localIP = getLocalIP();
+    const kdsOrigin = `http://${localIP}:${port}`;
+
+    activeKdsWindow = createKdsWindow(BrowserWindow);
+
+    activeKdsWindow.on('closed', () => {
+      activeKdsWindow = null;
+    });
+
+    // Confine KDS window to its own origin and deny external navigation/windows.
+    activeKdsWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    activeKdsWindow.webContents.on('will-navigate', (event, url) => {
+      let allowed = false;
+      try {
+        allowed = new URL(url).origin === kdsOrigin;
+      } catch {
+        allowed = false;
+      }
+      if (!allowed) event.preventDefault();
+    });
+
+    // KDS window has no preload; learns palette from URL param.
+    const kdsUrl = appendThemeQueryParam(
+      `${kdsOrigin}/kds`,
+      getCurrentEffectiveIsDark ? getCurrentEffectiveIsDark() : false,
+    );
+    activeKdsWindow.loadURL(kdsUrl);
+  });
+
+  handle('get-app-info', async () => {
+    return {
+      version: app.getVersion(),
+      name: app.getName(),
+      electron: process.versions.electron,
+      node: process.versions.node,
+      platform: process.platform,
+    };
+  });
+
+  // Tail of the current session's log file, for attaching to support tickets.
+  handle('get-log-tail', async () => {
+    try {
+      // electron-log rotates main.log at ~1MB, so reading it whole is cheap.
+      const logFilePath = log.transports.file.getFile().path;
+      const content = fs.readFileSync(logFilePath, 'utf8');
+      const lines = content.split('\n');
+
+      // Cut at the first line whose timestamp is within the window (a byte
+      // cut wouldn't line up with "recent enough" for a quiet store's log).
+      const cutoff = Date.now() - LOG_TAIL_MAX_AGE_MS;
+      let cutIndex = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const match = lines[i].match(LOG_LINE_TIMESTAMP_RE);
+        if (!match) continue;
+        const ts = new Date(match[1].replace(' ', 'T')).getTime();
+        if (Number.isFinite(ts) && ts >= cutoff) {
+          cutIndex = i;
+          break;
+        }
+      }
+      const filtered = cutIndex === -1 ? lines : lines.slice(cutIndex);
+      const filteredText = filtered.join('\n');
+
+      // Byte cap stays as a backstop in case even the time-windowed content
+      // is still large (e.g. a very chatty week).
+      const buffer = Buffer.from(filteredText, 'utf8');
+      const overCap = buffer.length > LOG_TAIL_MAX_BYTES;
+      const text = overCap ? buffer.subarray(-LOG_TAIL_MAX_BYTES).toString('utf8') : filteredText;
+      return { text, truncated: overCap || cutIndex > 0 };
+    } catch (error: unknown) {
+      return { error: getErrorMessage(error) };
+    }
+  });
+
+  // Renderer failures are classified locally; message, stack, digest and route
+  // can contain business data and are never sent automatically.
+  handle('report-renderer-error', async () => {
+    cloudSync.captureOperationFailure({
+      capture_point: 'fc.electron.renderer.exception',
+      outcome: 'unknown',
+      correlation_id: randomUUID(),
+    });
+    return { success: true };
+  });
+
+  handle('get-posthog-bootstrap', async () => {
+    try {
+      return readPostHogBootstrap();
+    } catch {
+      return { enabled: false };
+    }
+  });
+
+  // Printers
+  handle('get-printers', async () => {
+    return withDatabaseRequest(async () => {
+      try {
+        const db = getDatabase();
+        const printers = db.prepare('SELECT * FROM printers ORDER BY name').all();
+        return printers;
+      } catch (error: unknown) {
+        return { error: getErrorMessage(error) };
+      }
+    });
+  });
+
+  // Saves renderer-built print HTML (the menu, and future documents) as a PDF
+  // through an offscreen window, so a merchant can share it without a printer.
+  handle('save-html-as-pdf', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object')
+      return { success: false, error: 'Invalid PDF request' };
+    const { html, defaultFileName, pageSize } = payload as {
+      html?: unknown;
+      defaultFileName?: unknown;
+      pageSize?: unknown;
+    };
+    if (typeof html !== 'string' || html.length === 0) {
+      return { success: false, error: 'Invalid PDF request' };
+    }
+    if (Buffer.byteLength(html, 'utf8') > MAX_PDF_HTML_BYTES) {
+      return { success: false, error: 'Document too large to export' };
+    }
+    const resolvedPageSize = pageSize === 'Letter' ? 'Letter' : 'A4';
+    const requestedName = typeof defaultFileName === 'string' ? defaultFileName.trim() : '';
+    const baseName = requestedName.replace(/[^\w.\- ]+/g, '-').slice(0, 80) || 'document.pdf';
+    const saveResult = await dialog.showSaveDialog({
+      defaultPath: path.join(
+        app.getPath('documents'),
+        baseName.endsWith('.pdf') ? baseName : `${baseName}.pdf`,
+      ),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (saveResult.canceled || !saveResult.filePath) return { success: false, canceled: true };
+
+    const pdfWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        javascript: false,
+      },
+    });
+    try {
+      await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const pdfData = await pdfWindow.webContents.printToPDF({
+        printBackground: true,
+        pageSize: resolvedPageSize,
+      });
+      await fs.promises.writeFile(saveResult.filePath, pdfData);
+      return { success: true, path: saveResult.filePath };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) };
+    } finally {
+      if (!pdfWindow.isDestroyed()) pdfWindow.destroy();
+    }
+  });
+
+  handle('rasterize-print-document', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object')
+      return { ok: false, error: 'Invalid raster document request' };
+    const request = payload as {
+      document?: unknown;
+      template?: unknown;
+      profileId?: unknown;
+      options?: unknown;
+    };
+    if (
+      !isPrintDocument(request.document) ||
+      (request.template !== 'classic' && request.template !== 'compact') ||
+      typeof request.profileId !== 'string' ||
+      request.profileId.length === 0 ||
+      !request.options ||
+      typeof request.options !== 'object'
+    ) {
+      return { ok: false, error: 'Invalid raster document request' };
+    }
+    const options = request.options as Record<string, unknown>;
+    if (
+      !isValidRasterColumns(options.columns) ||
+      typeof options.language !== 'string' ||
+      typeof options.locale !== 'string' ||
+      typeof options.currency !== 'string' ||
+      typeof options.currencySymbol !== 'string' ||
+      typeof options.trimDecimals !== 'boolean' ||
+      typeof options.useUnicode !== 'boolean' ||
+      typeof options.arabicShaping !== 'boolean' ||
+      (options.timezone !== undefined && typeof options.timezone !== 'string')
+    ) {
+      return { ok: false, error: 'Invalid raster document options' };
+    }
+    try {
+      return await rasterizePrintDocumentForWebUsb(
+        request.document as Parameters<typeof rasterizePrintDocumentForWebUsb>[0],
+        request.template,
+        request.profileId,
+        options as Parameters<typeof rasterizePrintDocumentForWebUsb>[3],
+      );
+    } catch (error: unknown) {
+      return { ok: false, error: getErrorMessage(error) };
+    }
+  });
+
+  handle('rasterize-kot-document', async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object')
+      return { ok: false, error: 'Invalid raster KOT request' };
+    const request = payload as {
+      document?: unknown;
+      profileId?: unknown;
+      options?: unknown;
+    };
+    if (
+      !isKotDocument(request.document) ||
+      typeof request.profileId !== 'string' ||
+      request.profileId.length === 0 ||
+      !request.options ||
+      typeof request.options !== 'object'
+    ) {
+      return { ok: false, error: 'Invalid raster KOT request' };
+    }
+    const options = request.options as Record<string, unknown>;
+    if (
+      !isValidRasterColumns(options.columns) ||
+      typeof options.language !== 'string' ||
+      typeof options.locale !== 'string' ||
+      (options.timezone !== undefined && typeof options.timezone !== 'string') ||
+      typeof options.useUnicode !== 'boolean' ||
+      typeof options.arabicShaping !== 'boolean'
+    ) {
+      return { ok: false, error: 'Invalid raster KOT options' };
+    }
+    try {
+      return await rasterizeKotDocumentForWebUsb(
+        request.document,
+        request.profileId,
+        options as Parameters<typeof rasterizeKotDocumentForWebUsb>[2],
+      );
+    } catch (error: unknown) {
+      return { ok: false, error: getErrorMessage(error) };
+    }
+  });
+
+  console.log('[IPC] Handlers registered');
+}

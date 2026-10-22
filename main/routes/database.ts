@@ -1,0 +1,936 @@
+import { Router, Request, Response } from 'express';
+import Database from 'better-sqlite3';
+import {
+  captureKitchenStationSecurityState,
+  captureKdsEnabledSetting,
+  captureRestoreProtectedSettings,
+  captureUserSecurityState,
+  captureUserStationSecurityState,
+  clearGoogleDriveRestoreBinding,
+  getDatabase,
+  getDbPath,
+  createBackup,
+  createBackupUnlocked,
+  executeSequenceRepair,
+  getCurrentSchemaVersion,
+  getForeignKeyViolationKeys,
+  getInventoryMovementRows,
+  getSchemaVersionFromBackup,
+  getTables,
+  isSafeIdentifier,
+  mergeKdsEnabledSetting,
+  mergeRestoreProtectedSettings,
+  mergeUserSecurityState,
+  mergeUserStationSecurityState,
+  now,
+  rebuildSearchIndex,
+  restoreBackup,
+  throwIfDatabaseMaintenanceAborted,
+  validateInventoryLedgerDatabase,
+  validateInventoryLedgerReplacement,
+  validateInventoryLedgerRows,
+  withTxn,
+  withDatabaseMaintenanceLock,
+} from '../db';
+import { clearInMemoryRevokedTokens, clearUserAuthCache } from '../middleware/security';
+import { requirePermission } from '../services/authorization';
+import { requireMasterPin } from '../middleware/master-pin';
+import { clearJWTSecretCache } from '../security/jwt-secret';
+import * as fs from 'fs';
+import * as path from 'path';
+import { asyncHandler } from '../middleware/async-handler';
+import { getHttpRequestSignal, trackHttpRequestWork } from '../shutdown';
+import { parsePhoneE164 } from '../lib/phone';
+import { isRole } from '../../shared/role-permissions';
+import { randomUUID } from 'node:crypto';
+import { googleDrive } from '../services/google-drive';
+import { consumeRestoreFileSelection } from '../services/restore-file-selection';
+
+const router = Router();
+
+// Settings keys stripped from export — these are secrets; exporting them would
+// allow token forgery or cloud credential theft (vuln-0005).
+const EXPORT_SETTINGS_REDACT = new Set([
+  'jwt_secret',
+  'cloud_api_key',
+  'cloud_device_secret',
+  'cloud_pos_hash',
+  'mobile_pairing_code',
+  'mobile_pairing_code_expires_at',
+  // Token used to poll pending cloud account-deletion requests.
+  'cloud_deletion_status_token',
+  // Redact legacy error strings from exported settings.
+  'cloud_last_error',
+]);
+
+// User columns stripped from export — hashes must never leave the server.
+const USER_REDACT_COLS = new Set(['password', 'pin', 'pin_hash']);
+
+// Tables excluded entirely — cloud_sync_outbox may contain cloud auth payloads.
+// local_diagnostics is device-local operator-facing state, not customer data, so
+// a backup taken on one till must not carry another till's failure log.
+const EXPORT_EXCLUDE_TABLES = new Set([
+  'cloud_sync_outbox',
+  'support_ticket_outbox',
+  'store_diagnostics_outbox',
+  'diagnostics_hourly_aggregates',
+  'diagnostics_delivery_gaps',
+  'local_diagnostics',
+  'kds_pairing_tokens',
+  'customer_display_tokens',
+]);
+
+// Parse schema version; invalid or missing versions collapse to -1 or 0 to trigger mismatch handling.
+function parseImportSchemaVersion(value: unknown): number {
+  const raw = String(value ?? '0');
+  return /^(?:0|[1-9]\d*)$/.test(raw) ? Number(raw) : -1;
+}
+
+router.get('/export', requirePermission('database.manage'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+
+    const result = withTxn(() => {
+      const tables = getTables(db);
+
+      const exportData: Record<string, any[]> = {};
+      const redactedFields: string[] = [];
+
+      for (const tableName of tables) {
+        if (!isSafeIdentifier(tableName)) {
+          console.warn(`[DB Export] Skipping unsafe table name: ${tableName}`);
+          continue;
+        }
+
+        if (EXPORT_EXCLUDE_TABLES.has(tableName)) {
+          redactedFields.push(`table:${tableName}`);
+          continue;
+        }
+
+        const allowedColumns = new Set(getTableColumns(db, tableName));
+        const rawRows = db.prepare(`SELECT * FROM ${tableName}`).all() as Record<string, any>[];
+        const rows = rawRows.map((row) => {
+          const sanitized: Record<string, any> = {};
+          for (const [key, value] of Object.entries(row)) {
+            if (allowedColumns.has(key)) {
+              sanitized[key] = value;
+            }
+          }
+          return sanitized;
+        });
+
+        if (tableName === 'settings') {
+          exportData[tableName] = rows.map((row) => {
+            if (EXPORT_SETTINGS_REDACT.has(row.key)) {
+              redactedFields.push(`settings.${row.key}`);
+              return { ...row, value: '[REDACTED]' };
+            }
+            return row;
+          });
+        } else if (tableName === 'users') {
+          exportData[tableName] = rows.map((row) => {
+            const sanitized = { ...row };
+            for (const col of USER_REDACT_COLS) {
+              if (col in sanitized) {
+                delete sanitized[col];
+                if (!redactedFields.includes(`users.${col}`)) redactedFields.push(`users.${col}`);
+              }
+            }
+            return sanitized;
+          });
+        } else {
+          exportData[tableName] = rows;
+        }
+      }
+
+      return { exportData, redactedFields };
+    });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `flo-export-${timestamp}.json`;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json({
+      version: 1,
+      app: 'FloDesktop',
+      exported_at: new Date().toISOString(),
+      schema_version: String(getCurrentSchemaVersion()),
+      redacted_fields: result.redactedFields,
+      data: result.exportData,
+    });
+  } catch (error: any) {
+    console.error('[DB Export] Error:', error);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+router.post(
+  '/import',
+  requirePermission('database.manage'),
+  (req: Request, res: Response, next: () => void) => {
+    // Require Master PIN for overwrite or version mismatch to guard destructive replacement.
+    const body = req.body as { overwrite?: unknown; data?: Record<string, unknown> } | undefined;
+    const overwrite = Boolean(body?.overwrite);
+    const schemaVersionMismatch =
+      body?.data && typeof body.data === 'object'
+        ? parseImportSchemaVersion(body.data.schema_version) !== getCurrentSchemaVersion()
+        : false;
+    return overwrite || schemaVersionMismatch ? requireMasterPin(req, res, next) : next();
+  },
+  asyncHandler(async (req: Request, res: Response) => {
+    const { data } = req.body;
+    if (!data || !data.data || typeof data.data !== 'object') {
+      return res.status(400).json({ error: 'Invalid import file format' });
+    }
+    await googleDrive.prepareForDatabaseRestore();
+    try {
+      return await withDatabaseMaintenanceLock(async (signal) => {
+        try {
+          throwIfDatabaseMaintenanceAborted(signal);
+          const { data, overwrite } = req.body;
+
+          const db = getDatabase();
+          const allowedTables = new Set(getTables(db));
+          const preservedRevocations = db
+            .prepare('SELECT token_hash, expires_at, revoked_at FROM revoked_tokens')
+            .all() as { token_hash: string; expires_at: number; revoked_at: string }[];
+          const baselineForeignKeyViolations = getForeignKeyViolationKeys(db);
+          const preservedUserSecurity = captureUserSecurityState(db);
+          const preservedUserStations = captureUserStationSecurityState(db);
+          const preservedStationSecurity = captureKitchenStationSecurityState(db);
+          const preservedKdsEnabled = captureKdsEnabledSetting(db);
+          const preservedProtectedSettings = captureRestoreProtectedSettings(db);
+          const importData = data.data as Record<string, any[]>;
+          const importerUserId = String(
+            (req as Request & { user?: { userId?: string } }).user?.userId || '',
+          );
+          const importBatchId = randomUUID();
+          const importTimestamp = now();
+          const importSchemaVersion = parseImportSchemaVersion(data.schema_version);
+          const hasVersionMismatch = importSchemaVersion !== getCurrentSchemaVersion();
+
+          if (hasVersionMismatch) {
+            console.log(
+              `[DB Import] Version mismatch: import v${importSchemaVersion} vs current v${getCurrentSchemaVersion()}. Using data-only merge.`,
+            );
+          }
+
+          const requiredTables = ['settings', 'categories', 'products', 'users'];
+          const importedTables = Object.keys(importData);
+
+          const missingTables = requiredTables.filter((t) => !importedTables.includes(t));
+          if (missingTables.length > 0) {
+            return res.status(400).json({
+              error: `Missing required tables: ${missingTables.join(', ')}`,
+            });
+          }
+          const malformedTables = requiredTables.filter(
+            (tableName) => !Array.isArray(importData[tableName]),
+          );
+          if (malformedTables.length > 0) {
+            return res.status(400).json({
+              error: `Import tables must be arrays: ${malformedTables.join(', ')}`,
+            });
+          }
+
+          const invalidRecipeMultiplierIndex = Array.isArray(importData.product_variants)
+            ? importData.product_variants.findIndex(
+                (variant) =>
+                  variant?.recipe_multiplier !== undefined &&
+                  (typeof variant.recipe_multiplier !== 'number' ||
+                    !Number.isFinite(variant.recipe_multiplier) ||
+                    variant.recipe_multiplier <= 0),
+              )
+            : -1;
+          if (invalidRecipeMultiplierIndex >= 0) {
+            return res.status(400).json({
+              error: `product_variants[${invalidRecipeMultiplierIndex}].recipe_multiplier must be a positive finite number`,
+            });
+          }
+
+          if (Array.isArray(importData.products) && importData.products.length > 0) {
+            if (!Array.isArray(importData.inventory_movements)) {
+              const legacyZeroStockImport =
+                !importedTables.includes('inventory_movements') &&
+                importData.products.every((row) => {
+                  if (!row || typeof row !== 'object') return false;
+                  const stockQuantity = row.stock_quantity == null ? 0 : Number(row.stock_quantity);
+                  return Number.isFinite(stockQuantity) && stockQuantity === 0;
+                });
+              if (!legacyZeroStockImport) {
+                return res.status(400).json({
+                  error:
+                    'Product imports must include inventory movement history so stock changes remain auditable',
+                });
+              }
+            }
+            const importAddons = Array.isArray(importData.addons)
+              ? importSchemaVersion !== null && importSchemaVersion < 104
+                ? importData.addons.map((a) =>
+                    a && typeof a === 'object' && !('stock_quantity' in a)
+                      ? { ...a, stock_quantity: 0 }
+                      : a,
+                  )
+                : importData.addons
+              : [];
+            if (
+              Array.isArray(importData.inventory_movements) &&
+              validateInventoryLedgerRows(
+                importData.products,
+                importData.inventory_movements,
+                Array.isArray(importData.product_variants) ? importData.product_variants : [],
+                importAddons,
+              )
+            ) {
+              return res.status(400).json({
+                error: 'Product stock must match the latest inventory movement history',
+              });
+            }
+          }
+
+          if (
+            (overwrite || hasVersionMismatch) &&
+            Array.isArray(importData.inventory_movements) &&
+            getInventoryMovementRows(db).length > 0
+          ) {
+            return res.status(400).json({
+              error: 'Overwrite imports cannot replace existing inventory movement history',
+            });
+          }
+
+          if ((overwrite || hasVersionMismatch) && Array.isArray(importData.products)) {
+            const inventoryReplacementError = validateInventoryLedgerReplacement(
+              db.prepare('SELECT id, stock_quantity FROM products').all() as Record<
+                string,
+                unknown
+              >[],
+              importedTables.includes('inventory_movements') ? getInventoryMovementRows(db) : [],
+              importData.products,
+              Array.isArray(importData.inventory_movements) ? importData.inventory_movements : [],
+            );
+            if (inventoryReplacementError) {
+              return res.status(400).json({ error: inventoryReplacementError });
+            }
+          }
+
+          // Preserve existing accounts and create inactive placeholders for redacted users without hashes.
+          const importedUserRows = Array.isArray(importData.users) ? importData.users : [];
+          const credentialedUserIds = new Set(
+            importedUserRows
+              .filter((row) => typeof row?.password === 'string' && row.password.length > 0)
+              .map((row) => String(row.id)),
+          );
+          const redactedUserIds = new Set(
+            importedUserRows
+              .filter(
+                (row) =>
+                  row &&
+                  typeof row === 'object' &&
+                  row.id != null &&
+                  !credentialedUserIds.has(String(row.id)),
+              )
+              .map((row) => String(row.id)),
+          );
+          const importProvidedUserIds = new Set([...credentialedUserIds, ...redactedUserIds]);
+          const existingUserIds = new Set(
+            (db.prepare('SELECT id FROM users').all() as { id: string }[]).map((row) =>
+              String(row.id),
+            ),
+          );
+          const unresolvedUserIds = new Set<string>();
+          for (const [tableName, rows] of Object.entries(importData)) {
+            if (
+              tableName === 'users' ||
+              !Array.isArray(rows) ||
+              !isSafeIdentifier(tableName) ||
+              !allowedTables.has(tableName) ||
+              EXPORT_EXCLUDE_TABLES.has(tableName)
+            )
+              continue;
+            const userReferenceColumns = (
+              db.prepare(`PRAGMA foreign_key_list(${tableName})`).all() as {
+                table: string;
+                from: string;
+              }[]
+            )
+              .filter((foreignKey) => foreignKey.table === 'users')
+              .map((foreignKey) => foreignKey.from);
+            if (userReferenceColumns.length === 0) continue;
+            for (const row of rows) {
+              if (!row || typeof row !== 'object') continue;
+              for (const column of userReferenceColumns) {
+                if (
+                  tableName === 'inventory_movements' &&
+                  (column === 'actor_user_id' || column === 'imported_by_user_id')
+                )
+                  continue;
+                const value = row[column];
+                if (value != null && String(value) !== '') {
+                  const userId = String(value);
+                  if (!existingUserIds.has(userId) && !importProvidedUserIds.has(userId))
+                    unresolvedUserIds.add(userId);
+                }
+              }
+            }
+          }
+          const importedWhatsappActivator =
+            importedTables.includes('settings') && Array.isArray(importData.settings)
+              ? importData.settings.find((row) => row?.key === 'whatsapp_activated_by_user_id')
+                  ?.value
+              : null;
+          if (
+            importedWhatsappActivator &&
+            !existingUserIds.has(String(importedWhatsappActivator)) &&
+            !importProvidedUserIds.has(String(importedWhatsappActivator))
+          ) {
+            unresolvedUserIds.add(String(importedWhatsappActivator));
+          }
+          if (unresolvedUserIds.size > 0) {
+            return res.status(400).json({
+              error:
+                'Import contains rows linked to user accounts that are not present in this export or this install. Set up matching staff accounts first.',
+            });
+          }
+
+          const { path: backupPath } = await createBackupUnlocked(undefined, signal);
+          throwIfDatabaseMaintenanceAborted(signal);
+
+          const previousForeignKeys = Number(db.pragma('foreign_keys', { simple: true })) === 1;
+          db.pragma('foreign_keys = OFF');
+
+          try {
+            throwIfDatabaseMaintenanceAborted(signal);
+            db.exec('BEGIN IMMEDIATE');
+            try {
+              for (const tableName of importedTables) {
+                throwIfDatabaseMaintenanceAborted(signal);
+                if (!allowedTables.has(tableName) || EXPORT_EXCLUDE_TABLES.has(tableName)) continue;
+                // Validate table name to prevent SQL injection
+                if (!isSafeIdentifier(tableName)) {
+                  console.warn(`[DB Import] Skipping unsafe table name: ${tableName}`);
+                  continue;
+                }
+
+                const rows = importData[tableName];
+                if (!rows || !Array.isArray(rows)) continue;
+                if (rows.length === 0) {
+                  if (overwrite || hasVersionMismatch) {
+                    if (tableName === 'settings') {
+                      const protectedKeys = Array.from(EXPORT_SETTINGS_REDACT);
+                      const placeholders = protectedKeys.map(() => '?').join(', ');
+                      db.prepare(`DELETE FROM settings WHERE key NOT IN (${placeholders})`).run(
+                        ...protectedKeys,
+                      );
+                    } else {
+                      db.exec(`DELETE FROM ${tableName}`);
+                    }
+                  }
+                  continue;
+                }
+
+                const currentCols = getTableColumns(db, tableName);
+                // Validate and filter column names to prevent SQL injection
+                const importCols =
+                  tableName === 'product_variants'
+                    ? Array.from(
+                        new Set(rows.flatMap((row) => Object.keys(row).filter(isSafeIdentifier))),
+                      )
+                    : Object.keys(rows[0]).filter(isSafeIdentifier);
+                // A normal export intentionally omits password/pin hashes. It must not
+                // attempt to recreate users with a NULL required password.
+                if (tableName === 'users' && !importCols.includes('password')) continue;
+                const commonCols = importCols.filter(
+                  (c) => currentCols.includes(c) && isSafeIdentifier(c),
+                );
+
+                if (commonCols.length === 0) continue;
+
+                if (overwrite || hasVersionMismatch) {
+                  if (tableName === 'settings') {
+                    const protectedKeys = Array.from(EXPORT_SETTINGS_REDACT);
+                    const placeholders = protectedKeys.map(() => '?').join(', ');
+                    db.prepare(`DELETE FROM settings WHERE key NOT IN (${placeholders})`).run(
+                      ...protectedKeys,
+                    );
+                  } else {
+                    db.exec(`DELETE FROM ${tableName}`);
+                  }
+                }
+
+                if (tableName === 'inventory_movements') {
+                  const insertImportedMovement = db.prepare(`
+            INSERT INTO inventory_movements (
+              product_id, variant_id, addon_id, quantity_delta, movement_type, reference_type, reference_id,
+              reason, actor_user_id, stock_after, created_at,
+              imported_by_user_id, import_batch_id,
+              source_actor_user_id, source_reference_type, source_reference_id,
+              source_reason, source_created_at
+            ) VALUES (?, ?, ?, ?, ?, 'import', ?, 'Imported inventory movement', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+                  const allHavePositiveIntegerIds =
+                    rows.length > 0 &&
+                    rows.every((row) => {
+                      const rawId = Number(row?.id);
+                      return Number.isInteger(rawId) && rawId > 0;
+                    });
+                  const orderedRows = rows
+                    .map((row, index) => ({ row, index }))
+                    .sort((left, right) => {
+                      if (allHavePositiveIntegerIds) {
+                        const leftId = Number(left.row?.id);
+                        const rightId = Number(right.row?.id);
+                        if (leftId !== rightId) return leftId - rightId;
+                      }
+                      return left.index - right.index;
+                    });
+                  for (const { row } of orderedRows) {
+                    throwIfDatabaseMaintenanceAborted(signal);
+                    const sourceValue = (value: unknown): string | null =>
+                      value == null ? null : String(value);
+                    insertImportedMovement.run(
+                      row.product_id,
+                      sourceValue(row.variant_id),
+                      sourceValue(row.addon_id),
+                      row.quantity_delta,
+                      row.movement_type,
+                      importBatchId,
+                      importerUserId,
+                      row.stock_after,
+                      importTimestamp,
+                      importerUserId,
+                      importBatchId,
+                      sourceValue(row.source_actor_user_id ?? row.actor_user_id),
+                      sourceValue(row.source_reference_type ?? row.reference_type),
+                      sourceValue(row.source_reference_id ?? row.reference_id),
+                      sourceValue(row.source_reason ?? row.reason),
+                      sourceValue(row.source_created_at ?? row.created_at),
+                    );
+                  }
+                  console.log(
+                    `[DB Import] ${tableName}: ${rows.length} rows (${commonCols.length} columns)`,
+                  );
+                  continue;
+                }
+
+                const insertStatements = new Map<string, ReturnType<typeof db.prepare>>();
+
+                const tenantCountryRow = db
+                  .prepare("SELECT value FROM settings WHERE key = 'country'")
+                  .get() as any;
+                const tenantCountry = tenantCountryRow?.value || '';
+
+                for (const row of rows) {
+                  throwIfDatabaseMaintenanceAborted(signal);
+                  // Exported secret fields are deliberately redacted. Never import the
+                  // marker itself as a real credential (which would make it known).
+                  if (
+                    tableName === 'settings' &&
+                    EXPORT_SETTINGS_REDACT.has(String(row.key)) &&
+                    row.value === '[REDACTED]'
+                  )
+                    continue;
+
+                  if (tableName === 'customers' && row.phone) {
+                    const parsed = parsePhoneE164(String(row.phone), tenantCountry);
+                    if (parsed) {
+                      row.phone = parsed.e164;
+                      if (commonCols.includes('country_code')) {
+                        row.country_code = parsed.countryCode;
+                      }
+                    }
+                  }
+
+                  const rowCols =
+                    tableName === 'product_variants'
+                      ? commonCols.filter((column) =>
+                          Object.prototype.hasOwnProperty.call(row, column),
+                        )
+                      : commonCols;
+                  const rowColumnKey = rowCols.join(', ');
+                  let insertStmt = insertStatements.get(rowColumnKey);
+                  if (!insertStmt) {
+                    const placeholders = rowCols.map(() => '?').join(', ');
+                    insertStmt = db.prepare(
+                      `INSERT INTO ${tableName} (${rowColumnKey}) VALUES (${placeholders})`,
+                    );
+                    insertStatements.set(rowColumnKey, insertStmt);
+                  }
+                  insertStmt.run(rowCols.map((column) => row[column]));
+                }
+
+                console.log(
+                  `[DB Import] ${tableName}: ${rows.length} rows (${commonCols.length} columns)`,
+                );
+              }
+
+              const placeholderUsersCreated = restoreRedactedUserPlaceholders(
+                db,
+                importedUserRows,
+                existingUserIds,
+              );
+              if (placeholderUsersCreated > 0) {
+                console.log(
+                  `[DB Import] Created ${placeholderUsersCreated} inactive placeholder user(s) for redacted exported accounts`,
+                );
+              }
+
+              mergeUserSecurityState(db, preservedUserSecurity);
+              mergeUserStationSecurityState(
+                db,
+                preservedUserStations,
+                preservedUserSecurity.map((row) => row.id),
+                preservedStationSecurity,
+              );
+              mergeKdsEnabledSetting(db, preservedKdsEnabled);
+              mergeRestoreProtectedSettings(db, preservedProtectedSettings);
+              db.prepare('DELETE FROM kds_pairing_tokens').run();
+              db.prepare('DELETE FROM customer_display_tokens').run();
+              const mergeRevocation = db.prepare(`
+        INSERT INTO revoked_tokens (token_hash, expires_at, revoked_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(token_hash) DO UPDATE SET
+          expires_at = MAX(revoked_tokens.expires_at, excluded.expires_at),
+          revoked_at = MIN(revoked_tokens.revoked_at, excluded.revoked_at)
+      `);
+              for (const revocation of preservedRevocations) {
+                mergeRevocation.run(
+                  revocation.token_hash,
+                  revocation.expires_at,
+                  revocation.revoked_at,
+                );
+              }
+              const inventoryValidationError = validateInventoryLedgerDatabase(db);
+              if (inventoryValidationError) {
+                throw new Error(
+                  `Import would violate the inventory ledger: ${inventoryValidationError}`,
+                );
+              }
+              const newForeignKeyViolations = [...getForeignKeyViolationKeys(db)].filter(
+                (key) => !baselineForeignKeyViolations.has(key),
+              );
+              if (newForeignKeyViolations.length > 0) {
+                throw new Error(
+                  `Import would introduce ${newForeignKeyViolations.length} new foreign-key violation(s)`,
+                );
+              }
+              throwIfDatabaseMaintenanceAborted(signal);
+              clearGoogleDriveRestoreBinding(db);
+              executeSequenceRepair(db);
+              db.prepare(`
+                INSERT INTO settings (key, value, updated_at) VALUES ('sequence_repair_completed_at', ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+              `).run(now(), now());
+              db.prepare(`
+                INSERT INTO settings (key, value, updated_at) VALUES ('sequence_repair_pending', '0', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+              `).run(now());
+              rebuildSearchIndex(db);
+              db.exec('COMMIT');
+              const cleanup = googleDrive.completeDatabaseRestore();
+              try {
+                clearUserAuthCache();
+                clearInMemoryRevokedTokens();
+                clearJWTSecretCache();
+              } catch (cacheError: any) {
+                // Log post-commit cache cleanup failure without failing the committed import.
+                console.error('[DB Import] Post-commit cache cleanup failed:', cacheError);
+              }
+              res.json({
+                success: true,
+                message: hasVersionMismatch
+                  ? 'Data imported with schema compatibility (some fields may be missing)'
+                  : 'Database imported successfully',
+                backup: backupPath,
+                schemaVersionMismatch: hasVersionMismatch,
+                importedSchemaVersion: importSchemaVersion,
+                currentSchemaVersion: getCurrentSchemaVersion(),
+                placeholderUsersCreated,
+                cleanupPending: cleanup.cleanupPending,
+              });
+            } catch (err: any) {
+              try {
+                db.exec('ROLLBACK');
+              } catch {}
+              throw err;
+            }
+          } finally {
+            db.pragma(`foreign_keys = ${previousForeignKeys ? 'ON' : 'OFF'}`);
+          }
+        } catch (error: any) {
+          console.error('[DB Import] Error:', error);
+          res.status(500).json({ error: 'Import failed' });
+        }
+      }, getHttpRequestSignal(req));
+    } finally {
+      googleDrive.releaseDatabaseRestore();
+    }
+  }),
+);
+
+function restoreRedactedUserPlaceholders(
+  db: Database.Database,
+  importedUserRows: any[],
+  existingUserIds: Set<string>,
+): number {
+  if (importedUserRows.length === 0) return 0;
+
+  const currentCols = getTableColumns(db, 'users');
+  const insertableCols = [
+    'id',
+    'name',
+    'email',
+    'password',
+    'role',
+    'category_ids',
+    'is_active',
+    'terms_accepted_at',
+    'tokens_valid_after',
+    'station_assignments_configured',
+    'created_at',
+    'updated_at',
+  ].filter((column) => currentCols.includes(column));
+  if (!insertableCols.includes('id') || !insertableCols.includes('password')) return 0;
+
+  const colList = insertableCols.join(', ');
+  const placeholders = insertableCols.map(() => '?').join(', ');
+  const insertStmt = db.prepare(
+    `INSERT OR IGNORE INTO users (${colList}) VALUES (${placeholders})`,
+  );
+  let created = 0;
+
+  for (const row of importedUserRows) {
+    if (!row || typeof row !== 'object') continue;
+    if (typeof row.password === 'string' && row.password.length > 0) continue;
+
+    const id = row.id == null ? '' : String(row.id);
+    if (!id || existingUserIds.has(id)) continue;
+
+    const timestamp =
+      typeof row.updated_at === 'string' && row.updated_at
+        ? row.updated_at
+        : new Date().toISOString();
+    const roleValue = String(row.role);
+    const role = isRole(roleValue) ? roleValue : 'cashier';
+    const values: Record<string, unknown> = {
+      id,
+      name: typeof row.name === 'string' && row.name.trim() ? row.name : `Imported staff ${id}`,
+      email: null,
+      password: `disabled-redacted-import-${id}`,
+      role,
+      category_ids: typeof row.category_ids === 'string' ? row.category_ids : null,
+      is_active: 0,
+      terms_accepted_at: null,
+      tokens_valid_after: null,
+      station_assignments_configured: 0,
+      created_at: typeof row.created_at === 'string' && row.created_at ? row.created_at : timestamp,
+      updated_at: timestamp,
+    };
+
+    const info = insertStmt.run(...insertableCols.map((column) => values[column] ?? null));
+    if (info.changes > 0) {
+      existingUserIds.add(id);
+      created += 1;
+    }
+  }
+
+  return created;
+}
+
+function getTableColumns(db: Database.Database, tableName: string): string[] {
+  if (!isSafeIdentifier(tableName)) {
+    console.warn(`[DB Columns] Unsafe table name rejected: ${tableName}`);
+    return [];
+  }
+  try {
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
+    return columns.map((col) => col.name);
+  } catch {
+    return [];
+  }
+}
+
+router.post(
+  '/backup',
+  requirePermission('database.manage'),
+  requireMasterPin,
+  asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const { path: backupPath, schemaVersion } = await createBackup(
+        undefined,
+        getHttpRequestSignal(req),
+      );
+      res.json({
+        success: true,
+        path: backupPath,
+        filename: path.basename(backupPath),
+        schemaVersion,
+      });
+    } catch (error: any) {
+      console.error('[DB Backup] Error:', error);
+      res.status(500).json({ error: 'Backup failed' });
+    }
+  }),
+);
+
+const RESTORE_CONFIRMATION = 'RESTORE BACKUP';
+
+// Restore from a file the operator picked in the native dialog. This is the
+// authorised alternative to the Master PIN gate: the session must hold
+// database.manage, the operator must type the confirmation phrase, and the file
+// path is only accepted when it is the one the main process just handed out from
+// that dialog (see services/restore-file-selection). The restore itself runs
+// through the same restoreBackup() mechanism as every other route.
+router.post(
+  '/restore',
+  requirePermission('database.manage'),
+  asyncHandler(async (req: Request, res: Response) => {
+    if (req.body?.confirmation !== RESTORE_CONFIRMATION) {
+      return res.status(400).json({ error: `Type "${RESTORE_CONFIRMATION}" to confirm` });
+    }
+
+    const selectionToken =
+      typeof req.body?.selection_token === 'string' ? req.body.selection_token : '';
+    const backupPath = consumeRestoreFileSelection(selectionToken);
+    if (!backupPath) {
+      return res
+        .status(400)
+        .json({ error: 'Choose a backup file in the restore dialog before confirming' });
+    }
+
+    const backupVersion = getSchemaVersionFromBackup(backupPath);
+    if (backupVersion === null) {
+      return res.status(400).json({
+        error:
+          'Invalid backup file: missing schema version metadata. This backup may have been created with an older version of Flo.',
+      });
+    }
+
+    const currentVersion = getCurrentSchemaVersion();
+    const versionMismatch = backupVersion !== currentVersion;
+
+    await googleDrive.prepareForDatabaseRestore();
+    try {
+      const restoreResult = await withDatabaseMaintenanceLock(
+        (signal) => restoreBackup(backupPath, !versionMismatch, signal),
+        getHttpRequestSignal(req),
+      );
+      if (!restoreResult.success) {
+        return res.status(422).json({ error: restoreResult.error || 'Restore failed' });
+      }
+      const cleanup = googleDrive.completeDatabaseRestore();
+      clearUserAuthCache();
+      clearInMemoryRevokedTokens();
+      clearJWTSecretCache();
+      res.json({
+        success: true,
+        mode: restoreResult.mode,
+        backupVersion,
+        currentVersion,
+        tablesRestored: restoreResult.tablesRestored,
+        cleanupPending: restoreResult.cleanupPending === true || cleanup?.cleanupPending === true,
+      });
+    } catch (error: any) {
+      console.error('[DB Restore] Error:', error);
+      res.status(500).json({ error: 'Restore failed' });
+    } finally {
+      googleDrive.releaseDatabaseRestore();
+    }
+  }),
+);
+
+router.get(
+  '/download',
+  requirePermission('database.manage'),
+  requireMasterPin,
+  asyncHandler(async (req: Request, res: Response) => {
+    let tempDir: string | null = null;
+    try {
+      const dbPath = getDbPath();
+      tempDir = fs.mkdtempSync(path.join(path.dirname(dbPath), '.flo-download-'));
+      const snapshotPath = path.join(tempDir, 'flo-database.db');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `flo-database-${timestamp}.db`;
+
+      // Download a clean checkpointed backup rather than streaming the live WAL
+      // file. The temporary snapshot is independent of later restore/reset work.
+      await createBackup(snapshotPath, getHttpRequestSignal(req));
+      const signal = getHttpRequestSignal(req);
+      const download = new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const onAbort = (): void => {
+          try {
+            res.destroy();
+          } catch (error) {
+            settle(error as Error);
+            return;
+          }
+        };
+        const settle = (error?: Error): void => {
+          if (settled) return;
+          settled = true;
+          signal?.removeEventListener('abort', onAbort);
+          if (error) reject(error);
+          else resolve();
+        };
+        res.once('finish', () => settle());
+        res.once('close', () => settle());
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+        try {
+          res.download(snapshotPath, filename, (error) => settle(error));
+        } catch (error) {
+          settle(error as Error);
+        }
+      });
+      void trackHttpRequestWork(req, download)
+        .finally(() => {
+          try {
+            if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+          } catch {}
+        })
+        .catch((error) => {
+          console.error('[DB Download] Stream error:', (error as Error).message);
+        });
+    } catch (error: any) {
+      if (tempDir) {
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch {}
+      }
+      console.error('[DB Download] Error:', error);
+      res.status(500).json({ error: 'Download failed' });
+    }
+  }),
+);
+
+router.get('/tables', requirePermission('database.manage'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const tables = db
+      .prepare(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_flo_meta'
+      ORDER BY name
+    `)
+      .all() as { name: string }[];
+
+    const tableInfo = tables
+      .filter(({ name: tableName }) => isSafeIdentifier(tableName))
+      .map(({ name: tableName }) => {
+        const count = db.prepare(`SELECT COUNT(*) as count FROM ${tableName}`).get() as {
+          count: number;
+        };
+        return { name: tableName, rows: count.count };
+      });
+
+    res.json({ tables: tableInfo });
+  } catch (error: any) {
+    console.error('[DB Tables] Error:', error);
+    res.status(500).json({ error: 'Could not fetch database tables' });
+  }
+});
+
+export const databaseRoutes = router;

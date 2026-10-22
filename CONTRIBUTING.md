@@ -1,0 +1,245 @@
+# Contributing to FloCafe
+
+FloCafe welcomes outside contributions from developers, designers, operators, and translators.
+
+All contributors are expected to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+---
+
+## Contribution philosophy
+
+FloCafe is an actively developed, offline-first desktop POS used in real deployments. While core business operations and data safety are stable, internal and extension architecture continues to evolve.
+
+> **An open issue is not automatic approval of a proposed implementation.**
+
+Issues capture bugs, use cases, operator feedback, and design proposals. Before investing substantial effort into writing code, make sure the task's scope and architectural direction are agreed upon.
+
+### What you can start freely
+
+You do not need prior maintainer assignment or formal approval to start working on:
+
+- Small, isolated bug fixes
+- Documentation corrections and clarifications
+- Focused test additions
+- Narrowly scoped issues whose implementation direction is already clear
+
+If you plan to work on an existing issue, leave a short comment to let others know and avoid duplicated effort. Trivial, isolated fixes do not require creating a tracking issue beforehand.
+
+### What requires maintainer approval first
+
+Do not open implementation PRs for the following areas until maintainers have discussed and approved the proposed direction:
+
+- New product features or major workflow changes
+- Architectural changes and new public/extensibility contracts
+- Database schema changes and migration designs
+- Authentication, authorization, and security architecture
+- Tax engine changes, fiscal compliance architecture, and country tax packs
+- Plugin execution or plugin security models
+- Cloud synchronization architecture
+- Major internationalization (i18n) architecture or adding new languages while the current i18n migration is active
+- Large cross-cutting refactors across multiple subsystems
+
+### What counts as approval
+
+Approval for architectural or feature work is indicated by an **explicit comment from a maintainer** confirming that the approach and scope are ready for implementation.
+
+### Unsolicited large pull requests
+
+Large or architecture-changing PRs opened before the direction has been agreed may be moved back to design discussion, kept in draft while the approach is reviewed, or closed if they commit the project to unapproved architecture.
+
+Discussing substantial changes first prevents contributors from spending days implementing solutions that cannot be merged.
+
+### Draft PRs
+
+Draft PRs are welcome for sharing early prototypes, demonstrating bug reproductions, or getting feedback on an agreed direction. However, opening a draft PR does not bypass the requirement to discuss architecture-changing work before implementation.
+
+---
+
+## Set up a development copy
+
+FloCafe requires **Node.js 22 or later** and npm. On Windows, [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (with the "Desktop development with C++" workload) is recommended for compiling native modules such as SQLite.
+
+```sh
+# Clone your fork
+git clone https://github.com/YOUR-USERNAME/FloCafe.git
+cd FloCafe
+
+# Install dependencies
+npm install
+
+# Run the full desktop application
+npm run dev
+```
+
+### Development commands
+
+```sh
+npm run dev              # Build frontend & backend, launch Electron
+node dev-server.js       # Backend only (Express API on :3001, KDS on :3002, Server App on :3003)
+npm run dev:frontend     # Frontend development server in browser
+npm run lint             # Lint backend and frontend
+npm run build            # Compile TypeScript backend to dist/
+npm run build:frontend   # Export static Next.js frontend
+npm test                 # Run default test suite
+```
+
+### Formatting
+
+Oxfmt owns formatting, pinned to an exact version in both `package.json` files. The backend scope is
+JavaScript and TypeScript sources under `main/`, `shared/`, `scripts/`, and `tests/`, plus
+`dev-server.js` and `kill-ports.js`. The frontend scope is JavaScript and TypeScript sources under
+`frontend/src/` and `frontend/e2e/`, plus its maintained JavaScript and TypeScript configuration
+files. This includes TypeScript declarations. Formatting never reorders executable imports,
+`package.json` keys, or Tailwind classes.
+
+```sh
+npm run format                 # Write formatting across both scopes
+npm run format:check           # Report formatting drift without writing
+npm run format:backend         # Backend scope only
+npm run format:check:backend   # Backend scope, check only
+cd frontend && npm run format  # Frontend scope only
+```
+
+These npm commands operate on their complete configured scopes; they do not limit formatting to files
+changed by the current task. Generated and derived files stay outside both scopes: the derived
+print-label table, the translation catalogues, committed test fixtures and goldens, lockfiles, build
+output, coverage, and test results. To format only selected files, run
+`npx oxfmt --write -- path/to/file.ts` from the repository root, or
+`cd frontend && npx oxfmt --write -- src/path/to/file.tsx` for frontend files. Pass only paths owned
+by that package and quote paths containing spaces.
+
+`npm run format:check` reports the files that still need formatting. Existing sources carry a
+formatting backlog, so that command fails until they are formatted, and it is not a CI gate. CI
+checks formatting for the files a change touches: `npm run format:check:changed -- --base
+origin/main` (CI supplies its own comparison base) fails when a touched file is unformatted, and it
+checks each touched file as a whole. Untouched legacy files stay out of scope. Lint stays the
+enforced gate: `npm run lint` reports problems and never rewrites sources.
+
+### Editor and pre-commit hook
+
+`npm install` can install a Husky pre-commit hook that runs lint-staged. It formats staged files in
+each package's formatting scope and lints files in that package's lint scope; root lint is limited
+to `main/` and `shared/`, so root scripts, tests and tooling are format-only. The hook stages the
+formatted result. Partially staged files keep their unstaged edits untouched. Hooks are a local
+convenience rather than a gate: `git commit --no-verify` bypasses them, and CI re-runs the same
+scopes for every pull request.
+
+Hook installation is skipped when it does not apply: `HUSKY=0`, `CI`, `NODE_ENV=production`, a source
+archive without a `.git` directory, a frontend-only install, or a checkout where another tool
+already sets `core.hooksPath` (that setting is never replaced), or a default Git hooks directory
+that already contains a non-sample regular file (existing hooks are preserved). When the Oxc hook
+is not installed, use the manual formatter and lint commands above; CI remains the enforced gate.
+Use `HUSKY=0 npm install` inside linked worktrees, which share Git configuration with the main
+checkout.
+
+> **Port configuration:** FloCafe uses ports `3001` (Main API), `3002` (KDS), and `3003` (Server App). If these ports are in use (e.g. by Docker), FloCafe automatically falls back to subsequent available ports. You can also customize them via `PORT`, `KDS_PORT`, and `SERVER_APP_PORT` in `.env`.
+
+---
+
+## Making a change
+
+### Branch naming & commit conventions
+
+Create a branch from `main` with a descriptive prefix:
+
+- `fix/` — Bug fixes
+- `feat/` — Approved features
+- `docs/` — Documentation updates
+- `test/` — Test additions or improvements
+- `refactor/` — Code refactoring within approved scope
+- `chore/` — Maintenance tasks
+
+Use clear commit messages following Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ci:`, `chore:`). Release notes and `CHANGELOG.md` are automated via `git-cliff` (`npm run changelog`).
+
+### Scope discipline
+
+- **Keep PRs focused:** Do not bundle unrelated cleanup, formatting overhauls, dependency updates, or opportunistic refactors into the same pull request.
+- **Discovered problems:** If you find an adjacent bug or improvement while working on a task, report it separately rather than expanding the scope of your current PR.
+- **PR size:** Split large features into smaller, independently reviewable PRs where practical.
+
+### Code style and patterns
+
+- **Backend (`main/`):** TypeScript with strict types, Express route handlers in `main/routes/`, SQLite access via `better-sqlite3`.
+- **Frontend (`frontend/src/`):** Next.js 16, React 19, Tailwind CSS, shadcn/ui components, and Zustand for shared client state.
+
+---
+
+## AI-assisted contributions
+
+AI coding assistants and tools are welcome. FloCafe itself utilizes AI-assisted engineering workflows.
+
+- **Contributor responsibility:** Contributors remain fully responsible for understanding, explaining, testing, and maintaining everything they submit.
+- **Low-quality submissions:** Bulk-generated, speculative, issue-farming, or low-understanding PRs may be closed regardless of whether they were written by a human or an AI tool.
+- **Architectural discipline:** AI assistants should help implement approved designs, not silently invent unreviewed project architecture in pull requests.
+
+---
+
+## Check your work & verification
+
+Before opening a pull request, run checks appropriate to the affected subsystem:
+
+- **Formatting:** Run `npm run format:check:changed -- --base origin/main` for touched files. To fix selected files, use the per-file Oxfmt commands in [Formatting](#formatting); the npm `format` commands write their full scopes.
+- **Frontend changes:** Run `npm run lint` and `npm run build:frontend`.
+- **Translation / i18n changes:** Run `npm run i18n:check`.
+- **Backend changes:** Run `npm run lint`, `npm run build`, and relevant focused test suites (e.g., `npm run test:printer`, `npm run test:tax-engine`).
+- **Behavior changes:** Add or update focused tests demonstrating the fix or feature.
+- **Cross-cutting or release-sensitive work:** Run the full `npm test` suite.
+
+### Additional review for high-risk areas
+
+Changes touching database migrations, customer data handling, authentication, tax calculations, plugin boundaries, or cloud sync receive deeper maintainer scrutiny and require thorough automated test verification.
+
+---
+
+## Database and customer-data safety
+
+FloCafe runs on real business data that must survive software upgrades.
+
+- **Versioned migrations:** Every schema modification must use a new integer migration version via SQLite's `PRAGMA user_version` in `main/db.ts`.
+- **Destructive changes:** Destructive schema modifications require explicit maintainer approval, a documented data-preservation strategy, a tested upgrade path, and an appropriate recovery/rollback plan.
+- **Verification:** Database changes must be verified against both a fresh database installation and an upgraded database migrated from the latest released schema. For high-risk migrations affecting long-lived data, test against representative older database snapshots.
+- **No data wipes:** Never reset or purge database contents as a shortcut for migration design.
+
+---
+
+## Translations and i18n
+
+FloCafe currently provides translations for English (`en`), Spanish (`es`), French (`fr`), Brazilian Portuguese (`pt`), Russian (`ru`), Filipino (`fil`), Turkish (`tr`), Persian (`fa`, including RTL support), Arabic (`ar`, including RTL support), Urdu (`ur`, including RTL support), German (`de`), Italian (`it`), Japanese (`ja`), Simplified Chinese (`zh`), Traditional Chinese for Taiwan (`zh-tw`), Korean (`ko`), Bahasa Indonesia (`id`), Dutch (`nl`), Hindi (`hi`), Bengali/Bangla (`bn`), Albanian (`sq`), Vietnamese (`vi`), Thai (`th`), and Nepali (`ne`).
+
+- **Existing languages:** Narrowly scoped fixes and improvements to existing translation strings are always welcome. Verify changes with `npm run i18n:check`.
+- **New languages:** Adding an entirely new language requires maintainer coordination through an issue first.
+- **Local scaffolding:** Once a new language is approved, run `npm run i18n:add -- <lang>` (or a canonical lowercase regional key such as `zh-tw`) to copy the English schema without overwriting an existing file. Add the generated language entry to `frontend/src/lib/i18n/languages.ts`, translate the copied leaves while preserving ICU placeholders/tags, then run `npm run i18n:check`.
+
+The validation command is fully offline and checks registry/file consistency, exact English key parity, string and ICU validity, placeholder/tag parity, maintained-language fallback safeguards, and frontend translation-key safety.
+
+For complete authoring, scaffolding, RTL support, and verification instructions, see [Adding a language](docs/guides/adding-a-language.md) and the [internationalization architecture](docs/architecture/internationalization.md). Language-specific script and print constraints are in the [translation terminology reference](docs/reference/translation-terminology.md).
+
+---
+
+## Tax packs and compliance contributions
+
+FloCafe uses a generic calculation engine paired with data-only country tax packs (`main/tax-packs/`).
+
+- **Authoritative sources:** Tax rules must be backed by authoritative references (official tax authorities, enacted legislation, or official administrative guidelines). Blog posts or AI summaries are not sufficient primary sources.
+- **Jurisdictional scope:** Clearly identify the geographic and legal scope of the pack (country-wide VAT, state/province sales taxes, intra/inter-state rules).
+- **Process:** Open a proposal issue before authoring a pack. Follow the [tax pack authoring procedure](docs/guides/adding-a-tax-pack.md) for executable calculation fixtures and verification against `main/tax-packs/types.ts`.
+- **Disclaimer:** FloCafe is software, not certified legal or tax advice. Tax packs do not by themselves guarantee compliance with local regulations.
+
+For the pack schema, trust model, and catalog mechanics, see the [tax pack reference](docs/reference/tax-packs.md). For the authoring procedure, see [Adding a tax pack](docs/guides/adding-a-tax-pack.md).
+
+---
+
+## Opening a pull request
+
+1. Fill out the [.github/pull_request_template.md](.github/pull_request_template.md). Substantive PRs should reference their approved issue or discussion; trivial isolated fixes do not require an issue.
+2. State the exact verification commands executed and summarize results.
+3. If your change touches something [docs/](docs/README.md) already describes, update that page in the same pull request and remove the text it supersedes. The authoring rules are in [DOCUMENTATION.md](DOCUMENTATION.md); run `npm run docs:check` before submitting.
+4. Note any data migration, offline/network impact, or UI changes (include screenshots for visual adjustments).
+
+---
+
+## Getting help
+
+- **Operator & general questions:** [GitHub Discussions](https://github.com/FreeOpenSourcePOS/FloCafe/discussions)
+- **Bug reports & feature requests:** [GitHub Issues](https://github.com/FreeOpenSourcePOS/FloCafe/issues)
+- **Security vulnerabilities:** Report privately per [SECURITY.md](SECURITY.md) (do not open public issues)
