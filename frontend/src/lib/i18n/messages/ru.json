@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Добавить в заказ",
     "billPrintFailed": "Заказ отправлен, но счёт не распечатан",
+    "continueAsGuest": "Продолжить как гость",
     "couldNotLoadData": "Не удалось загрузить данные серверного приложения",
     "couldNotSendOrder": "Не удалось отправить заказ",
     "currentTicket": "Текущий заказ",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Нажмите на пункты меню, чтобы добавить их сюда.",
     "guestFallbackName": "Гость {last4}",
+    "guestLabel": "Гость",
     "itemNotePlaceholder": "Примечание к элементу",
     "kitchen": "Кухня",
     "kotPrintFailed": "Заказ отправлен, но заказ на кухню не распечатан",

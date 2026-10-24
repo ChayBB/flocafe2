@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Thêm vào đơn hàng",
     "billPrintFailed": "Đã gửi đơn hàng nhưng không in được hóa đơn",
+    "continueAsGuest": "Tiếp tục với tư cách khách",
     "couldNotLoadData": "Không thể tải dữ liệu Server App",
     "couldNotSendOrder": "Không thể gửi đơn hàng",
     "currentTicket": "Đơn hàng hiện tại",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Chạm vào món trong thực đơn để thêm vào đây.",
     "guestFallbackName": "Khách {last4}",
+    "guestLabel": "Khách",
     "itemNotePlaceholder": "Ghi chú món",
     "kitchen": "Bếp",
     "kotPrintFailed": "Đã gửi đơn hàng nhưng không in được phiếu bếp",

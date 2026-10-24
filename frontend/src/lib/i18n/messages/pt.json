@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Adicionar ao pedido",
     "billPrintFailed": "Pedido enviado, mas a conta não foi impressa",
+    "continueAsGuest": "Continuar como convidado",
     "couldNotLoadData": "Não foi possível carregar os dados do App do Garçom",
     "couldNotSendOrder": "Não foi possível enviar o pedido",
     "currentTicket": "Comanda atual",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Toque nos itens do menu para adicioná-los aqui.",
     "guestFallbackName": "Convidado {last4}",
+    "guestLabel": "Convidado",
     "itemNotePlaceholder": "Nota do item",
     "kitchen": "Cozinha",
     "kotPrintFailed": "Pedido enviado, mas a comanda da cozinha não foi impressa",

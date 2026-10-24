@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Agregar al pedido",
     "billPrintFailed": "Pedido enviado, pero la cuenta no se imprimió",
+    "continueAsGuest": "Continuar como invitado",
     "couldNotLoadData": "No se pudieron cargar los datos de la App de mesero",
     "couldNotSendOrder": "No se pudo enviar el pedido",
     "currentTicket": "Comanda actual",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Tocá los ítems del menú para agregarlos acá.",
     "guestFallbackName": "Invitado {last4}",
+    "guestLabel": "Invitado",
     "itemNotePlaceholder": "Nota del ítem",
     "kitchen": "Cocina",
     "kotPrintFailed": "Pedido enviado, pero el comprobante de cocina no se imprimió",

@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "افزودن به سفارش",
     "billPrintFailed": "سفارش ارسال شد، اما صورت‌حساب چاپ نشد",
+    "continueAsGuest": "ادامه به‌عنوان مهمان",
     "couldNotLoadData": "بارگذاری داده‌های برنامه سرور انجام نشد",
     "couldNotSendOrder": "ارسال سفارش انجام نشد",
     "currentTicket": "صورتحساب جاری",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "برای افزودن کالاها، روی کالاهای منو بزنید.",
     "guestFallbackName": "میهمان {last4}",
+    "guestLabel": "مهمان",
     "itemNotePlaceholder": "یادداشت کالا",
     "kitchen": "آشپزخانه",
     "kotPrintFailed": "سفارش ارسال شد، اما فیش آشپزخانه چاپ نشد",

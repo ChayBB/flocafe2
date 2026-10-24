@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "注文に追加",
     "billPrintFailed": "注文は送信しましたが、請求書を印刷できませんでした",
+    "continueAsGuest": "ゲストとして続ける",
     "couldNotLoadData": "サーバーアプリのデータを読み込めませんでした",
     "couldNotSendOrder": "注文を送信できませんでした",
     "currentTicket": "現在の伝票",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "メニュー項目をタップしてここに追加します。",
     "guestFallbackName": "お客様 {last4}",
+    "guestLabel": "ゲスト",
     "itemNotePlaceholder": "商品メモ",
     "kitchen": "キッチン",
     "kotPrintFailed": "注文は送信しましたが、キッチン伝票を印刷できませんでした",

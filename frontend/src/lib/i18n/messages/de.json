@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Zur Bestellung hinzufügen",
     "billPrintFailed": "Bestellung gesendet, aber die Rechnung wurde nicht gedruckt",
+    "continueAsGuest": "Als Gast fortfahren",
     "couldNotLoadData": "Server-App-Daten konnten nicht geladen werden",
     "couldNotSendOrder": "Bestellung konnte nicht an die Küche gesendet werden",
     "currentTicket": "Aktueller Bon",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Tippen Sie auf Menüartikel, um sie hier hinzuzufügen.",
     "guestFallbackName": "Gast {last4}",
+    "guestLabel": "Gast",
     "itemNotePlaceholder": "Artikelnotiz",
     "kitchen": "Küche",
     "kotPrintFailed": "Bestellung gesendet, aber der Küchenbon wurde nicht gedruckt",

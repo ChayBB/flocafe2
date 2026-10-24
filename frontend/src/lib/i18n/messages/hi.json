@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "ऑर्डर में जोड़ें",
     "billPrintFailed": "ऑर्डर भेज दिया गया, लेकिन बिल प्रिंट नहीं हुआ",
+    "continueAsGuest": "अतिथि के रूप में जारी रखें",
     "couldNotLoadData": "सर्वर ऐप डेटा लोड नहीं हो सका",
     "couldNotSendOrder": "आदेश नहीं भेजा जा सका",
     "currentTicket": "वर्तमान ऑर्डर",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "मेनू आइटम को यहां जोड़ने के लिए उन पर टैप करें।",
     "guestFallbackName": "अतिथि {last4}",
+    "guestLabel": "अतिथि",
     "itemNotePlaceholder": "आइटम नोट",
     "kitchen": "रसोई",
     "kotPrintFailed": "ऑर्डर भेज दिया गया, लेकिन रसोई टिकट प्रिंट नहीं हुआ",

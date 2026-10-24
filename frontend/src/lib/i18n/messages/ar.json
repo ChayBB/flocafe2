@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "إضافة إلى الطلب",
     "billPrintFailed": "تم إرسال الطلب، لكن الفاتورة لم تُطبع",
+    "continueAsGuest": "المتابعة كضيف",
     "couldNotLoadData": "تعذر تحميل بيانات تطبيق الخادم",
     "couldNotSendOrder": "تعذر إرسال الطلب",
     "currentTicket": "التذكرة الحالية",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "انقر على عناصر القائمة لإضافتها هنا.",
     "guestFallbackName": "ضيف {last4}",
+    "guestLabel": "ضيف",
     "itemNotePlaceholder": "ملاحظة بشأن العنصر",
     "kitchen": "المطبخ",
     "kotPrintFailed": "تم إرسال الطلب، لكن بطاقة المطبخ لم تُطبع",

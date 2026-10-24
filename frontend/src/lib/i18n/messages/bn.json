@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "অর্ডার যোগ করুন",
     "billPrintFailed": "অর্ডার পাঠানো হয়েছে, কিন্তু বিল প্রিন্ট করা হয়নি",
+    "continueAsGuest": "অতিথি হিসেবে চালিয়ে যান",
     "couldNotLoadData": "সার্ভার অ্যাপ ডেটা লোড করা যায়নি",
     "couldNotSendOrder": "অর্ডার পাঠানো যায়নি",
     "currentTicket": "বর্তমান টিকিট",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "মেনু আইটেমগুলিকে এখানে যোগ করতে আলতো চাপুন।",
     "guestFallbackName": "অতিথি {last4}",
+    "guestLabel": "অতিথি",
     "itemNotePlaceholder": "আইটেম নোট",
     "kitchen": "রান্নাঘর",
     "kotPrintFailed": "অর্ডার পাঠানো হয়েছে, কিন্তু রান্নাঘরের টিকিট প্রিন্ট করা হয়নি",

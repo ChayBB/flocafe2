@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "آرڈر میں شامل کریں",
     "billPrintFailed": "آرڈر بھیج دیا گیا، لیکن بل پرنٹ نہیں ہوا",
+    "continueAsGuest": "مہمان کے طور پر جاری رکھیں",
     "couldNotLoadData": "Server App کا ڈیٹا لوڈ نہیں ہو سکا",
     "couldNotSendOrder": "آرڈر نہیں بھیجا جا سکا",
     "currentTicket": "موجودہ ٹکٹ",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "مینو آئٹمز پر کلک کر کے انہیں یہاں شامل کریں۔",
     "guestFallbackName": "مہمان {last4}",
+    "guestLabel": "مہمان",
     "itemNotePlaceholder": "آئٹم نوٹ",
     "kitchen": "کچن",
     "kotPrintFailed": "آرڈر بھیج دیا گیا، لیکن کچن ٹکٹ پرنٹ نہیں ہوا",

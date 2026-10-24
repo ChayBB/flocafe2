@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Toevoegen aan bestelling",
     "billPrintFailed": "Bestelling verzonden, maar de bon is niet afgedrukt",
+    "continueAsGuest": "Doorgaan als gast",
     "couldNotLoadData": "Kan serverapp-gegevens niet laden",
     "couldNotSendOrder": "Kan bestelling niet verzenden",
     "currentTicket": "Huidige bestelling",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Tik op menu-artikelen om ze hier toe te voegen.",
     "guestFallbackName": "Gast {last4}",
+    "guestLabel": "Gast",
     "itemNotePlaceholder": "Artikelopmerking",
     "kitchen": "Keuken",
     "kotPrintFailed": "Bestelling verzonden, maar de keukenbon is niet afgedrukt",

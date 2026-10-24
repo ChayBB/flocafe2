@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "เพิ่มเข้าคำสั่งซื้อ",
     "billPrintFailed": "ส่งคำสั่งซื้อแล้ว แต่พิมพ์บิลไม่สำเร็จ",
+    "continueAsGuest": "ใช้งานแบบผู้เยี่ยมชมต่อ",
     "couldNotLoadData": "ไม่สามารถโหลดข้อมูล Server App ได้",
     "couldNotSendOrder": "ส่งคำสั่งซื้อไม่สำเร็จ",
     "currentTicket": "ใบสั่งปัจจุบัน",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "แตะรายการเมนูเพื่อเพิ่มที่นี่",
     "guestFallbackName": "ลูกค้า {last4}",
+    "guestLabel": "ผู้เยี่ยมชม",
     "itemNotePlaceholder": "หมายเหตุสินค้า",
     "kitchen": "ครัว",
     "kotPrintFailed": "ส่งคำสั่งซื้อแล้ว แต่พิมพ์ใบสั่งอาหารไม่สำเร็จ",

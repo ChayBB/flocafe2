@@ -20,7 +20,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { parsePhone } from '@/lib/phone';
 import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
 import { useTranslations, type AppConfig } from 'use-intl';
@@ -83,6 +83,8 @@ type ServerAppInfo = {
 type ServerAppKey = keyof AppConfig['Messages']['serverApp'];
 
 const TOKEN_KEY = 'flocafe:server-app-token';
+
+const subscribeToNothing = () => () => {};
 
 function createApi(): AxiosInstance {
   const api = axios.create({ baseURL: window.location.origin, timeout: 10000 });
@@ -213,6 +215,16 @@ export default function ServerStandalonePage() {
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  // undefined while rendering on the server; null when the address carries no QR table.
+  const guestTableId = useSyncExternalStore(
+    subscribeToNothing,
+    () => new URLSearchParams(window.location.search).get('table'),
+    () => undefined,
+  );
+  const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
+  const [guestChecked, setGuestChecked] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const guestAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -399,6 +411,38 @@ export default function ServerStandalonePage() {
     };
   }, [api, selectedTableId, user, t]);
 
+  // A table QR opens the app as a guest bound to that one table until someone signs in.
+  useEffect(() => {
+    if (!api || user || !guestTableId || loading) return;
+    let cancelled = false;
+    Promise.all([
+      api.get('/api/guest/table', { params: { table_id: guestTableId } }),
+      api.get('/api/guest/menu'),
+    ])
+      .then(([tableRes, menuRes]) => {
+        if (cancelled) return;
+        const table = tableRes.data.table as { id: string; name: string };
+        setGuestTable(table);
+        setTables([{ id: table.id, name: table.name }]);
+        setTablesLoaded(true);
+        setCategories(menuRes.data.categories || []);
+        setProducts(menuRes.data.products || []);
+        selectedTableIdRef.current = table.id;
+        setSelectedTableId(table.id);
+        orderLoadedTableIdRef.current = table.id;
+        setOrderLoadedTableId(table.id);
+      })
+      .catch(() => {
+        if (!cancelled) setGuestTable(null);
+      })
+      .finally(() => {
+        if (!cancelled) setGuestChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, user, guestTableId, loading]);
+
   useEffect(() => {
     if (!selectedTableId || !user || !api) return;
     let cancelled = false;
@@ -580,6 +624,7 @@ export default function ServerStandalonePage() {
       });
       localStorage.setItem(TOKEN_KEY, res.data.access_token);
       setUser(res.data.user);
+      setShowLogin(false);
     } catch (error: unknown) {
       toastApiError(error, t('signInFailed'), apiErrorT);
     } finally {
@@ -829,7 +874,58 @@ export default function ServerStandalonePage() {
     }
   }
 
+  async function sendGuestDraft() {
+    if (
+      !api ||
+      !guestTable ||
+      draft.length === 0 ||
+      sendInFlightRef.current
+    ) {
+      return;
+    }
+    const lines = draft.map((line) => ({ ...line, addons: line.addons.map((addon) => ({ ...addon })) }));
+    const items = lines.map((line) => cartItemToOrderItem(line));
+    const notes = orderNotes.trim();
+    const signature = JSON.stringify([guestTable.id, items, notes]);
+    if (guestAttemptRef.current?.signature !== signature) {
+      guestAttemptRef.current = { signature, key: createPaymentIdempotencyKey() };
+    }
+    const { key } = guestAttemptRef.current;
+    sendInFlightRef.current = true;
+    setSending(true);
+    try {
+      await api.post('/api/guest/order', {
+        table_id: guestTable.id,
+        items,
+        special_instructions: notes || undefined,
+        idempotency_key: key,
+      });
+      if (guestAttemptRef.current?.signature === signature) guestAttemptRef.current = null;
+      const submittedQtyById = new Map(lines.map((line) => [line.id, line.quantity]));
+      setDraft((currentLines) =>
+        currentLines.flatMap((line) => {
+          const ackedQty = submittedQtyById.get(line.id);
+          if (ackedQty === undefined) return [line];
+          const remainingQuantity = line.quantity - ackedQty;
+          return remainingQuantity > 0 ? [{ ...line, quantity: remainingQuantity }] : [];
+        }),
+      );
+      setOrderNotes((currentNotes) => (currentNotes === orderNotes ? '' : currentNotes));
+      setMobileCartOpen(false);
+      toast.success(t('orderSent'));
+    } catch (error: unknown) {
+      toastApiError(error, t('couldNotSendOrder'), apiErrorT);
+    } finally {
+      sendInFlightRef.current = false;
+      setSending(false);
+    }
+  }
+
   async function sendDraft() {
+    if (!user) {
+      await sendGuestDraft();
+      return;
+    }
     if (
       !api ||
       !selectedTableId ||
@@ -979,7 +1075,11 @@ export default function ServerStandalonePage() {
   }, [draft]);
   const draftItemCount = draft.reduce((sum, line) => sum + line.quantity, 0);
 
-  if (loading) {
+  const guestMode = !user && !!guestTable && !showLogin;
+  const waitingForGuest =
+    !user && (guestTableId === undefined || (!!guestTableId && !guestChecked));
+
+  if (loading || waitingForGuest) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand border-t-transparent" />
@@ -997,7 +1097,7 @@ export default function ServerStandalonePage() {
     );
   }
 
-  if (!user) {
+  if (!user && !guestMode) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <form
@@ -1036,6 +1136,15 @@ export default function ServerStandalonePage() {
             </button>
           </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">{t('loginHint')}</p>
+          {guestTable && (
+            <button
+              type="button"
+              onClick={() => setShowLogin(false)}
+              className="mt-3 w-full text-center text-sm font-medium text-muted-foreground underline"
+            >
+              {t('continueAsGuest')}
+            </button>
+          )}
         </form>
       </div>
     );
@@ -1044,6 +1153,8 @@ export default function ServerStandalonePage() {
   const ticketPanelBody = (
     <>
       <h2 className="text-sm font-semibold">{t('currentTicket')}</h2>
+      {!guestMode && (
+        <>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <input
           value={customerPhone}
@@ -1076,6 +1187,8 @@ export default function ServerStandalonePage() {
         >
           {customerMatch ? tPos('customerFound') : tPos('newCustomerEnterName')}
         </p>
+      )}
+        </>
       )}
 
       {currentOrder?.items && currentOrder.items.length > 0 && (
@@ -1231,26 +1344,51 @@ export default function ServerStandalonePage() {
             </p>
           </div>
           <img src="/logo.svg" alt="Flo" width={32} height={32} className="h-8 w-8 shrink-0" />
-          <button
-            type="button"
-            disabled={sending}
-            onClick={() => setTablePickerOpen((open) => !open)}
-            aria-expanded={tablePickerOpen}
-            data-testid="server-app-table-button"
-            className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
-          >
-            <UtensilsCrossed size={14} />
-            {t('selectTable')}
-          </button>
-          <button
-            onClick={logout}
-            aria-label={tNav('logout')}
-            title={tNav('logout')}
-            data-testid="server-app-session-button"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-green-600 p-2 text-green-600"
-          >
-            <UserRound size={17} />
-          </button>
+          {user ? (
+            <>
+              <span
+                data-testid="server-app-staff-name"
+                className="hidden max-w-[96px] truncate text-sm font-medium min-[400px]:block"
+              >
+                {user.name}
+              </span>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => setTablePickerOpen((open) => !open)}
+                aria-expanded={tablePickerOpen}
+                data-testid="server-app-table-button"
+                className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+              >
+                <UtensilsCrossed size={14} />
+                {t('selectTable')}
+              </button>
+            </>
+          ) : (
+            <span data-testid="server-app-guest-name" className="text-sm font-medium text-muted-foreground">
+              {t('guestLabel')}
+            </span>
+          )}
+          {user ? (
+            <button
+              onClick={logout}
+              aria-label={tNav('logout')}
+              title={tNav('logout')}
+              data-testid="server-app-session-button"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-green-600 p-2 text-green-600"
+            >
+              <UserRound size={17} />
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowLogin(true)}
+              data-testid="server-app-login-button"
+              className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg bg-orange-500 px-3 text-sm font-semibold text-white hover:bg-orange-600"
+            >
+              <UserRound size={16} />
+              {tAuth('signIn')}
+            </button>
+          )}
         </div>
       </header>
 
@@ -1262,9 +1400,9 @@ export default function ServerStandalonePage() {
         </div>
       ) : (
         <main
-          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${tablePickerOpen ? 'lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
+          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${user && tablePickerOpen ? 'lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
-          {tablePickerOpen && (
+          {user && tablePickerOpen && (
           <section className="min-w-0 rounded-lg border border-border bg-card p-3">
             <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               {t('tables')}

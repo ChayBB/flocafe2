@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
+import { GUEST_USER_ID } from '../lib/guest-order';
 
 const router = Router();
 
@@ -171,8 +172,10 @@ function ownerZoneConflict(
 router.get('/owner-candidates', requirePermission('tables.manage'), (_req: Request, res: Response) => {
   const db = getDatabase();
   const rows = db
-    .prepare('SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY name COLLATE NOCASE')
-    .all() as { id: string; name: string; role: string }[];
+    .prepare(
+      'SELECT id, name, role FROM users WHERE is_active = 1 AND id != ? ORDER BY name COLLATE NOCASE',
+    )
+    .all(GUEST_USER_ID) as { id: string; name: string; role: string }[];
   const owned = db
     .prepare('SELECT owner_user_id AS id, floor FROM tables WHERE owner_user_id IS NOT NULL')
     .all() as { id: string; floor: string | null }[];

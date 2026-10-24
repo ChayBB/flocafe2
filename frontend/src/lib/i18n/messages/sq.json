@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Shto në porosi",
     "billPrintFailed": "Porosia u dërgua, por dëftesa nuk u printua",
+    "continueAsGuest": "Vazhdo si mysafir",
     "couldNotLoadData": "Nuk mund të ngarkoheshin të dhënat e aplikacionit të serverit",
     "couldNotSendOrder": "Porosia nuk mund të dërgohej",
     "currentTicket": "Porosi aktuale",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Prekni artikujt e menusë për t’i shtuar këtu.",
     "guestFallbackName": "I ftuar {last4}",
+    "guestLabel": "Mysafir",
     "itemNotePlaceholder": "Shënim i artikullit",
     "kitchen": "Kuzhina",
     "kotPrintFailed": "Porosia u dërgua, por porosia e kuzhinës nuk u printua",

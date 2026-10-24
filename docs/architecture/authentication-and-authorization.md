@@ -246,6 +246,13 @@ configurable, and when the feature is disabled every route returns 404 rather th
 disabled surface is not discoverable. The 404 check appears in three places in
 `main/server-app.ts`, including the one that decides whether a path is proxied at all.
 
+A table QR opens the Server App as a guest bound to that table. Three `/api/guest/*` routes are
+reachable without signing in: the table's name, the menu, and order creation. They act as a
+hidden `Guest` user (`guest-self-order`) that has no usable password, no staff code, and does not
+appear in staff or owner lists; the order lines are rebuilt from the catalog so a guest cannot
+choose a price, order creation is limited to 12 per 10 minutes per address, and a guest cannot
+read orders or customers. Server App sessions end at the next 06:00 in the store time zone.
+
 ## Audit attribution
 
 Every write records the authenticated actor. `order_audit_log` stores `actor_user_id`, `action`,

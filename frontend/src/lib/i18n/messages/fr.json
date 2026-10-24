@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Ajouter à la commande",
     "billPrintFailed": "Commande envoyée, mais l’addition ne s’est pas imprimée",
+    "continueAsGuest": "Continuer en tant qu’invité",
     "couldNotLoadData": "Impossible de charger les données de l’application serveur",
     "couldNotSendOrder": "Impossible d’envoyer la commande",
     "currentTicket": "Addition actuelle",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Touchez les articles du menu pour les ajouter ici.",
     "guestFallbackName": "Client {last4}",
+    "guestLabel": "Invité",
     "itemNotePlaceholder": "Note sur l’article",
     "kitchen": "Cuisine",
     "kotPrintFailed": "Commande envoyée, mais le ticket cuisine ne s'est pas imprimé",

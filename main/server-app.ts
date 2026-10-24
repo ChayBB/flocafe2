@@ -48,6 +48,12 @@ import { resolveContainedPath } from './lib/path-containment';
 import { RegionalNotConfiguredError, resolveRegionalSnapshot } from './countries';
 import { nextDailyResetEpochSeconds } from './lib/daily-session-reset';
 import {
+  GUEST_USER_ID,
+  sanitizeGuestOrderItems,
+  sanitizeGuestOrderNote,
+  sanitizeGuestProduct,
+} from './lib/guest-order';
+import {
   effectivePermissionRevision,
   hasPermission,
   resolveEffectivePermissions,
@@ -193,6 +199,62 @@ async function forwardToMainApiImpl(req: Request, res: Response, targetPath: str
       revokeDatabaseMaintenanceHandoff(handoffToken);
     }
   }
+}
+
+/** Calls the main API on behalf of the Guest account that table-QR visitors order as. */
+async function callMainApiAsGuest(
+  req: Request,
+  method: 'GET' | 'POST',
+  apiPath: string,
+  options: { body?: unknown; query?: Record<string, string>; headers?: Record<string, string> } = {},
+): Promise<{ status: number; data: any }> {
+  const target = new URL(`/api${apiPath}`, `http://127.0.0.1:${getServerPort()}`);
+  for (const [key, value] of Object.entries(options.query ?? {})) target.searchParams.set(key, value);
+  const reservation = (req as any).databaseAdmissionReservation as
+    | DatabaseAdmissionReservation
+    | undefined;
+  const handoffToken = reservation ? createDatabaseMaintenanceHandoff(reservation) : undefined;
+  const guestToken = jwt.sign(
+    { userId: GUEST_USER_ID, email: null, role: 'server', jti: randomUUID() },
+    getJWTSecret(),
+    { expiresIn: '2m' },
+  );
+  try {
+    const upstream = await fetch(target, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${guestToken}`,
+        ...(options.headers ?? {}),
+        ...(handoffToken ? { 'x-flo-maintenance-handoff': handoffToken } : {}),
+      },
+      body: method === 'GET' ? undefined : JSON.stringify(options.body ?? {}),
+      signal: getHttpRequestSignal(req),
+    });
+    const text = await upstream.text();
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    return { status: upstream.status, data };
+  } finally {
+    if (handoffToken) revokeDatabaseMaintenanceHandoff(handoffToken);
+  }
+}
+
+/** The Guest account exists only for audit attribution: it has no usable password and no staff code. */
+function ensureGuestUser(): void {
+  const db = getDatabase();
+  if (db.prepare('SELECT 1 FROM users WHERE id = ?').get(GUEST_USER_ID)) return;
+  const bcrypt = require('bcryptjs');
+  const unusablePassword = bcrypt.hashSync(randomUUID() + randomUUID(), 10);
+  const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  db.prepare(
+    `INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+     VALUES (?, 'Guest', NULL, ?, 'server', 1, ?, ?)`,
+  ).run(GUEST_USER_ID, unusablePassword, stamp, stamp);
 }
 
 export function startServerApp(): Promise<void> {
@@ -403,6 +465,134 @@ export function startServerApp(): Promise<void> {
         const user = (req as Request & { user: ServerAppUser }).user;
         if (token) revokeToken(token, typeof user.exp === 'number' ? user.exp * 1000 : undefined);
         res.json({ success: true });
+      },
+    );
+
+    // Guest access for a table QR: read the menu and the one table, and place orders for that table.
+    const guestOrderRateLimit = expressRateLimit({
+      windowMs: 10 * 60 * 1000,
+      limit: 12,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many orders from this device. Please ask a staff member.' },
+    });
+
+    app.get('/api/guest/table', serverAppApiRateLimit, (req: Request, res: Response) => {
+      if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      const tableId = typeof req.query.table_id === 'string' ? req.query.table_id : '';
+      const table = tableId
+        ? (getDatabase()
+            .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
+            .get(tableId) as { id: string; number: string } | undefined)
+        : undefined;
+      if (!table) return res.status(404).json({ error: 'Table not found' });
+      res.json({ table: { id: table.id, name: table.number } });
+    });
+
+    app.get('/api/guest/menu', serverAppApiRateLimit, async (req: Request, res: Response) => {
+      if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      try {
+        ensureGuestUser();
+        const [categories, products] = await trackHttpRequestWork(
+          req,
+          Promise.all([
+            callMainApiAsGuest(req, 'GET', '/categories', { query: { active: 'true' } }),
+            callMainApiAsGuest(req, 'GET', '/products', { query: { active: 'true' } }),
+          ]),
+        );
+        if (categories.status >= 400 || products.status >= 400) {
+          return res.status(502).json({ error: 'Could not load the menu' });
+        }
+        res.json({
+          categories: categories.data?.categories ?? [],
+          products: (products.data?.products ?? []).map(sanitizeGuestProduct),
+        });
+      } catch (error: any) {
+        if (getHttpRequestSignal(req)?.aborted) return res.status(503).end();
+        console.error('[Server App] Guest menu failed:', error);
+        res.status(502).json({ error: 'Could not load the menu' });
+      }
+    });
+
+    app.post(
+      '/api/guest/order',
+      serverAppApiRateLimit,
+      guestOrderRateLimit,
+      async (req: Request, res: Response) => {
+        if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+        try {
+          const db = getDatabase();
+          const tableId = typeof req.body?.table_id === 'string' ? req.body.table_id : '';
+          const table = tableId
+            ? db.prepare('SELECT id FROM tables WHERE id = ? AND is_active = 1').get(tableId)
+            : undefined;
+          if (!table) return res.status(404).json({ error: 'Table not found' });
+
+          const sanitized = sanitizeGuestOrderItems(db, req.body?.items);
+          if (!sanitized.ok) return res.status(400).json({ error: sanitized.error });
+          const note = sanitizeGuestOrderNote(req.body?.special_instructions);
+          if (note === false) return res.status(400).json({ error: 'The order note is too long' });
+
+          const rawKey = req.body?.idempotency_key;
+          const key =
+            typeof rawKey === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(rawKey) ? rawKey : randomUUID();
+          const headers = { 'Idempotency-Key': `guest-${tableId}-${key}` };
+
+          ensureGuestUser();
+          const open = db
+            .prepare(
+              `SELECT id FROM orders WHERE table_id = ? AND type = 'dine_in'
+               AND status IN ('pending', 'preparing', 'ready') ORDER BY id DESC LIMIT 1`,
+            )
+            .get(tableId) as { id: number } | undefined;
+          const existingItemIds = new Set(
+            open
+              ? (
+                  db.prepare('SELECT id FROM order_items WHERE order_id = ?').all(open.id) as {
+                    id: number;
+                  }[]
+                ).map((row) => row.id)
+              : [],
+          );
+
+          const result = await trackHttpRequestWork(
+            req,
+            open
+              ? callMainApiAsGuest(req, 'POST', `/orders/${open.id}/items`, {
+                  body: { items: sanitized.items, special_instructions: note ?? undefined },
+                  headers,
+                })
+              : callMainApiAsGuest(req, 'POST', '/orders', {
+                  body: {
+                    table_id: tableId,
+                    type: 'dine_in',
+                    special_instructions: note ?? undefined,
+                    items: sanitized.items,
+                  },
+                  headers,
+                }),
+          );
+          if (result.status >= 400 || !result.data?.order) {
+            return res
+              .status(result.status >= 400 ? result.status : 502)
+              .json({ error: result.data?.error || 'Could not send the order' });
+          }
+
+          const order = result.data.order;
+          const newItems = (order.items || []).filter(
+            (item: { id: number }) => !existingItemIds.has(item.id),
+          );
+          // The kitchen ticket is printed here because a guest has no print permission of their own.
+          void callMainApiAsGuest(req, 'POST', '/printers/print-kot', {
+            body: { orderId: order.id, items: newItems },
+          }).catch(() => undefined);
+
+          res.status(201).json({ success: true, order_number: order.order_number ?? null });
+        } catch (error: any) {
+          if (getHttpRequestSignal(req)?.aborted) return res.status(503).end();
+          console.error('[Server App] Guest order failed:', error);
+          res.status(502).json({ error: 'Could not send the order' });
+        }
       },
     );
 

@@ -14,6 +14,7 @@ import { syncPostHogIdentity } from '../services/posthog';
 import { serializeOperationFailure } from '../lib/operation-failure';
 import { isValidEmail } from './auth';
 import { ROLE_ACCESS, ROLE_KEYS, OPERATIONAL_ROLES, hasRole } from '../../shared/role-permissions';
+import { GUEST_USER_ID } from '../lib/guest-order';
 
 const router = Router();
 
@@ -149,7 +150,7 @@ function normalizeStationIds(value: unknown): string[] | null {
 router.get('/', requirePermission('staff.view'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    let query = `SELECT ${STAFF_SELECT_FIELDS} FROM users WHERE 1=1`;
+    let query = `SELECT ${STAFF_SELECT_FIELDS} FROM users WHERE id != '${GUEST_USER_ID}'`;
     const params: any[] = [];
 
     if (req.query.role) {

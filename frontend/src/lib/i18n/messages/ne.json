@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "अर्डरमा थप्नुहोस्",
     "billPrintFailed": "अर्डर पठाइयो, तर बिल छापिएन",
+    "continueAsGuest": "अतिथिका रूपमा जारी राख्नुहोस्",
     "couldNotLoadData": "सर्भर एप डाटा लोड गर्न सकिएन",
     "couldNotSendOrder": "अर्डर पठाउन सकिएन",
     "currentTicket": "हालको टिकट",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "मेनु वस्तुहरूलाई यहाँ थप्न ट्याप गर्नुहोस्।",
     "guestFallbackName": "अतिथि {last4}",
+    "guestLabel": "अतिथि",
     "itemNotePlaceholder": "वस्तु नोट",
     "kitchen": "भान्सा",
     "kotPrintFailed": "अर्डर पठाइयो, तर भान्साको टिकट छापिएन",

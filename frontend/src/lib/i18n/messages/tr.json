@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Siparişe Ekle",
     "billPrintFailed": "Sipariş gönderildi, ancak hesap fişi yazdırılamadı",
+    "continueAsGuest": "Misafir olarak devam et",
     "couldNotLoadData": "Garson Uygulaması verileri yüklenemedi",
     "couldNotSendOrder": "Sipariş gönderilemedi",
     "currentTicket": "Mevcut Fiş",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "garson@restoran.com",
     "emptyDraft": "Buraya eklemek için menü ürünlerine dokunun.",
     "guestFallbackName": "Misafir {last4}",
+    "guestLabel": "Misafir",
     "itemNotePlaceholder": "Ürün notu",
     "kitchen": "Mutfak",
     "kotPrintFailed": "Sipariş gönderildi, ancak mutfak fişi yazdırılamadı",

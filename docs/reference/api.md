@@ -934,22 +934,25 @@ Nineteen routes in total, eleven of which forward:
 Adding a route to `3001` does not expose it on `3003`. A path becomes reachable from the Server App
 only when a forwarding route is added to `main/server-app.ts`.
 
-The seven routes that are not forwards:
+The ten routes that are not forwards:
 
 | Method | Path                   | Authorization                                            | Response                                                                                                                                                                                                                                                                                                 |
 | ------ | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `/api/health`          | none                                                     | `{ status, service, version, timestamp }`                                                                                                                                                                                                                                                                |
 | `GET`  | `/api/server-app/info` | none                                                     | `{ language, country, currency, currency_symbol, currency_position, currency_fraction_digits, kds_enabled }`. `404` when the feature is disabled; `409` with `error: "regional_not_configured"` when the regional snapshot cannot be resolved.                                                           |
-| `POST` | `/api/auth/login`      | none, `loginAuthRateLimit` + shared failed-login limiter | Body `email`, `password`, `remember_me`. `{ access_token, user: { id, name, email, role } }`; 24 hours, or 10 days with `remember_me`. `401` on bad credentials with `attempts_remaining`; `429` after 5 failed attempts across local login listeners; `403` for a role outside `ROLE_ACCESS.serverApp`. |
+| `POST` | `/api/auth/login`      | none, `loginAuthRateLimit` + shared failed-login limiter | Body `identifier` (staff name or email; `email` is still accepted) and `password` (the 4-digit staff code, the PIN, or the account password). `{ access_token, user: { id, name, email, role } }`; the token expires at the next 06:00 in the store time zone. `409 ambiguous_credentials` when several staff with that name match the code. `401` on bad credentials with `attempts_remaining`; `429` after 5 failed attempts across local login listeners; `403` for a role outside `ROLE_ACCESS.serverApp`. |
 | `GET`  | `/api/auth/me`         | `ROLE_ACCESS.serverApp`                                  | `{ user: { id, name, email, role } }`                                                                                                                                                                                                                                                                    |
 | `POST` | `/api/auth/logout`     | `ROLE_ACCESS.serverApp`                                  | `{ success: true }`, revoking the token                                                                                                                                                                                                                                                                  |
+| `GET`  | `/api/guest/table`     | none, `serverAppApiRateLimit`                            | `{ table: { id, name } }` for an active table named by `?table_id=`; `404` otherwise. Used by the table-QR guest view.                                                                                                                                                                                   |
+| `GET`  | `/api/guest/menu`      | none, `serverAppApiRateLimit`                            | `{ categories, products }` fetched from the main API as the Guest account, with product cost and inventory-linking fields removed.                                                                                                                                                                       |
+| `POST` | `/api/guest/order`     | none, `serverAppApiRateLimit` + 12 per 10 minutes per IP | Body `table_id`, `items`, `special_instructions`, `idempotency_key`. Rebuilds the lines from the catalog (add-on names and prices never come from the request), then creates the table's order or appends to its open one as the Guest account and prints the kitchen ticket. `201 { success, order_number }`. |
 | `GET`  | `/`                    | none                                                     | Redirect to `/server-standalone`                                                                                                                                                                                                                                                                         |
 | `GET`  | `/*splat`              | none                                                     | Static bundle, falling back to the `/server-standalone` page                                                                                                                                                                                                                                             |
 
 When the frontend export is missing, the `GET /` redirect is replaced by a placeholder page instead,
 so `GET /` is two mutually exclusive registrations rather than two routes.
 
-`requireServerAppAuth` is applied to every route except `/api/health` and `/api/server-app/info`, and
+`requireServerAppAuth` is applied to every route except `/api/health`, `/api/server-app/info`, the three `/api/guest/*` routes and the login route, and
 it runs the feature check **before** the token check. Behaviour by condition:
 
 - Feature disabled: `404` with `{ error: "Not found" }`, so the surface is not advertised.
@@ -1145,9 +1148,9 @@ This page lists 308 HTTP route registrations across 307 distinct rows, and one W
   are mutually exclusive `GET /` handlers under one path, which is why 19 registrations render as 18
   rows.
 
-Every one of the 307 rows is listed with its method, path, authorization gate, and the parameters
-its handler reads. The **Response** column carries a note for 171 of them: 145 main-API endpoints,
-all 8 KDS-server routes, and the 18 Server App routes. The remaining 146 main-API endpoints are
+Every one of the 310 rows is listed with its method, path, authorization gate, and the parameters
+its handler reads. The **Response** column carries a note for 174 of them: 145 main-API endpoints,
+all 8 KDS-server routes, and the 21 Server App routes. The remaining 146 main-API endpoints are
 listed with method, path, gate, and parameters only, and this page asserts nothing about what they
 return. Those rows are complete as a route inventory and silent as a contract; the handler in
 `main/routes/` is authoritative for them. A `-` in the Response column means that, not that the

@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "加入訂單",
     "billPrintFailed": "訂單已傳送，但帳單未列印",
+    "continueAsGuest": "以訪客身分繼續",
     "couldNotLoadData": "無法載入服務員應用程式資料",
     "couldNotSendOrder": "無法傳送訂單",
     "currentTicket": "目前單據",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "點按菜單商品將其新增到這裡。",
     "guestFallbackName": "客人 {last4}",
+    "guestLabel": "訪客",
     "itemNotePlaceholder": "商品備註",
     "kitchen": "廚房",
     "kotPrintFailed": "訂單已傳送，但廚房單未列印",

@@ -1589,6 +1589,7 @@
   "serverApp": {
     "addToOrder": "Tambahkan ke pesanan",
     "billPrintFailed": "Pesanan terkirim, tetapi tagihan tidak tercetak",
+    "continueAsGuest": "Lanjutkan sebagai tamu",
     "couldNotLoadData": "Tidak dapat memuat data Server App",
     "couldNotSendOrder": "Tidak dapat mengirim pesanan",
     "currentTicket": "Tiket saat ini",
@@ -1599,6 +1600,7 @@
     "emailPlaceholder": "server@flo.local",
     "emptyDraft": "Ketuk item menu untuk menambahkannya di sini.",
     "guestFallbackName": "Tamu {last4}",
+    "guestLabel": "Tamu",
     "itemNotePlaceholder": "Catatan item",
     "kitchen": "Dapur",
     "kotPrintFailed": "Pesanan terkirim, tetapi tiket dapur tidak tercetak",

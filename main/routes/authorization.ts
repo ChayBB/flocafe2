@@ -24,6 +24,7 @@ import {
   type PermissionId,
 } from '../../shared/permissions';
 import { isRole, ROLE_KEYS, type Role } from '../../shared/role-permissions';
+import { GUEST_USER_ID } from '../lib/guest-order';
 
 const router = Router();
 const MAX_OVERRIDES = PERMISSION_DEFINITIONS.length;
@@ -300,7 +301,7 @@ router.get('/users', (_req: Request, res: Response) => {
   const users = getDatabase()
     .prepare(`
     SELECT id, name, email, role, (pin_hash IS NOT NULL) AS has_pin, (staff_code_hash IS NOT NULL) AS has_staff_code, is_active, created_at, updated_at
-    FROM users ORDER BY role, name
+    FROM users WHERE id != '${GUEST_USER_ID}' ORDER BY role, name
   `)
     .all();
   res.json({ users });
