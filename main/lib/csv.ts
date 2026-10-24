@@ -4,6 +4,11 @@ export const FLO_CSV_ENCODING_QUOTE_V1 = 'quote-v1';
 const FORMULA_TRIGGER_PREFIX = /^\s*[=+\-@]/;
 const QUOTE_V1_ADDED_APOSTROPHE = /^'(?:'|\s*[=+\-@])/;
 
+/** Excel guesses a legacy code page for UTF-8 CSV files unless they start with a BOM. */
+export function withUtf8Bom(csv: string): string {
+  return csv.startsWith('\uFEFF') ? csv : '\uFEFF' + csv;
+}
+
 /** CSV field serializer with spreadsheet formula neutralization (CWE-1236). */
 export function toCsvRow(fields: (string | number | null | undefined)[]): string {
   return fields

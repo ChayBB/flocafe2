@@ -19,6 +19,7 @@ import {
   decodeLegacyProvenField,
   decodeQuoteV1Field,
   toQuoteV1CsvRow,
+  withUtf8Bom,
 } from '../lib/csv';
 
 const router = Router();
@@ -128,6 +129,8 @@ function parseCSV(text: string): string[][] {
   if (Buffer.byteLength(text, 'utf8') > MAX_CSV_BYTES) {
     throw new CsvImportError(`CSV exceeds the ${MAX_CSV_BYTES}-byte size limit`);
   }
+  // A spreadsheet may re-save the file with a BOM; it is not part of the first header.
+  if (text.startsWith('\uFEFF')) text = text.slice(1);
 
   const rows: string[][] = [];
   let fields: string[] = [];
@@ -391,9 +394,9 @@ router.get(
     const type = req.params.type as string;
     const csv = TEMPLATES[type];
     if (!csv) return res.status(404).json({ error: 'Unknown template type' });
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${type}-template.csv"`);
-    res.send(csv);
+    res.send(withUtf8Bom(csv));
   },
 );
 
@@ -420,9 +423,9 @@ router.get(
             FLO_CSV_ENCODING_QUOTE_V1,
           ]),
         );
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="categories-export.csv"');
-      res.send(lines.join('\n'));
+      res.send(withUtf8Bom(lines.join('\n')));
     } catch (err: any) {
       console.error('[API] Menu CSV export failed:', err);
       res.status(500).json({ error: 'Menu CSV export failed' });
@@ -469,9 +472,9 @@ router.get(
           ]),
         );
       }
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="products-export.csv"');
-      res.send(lines.join('\n'));
+      res.send(withUtf8Bom(lines.join('\n')));
     } catch (err: any) {
       if (err instanceof RegionalNotConfiguredError)
         return res.status(409).json({ error: 'regional_not_configured' });
@@ -516,9 +519,9 @@ router.get(
             ]),
           );
       }
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="addons-export.csv"');
-      res.send(lines.join('\n'));
+      res.send(withUtf8Bom(lines.join('\n')));
     } catch (err: any) {
       if (err instanceof RegionalNotConfiguredError)
         return res.status(409).json({ error: 'regional_not_configured' });
