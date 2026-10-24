@@ -46,6 +46,7 @@ import { API_JSON_BODY_LIMIT } from './http-limits';
 import { buildCspHeader } from './csp';
 import { resolveContainedPath } from './lib/path-containment';
 import { RegionalNotConfiguredError, resolveRegionalSnapshot } from './countries';
+import { nextDailyResetEpochSeconds } from './lib/daily-session-reset';
 import {
   effectivePermissionRevision,
   hasPermission,
@@ -279,7 +280,7 @@ export function startServerApp(): Promise<void> {
         }
 
         const email = normalizeEmail(req.body?.email);
-        const { password, remember_me } = req.body;
+        const { password } = req.body;
         if (!email || !password)
           return res.status(400).json({ error: 'Email and password required' });
 
@@ -314,10 +315,29 @@ export function startServerApp(): Promise<void> {
 
         resetSuccessfulLogin(ip);
 
+        const settingsRows = db.prepare('SELECT key, value FROM settings').all() as {
+          key: string;
+          value: string;
+        }[];
+        const storeSettings: Record<string, string> = {};
+        for (const row of settingsRows) storeSettings[row.key] = row.value;
+        let sessionTimeZone: string;
+        try {
+          sessionTimeZone = resolveRegionalSnapshot(storeSettings).timezone;
+        } catch (error) {
+          if (error instanceof RegionalNotConfiguredError)
+            return res.status(409).json({ error: 'regional_not_configured' });
+          throw error;
+        }
         const token = jwt.sign(
-          { userId: user.id, email: user.email, role: user.role, jti: randomUUID() },
+          {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            jti: randomUUID(),
+            exp: nextDailyResetEpochSeconds(new Date(), sessionTimeZone),
+          },
           getJWTSecret(),
-          { expiresIn: remember_me ? '10d' : '24h' },
         );
 
         res.json({

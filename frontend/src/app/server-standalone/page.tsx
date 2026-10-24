@@ -9,7 +9,6 @@ import {
   Circle,
   Flame,
   LayoutGrid,
-  LogOut,
   Minus,
   Plus,
   RefreshCw,
@@ -199,7 +198,6 @@ export default function ServerStandalonePage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
@@ -379,7 +377,10 @@ export default function ServerStandalonePage() {
           setSelectedTableId(initialTable.id);
         }
       })
-      .catch(() => toast.error(t('couldNotLoadData')));
+      .catch((error) => {
+        if (error?.response?.status === 401) setUser(null);
+        else toast.error(t('couldNotLoadData'));
+      });
     return () => {
       cancelled = true;
     };
@@ -540,9 +541,10 @@ export default function ServerStandalonePage() {
   function handleRefresh() {
     if (sendInFlightRef.current) return;
     const tableId = selectedTableIdRef.current;
-    Promise.all([loadAll(), tableId ? loadOrder(tableId) : Promise.resolve()]).catch(() =>
-      toast.error(t('refreshFailed')),
-    );
+    Promise.all([loadAll(), tableId ? loadOrder(tableId) : Promise.resolve()]).catch((error) => {
+      if (error?.response?.status === 401) setUser(null);
+      else toast.error(t('refreshFailed'));
+    });
   }
 
   function openAddonModal(
@@ -571,7 +573,6 @@ export default function ServerStandalonePage() {
       const res = await api.post('/api/auth/login', {
         email,
         password,
-        remember_me: rememberMe,
       });
       localStorage.setItem(TOKEN_KEY, res.data.access_token);
       setUser(res.data.user);
@@ -581,6 +582,36 @@ export default function ServerStandalonePage() {
       setLoginLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem(TOKEN_KEY);
+    let expiresAt = 0;
+    try {
+      expiresAt = JSON.parse(atob((token ?? '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000;
+    } catch {
+      return;
+    }
+    if (!Number.isFinite(expiresAt)) return;
+    const endSession = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      setUser(null);
+    };
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      endSession();
+      return;
+    }
+    const timer = setTimeout(endSession, Math.min(remaining, 2 ** 31 - 1));
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() >= expiresAt) endSession();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
 
   async function logout() {
     try {
@@ -970,7 +1001,7 @@ export default function ServerStandalonePage() {
           className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-sm"
         >
           <div className="mb-6 text-center">
-            <UserRound size={42} className="mx-auto mb-3 text-brand" />
+            <UserRound size={42} className="mx-auto mb-3 text-red-600" aria-hidden="true" />
             <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{t('loginSubtitle')}</p>
           </div>
@@ -992,15 +1023,6 @@ export default function ServerStandalonePage() {
               required
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-                className="rounded border-border text-brand focus:ring-brand"
-              />
-              {tAuth('rememberMe')}
-            </label>
             <button
               disabled={loginLoading}
               className="h-11 w-full rounded-lg bg-brand font-semibold text-white disabled:opacity-60"
@@ -1214,9 +1236,11 @@ export default function ServerStandalonePage() {
           <button
             onClick={logout}
             aria-label={tNav('logout')}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border p-2 text-muted-foreground"
+            title={tNav('logout')}
+            data-testid="server-app-session-button"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-green-600 p-2 text-green-600"
           >
-            <LogOut size={17} />
+            <UserRound size={17} />
           </button>
         </div>
       </header>
