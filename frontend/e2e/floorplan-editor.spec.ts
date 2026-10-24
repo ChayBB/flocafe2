@@ -3,7 +3,7 @@ import { E2E_BASE_URL as BASE } from './helpers/urls';
 
 // Tall viewport so the canvas AND the staging tray below it are inside the
 // viewport — mouse drags hit nothing outside it.
-test.use({ viewport: { width: 1280, height: 1000 } });
+test.use({ viewport: { width: 1280, height: 1300 } });
 
 const EMAIL = 'manager@flo.local';
 const PASSWORD = 'E2ePass123!';
@@ -156,6 +156,12 @@ test('floorplan editor: drag table back to tray unplaces it', async ({ page, req
   await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(trayBox.x + trayBox.width / 2, trayBox.y + trayBox.height / 2, { steps: 8 });
+  // The tray shifts while a chip is dragged: aim again at where it is now
+  const liveTrayBox = await tray.boundingBox();
+  if (!liveTrayBox) throw new Error('missing tray geometry');
+  await page.mouse.move(liveTrayBox.x + liveTrayBox.width / 2, liveTrayBox.y + liveTrayBox.height / 2, { steps: 4 });
+  // Release only once the tray shows the drop highlight, as a user pausing over it would
+  await expect(tray).toHaveClass(/border-brand/);
   await page.mouse.up();
 
   await expect(page.getByTestId('floorplan-tray-T1')).toBeVisible();
@@ -264,6 +270,10 @@ test('floorplan editor: add a named floor and see it in the all-floors overview'
   expect(floorTable).toMatch(/^\d+$/);
   await floorForm.getByRole('button', { name: 'Create Table' }).click();
   await expect(page.getByText('Table created')).toBeVisible();
+
+  // Creating a zone offers its QR codes in a dialog; close it before using the editor
+  await page.getByRole('dialog', { name: 'Order QR codes' }).getByRole('button', { name: 'Close', exact: true }).last().click();
+  await expect(page.getByRole('dialog', { name: 'Order QR codes' })).toBeHidden();
 
   // Editor switches to the new floor; its first table starts placed on the canvas
   await expect(page.getByTestId(`floorplan-chip-${floorTable}`)).toBeVisible();
