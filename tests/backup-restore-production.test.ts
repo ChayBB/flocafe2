@@ -35,6 +35,7 @@ import {
   restoreBackup,
   validateInventoryLedgerDatabase,
   buildIdealSchemaDb,
+  MIGRATIONS,
 } from '../main/db';
 import { adjustProductStock } from '../main/services/inventory';
 
@@ -973,8 +974,8 @@ async function run() {
     initDatabase();
     assert.equal(
       getCurrentSchemaVersion(),
-      115,
-      'interrupted v114 replacement recovered and migrated to v115',
+      MIGRATIONS[MIGRATIONS.length - 1].version,
+      'interrupted v114 replacement recovered and migrated to the latest schema',
     );
     assert.equal(
       fs.existsSync(journalPath),
