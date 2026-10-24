@@ -500,7 +500,12 @@ export default function AddonModal({
               </>
             )}
           </div>
-          <Button onClick={handleAdd} disabled={!isValid} className="w-full" size="lg">
+          <Button
+            onClick={handleAdd}
+            disabled={!isValid}
+            className="w-full bg-orange-500 text-white hover:bg-orange-600 disabled:bg-orange-500/50"
+            size="lg"
+          >
             {mode === 'edit'
               ? t('saveItemChanges', { total: fmt(itemTotal) })
               : t('addToCart', { total: fmt(itemTotal) })}

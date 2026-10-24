@@ -300,7 +300,7 @@ export default function CartPanel({
                   data-testid="cart-table-button"
                   className={`flex items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors whitespace-nowrap min-h-[38px] ${
                     cart.tableId
-                      ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+                      ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-950/60'
                       : 'bg-amber-50 border-amber-400 text-amber-700 hover:bg-amber-100'
                   }`}
                 >
@@ -684,7 +684,7 @@ export default function CartPanel({
           <Button
             onClick={onPlaceOrder}
             disabled={submitting || cart.items.length === 0}
-            className="flex-1"
+            className="flex-1 bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-70"
             size="lg"
           >
             {submitting ? t('placing') : t('placeOrderButton')}
