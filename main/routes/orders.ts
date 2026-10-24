@@ -1,3 +1,8 @@
+import {
+  WEIGHT_PENDING_NOTE,
+  isWeightPricedProduct,
+  withWeightPendingNote,
+} from '../lib/weight-pending';
 import { createHash } from 'crypto';
 import { Router, Request, Response } from 'express';
 import {
@@ -821,6 +826,8 @@ interface OrderItemInput {
   inventory_deducted_quantity?: number;
   inventory_target_product_id?: string | null;
   inventory_target_variant_id?: string | null;
+  weight_pending?: boolean;
+  weight?: number | null;
   addons?:
     | {
         id?: string;
@@ -852,8 +859,8 @@ function insertOrderItems(
   const insertItem = db.prepare(`
   INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, inventory_product_id, inventory_variant_id,
     subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-    modifier_selection, special_instructions, recipe_snapshot, status, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, weight, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
   const insertedItemIds: (number | bigint)[] = [];
@@ -943,6 +950,12 @@ function insertOrderItems(
       ? JSON.stringify(taxResult.tax_snapshot)
       : null;
 
+    // Quantity edits carry the line's weighing state; new lines start unweighed.
+    const weightPending = context.preserveUnitPrice
+      ? Boolean(item.weight_pending)
+      : isWeightPricedProduct(db, product);
+    const weight = context.preserveUnitPrice ? (item.weight ?? null) : null;
+
     const itemCreatedAt = now();
     const recipeSnapshot =
       context.preserveSelections && item.recipe_snapshot !== undefined
@@ -972,9 +985,13 @@ function insertOrderItems(
           ? variantSelectionSnapshot(variant)
           : JSON.stringify(item.variant_selection || null),
       JSON.stringify(item.modifier_selection || null),
-      item.special_instructions || null,
+      weightPending && weight === null
+        ? withWeightPendingNote(item.special_instructions)
+        : item.special_instructions || null,
       recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
       initialStatus,
+      weightPending ? 1 : 0,
+      weight,
       itemCreatedAt,
       itemCreatedAt,
     );
@@ -1036,6 +1053,8 @@ interface OrderItemRow {
   inventory_product_id: string | null;
   inventory_variant_id: string | null;
   recipe_snapshot: string | null;
+  weight_pending?: number | null;
+  weight?: number | null;
   updated_at: string;
 }
 
@@ -1707,8 +1726,8 @@ router.post(
         const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, inventory_product_id, inventory_variant_id,
           subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, special_instructions, recipe_snapshot, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
       `);
 
         const validatedItems: Array<{
@@ -1851,6 +1870,7 @@ router.post(
           subtotal += itemSubtotal;
 
           const itemCreatedAt = now();
+          const weightPricedLine = isWeightPricedProduct(db, product);
           const recipeSnapshot = buildRecipeSnapshot(
             db,
             product.id,
@@ -1879,8 +1899,11 @@ router.post(
               ? variantSelectionSnapshot(variant)
               : JSON.stringify(item.variant_selection || null),
             JSON.stringify(item.modifier_selection || null),
-            item.special_instructions || null,
+            weightPricedLine
+              ? withWeightPendingNote(item.special_instructions)
+              : item.special_instructions || null,
             recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
+            weightPricedLine ? 1 : 0,
             itemCreatedAt,
             itemCreatedAt,
           );
@@ -4776,6 +4799,102 @@ router.patch(
 );
 
 // Owner-only edit of a live order line: change its quantity or swap it for another product.
+function persistRecomputedOrderTotals(
+  db: ReturnType<typeof getDatabase>,
+  orderId: string,
+  currentOrder: EditableOrderRow,
+  context: {
+    tenantInfo: Parameters<typeof calculateItemTax>[0] & { currency: string };
+    customer: TaxCustomerRow | null;
+    bills: { paid_amount: number | null }[];
+    decimals: number;
+  },
+): void {
+  const { tenantInfo, customer, bills, decimals } = context;
+  const orderTotals = calculateOrderTotals(db, orderId);
+  const { subtotal } = orderTotals;
+  let newDiscountAmount = currentOrder.discount_amount || 0;
+  if (newDiscountAmount > 0 && currentOrder.subtotal > 0) {
+    if (currentOrder.discount_type === 'percentage') {
+      newDiscountAmount = Number(
+        ((subtotal * (currentOrder.discount_value || 0)) / 100).toFixed(decimals),
+      );
+    } else {
+      newDiscountAmount = Math.min(subtotal, Number(newDiscountAmount.toFixed(decimals)));
+    }
+  }
+  const engineCharges = resolveEngineCharges(currentOrder, subtotal, newDiscountAmount);
+  const { taxRollup, total, roundOff } = recomputeOrderTotals({
+    tenantInfo,
+    chargeContext: currentOrder,
+    customer,
+    totals: orderTotals,
+    discountAmount: newDiscountAmount,
+    taxScaling: 'when-discounted',
+    appliedCharges: engineCharges ? engineCharges.appliedCharges : null,
+    chargeColumnOverrides: engineCharges?.chargeColumnOverrides,
+  });
+
+  const { total: payableTotal } = applyPayableRounding(
+    total,
+    getActiveCountryPack(tenantInfo.country),
+    tenantInfo.currency,
+  );
+  const collected = bills.reduce((sum, bill) => sum + Number(bill.paid_amount || 0), 0);
+  if (payableTotal < collected) {
+    throw Object.assign(
+      new Error(
+        'The new total is below the amount already collected; refund the difference first',
+      ),
+      { statusCode: 409 },
+    );
+  }
+
+  const serviceCharge = engineCharges
+    ? engineCharges.columns.service_charge
+    : currentOrder.service_charge || 0;
+  const packagingCharge = engineCharges
+    ? engineCharges.columns.packaging_charge
+    : currentOrder.packaging_charge || 0;
+  const chargesJson = engineCharges
+    ? engineCharges.chargesJson
+    : (currentOrder.charges_breakdown ?? null);
+  db.prepare(`
+    UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, tax_snapshot = ?, discount_amount = ?, total = ?,
+      service_charge = ?, packaging_charge = ?, charges_breakdown = ?, round_off = ?, updated_at = ? WHERE id = ?
+  `).run(
+    subtotal,
+    taxRollup.taxAmount,
+    JSON.stringify(taxRollup.breakdowns),
+    taxRollup.snapshotJson,
+    newDiscountAmount,
+    total,
+    serviceCharge,
+    packagingCharge,
+    chargesJson,
+    roundOff,
+    now(),
+    orderId,
+  );
+  syncUnpaidBillsForOrder(
+    db,
+    orderId,
+    {
+      subtotal,
+      taxAmount: taxRollup.taxAmount,
+      taxBreakdown: JSON.stringify(taxRollup.breakdowns),
+      taxSnapshot: taxRollup.snapshotJson,
+      discountAmount: newDiscountAmount,
+      deliveryCharge: currentOrder.delivery_charge || 0,
+      packagingCharge,
+      serviceCharge,
+      chargesBreakdown: chargesJson,
+      total,
+    },
+    tenantInfo.country,
+  );
+}
+
 router.patch(
   '/:orderId/items/:itemId/edit',
   orderWriteRateLimit,
@@ -5053,6 +5172,8 @@ router.patch(
               variant_selection: parsedOld.variant_selection,
               modifier_selection: parsedOld.modifier_selection,
               special_instructions: oldItem.special_instructions,
+              weight_pending: Boolean(oldItem.weight_pending),
+              weight: oldItem.weight ?? null,
               addons: oldAddons.map((addon) => ({
                 id: addon.addon_id ?? undefined,
                 name: addon.addon_name,
@@ -5079,7 +5200,12 @@ router.patch(
           }
 
           try {
-            validateItemNotes(db, newItem.special_instructions);
+            validateItemNotes(
+              db,
+              newItem.special_instructions
+                ?.replace(`${WEIGHT_PENDING_NOTE} | `, '')
+                .replace(WEIGHT_PENDING_NOTE, ''),
+            );
             if (preserveStoredSelections) {
               // A reduction needs no extra units, so the stored selections stay
               // authoritative even when the catalog has since disabled the sold
@@ -5178,88 +5304,12 @@ router.patch(
           }
         }
 
-        const orderTotals = calculateOrderTotals(db, orderId);
-        const { subtotal } = orderTotals;
-        let newDiscountAmount = currentOrder.discount_amount || 0;
-        if (newDiscountAmount > 0 && currentOrder.subtotal > 0) {
-          if (currentOrder.discount_type === 'percentage') {
-            newDiscountAmount = Number(
-              ((subtotal * (currentOrder.discount_value || 0)) / 100).toFixed(decimals),
-            );
-          } else {
-            newDiscountAmount = Math.min(subtotal, Number(newDiscountAmount.toFixed(decimals)));
-          }
-        }
-        const engineCharges = resolveEngineCharges(currentOrder, subtotal, newDiscountAmount);
-        const { taxRollup, total, roundOff } = recomputeOrderTotals({
+        persistRecomputedOrderTotals(db, orderId, currentOrder, {
           tenantInfo,
-          chargeContext: currentOrder,
           customer,
-          totals: orderTotals,
-          discountAmount: newDiscountAmount,
-          taxScaling: 'when-discounted',
-          appliedCharges: engineCharges ? engineCharges.appliedCharges : null,
-          chargeColumnOverrides: engineCharges?.chargeColumnOverrides,
+          bills,
+          decimals,
         });
-
-        const { total: payableTotal } = applyPayableRounding(
-          total,
-          getActiveCountryPack(tenantInfo.country),
-          tenantInfo.currency,
-        );
-        const collected = bills.reduce((sum, bill) => sum + Number(bill.paid_amount || 0), 0);
-        if (payableTotal < collected) {
-          throw Object.assign(
-            new Error(
-              'The new total is below the amount already collected; refund the difference first',
-            ),
-            { statusCode: 409 },
-          );
-        }
-
-        const serviceCharge = engineCharges
-          ? engineCharges.columns.service_charge
-          : currentOrder.service_charge || 0;
-        const packagingCharge = engineCharges
-          ? engineCharges.columns.packaging_charge
-          : currentOrder.packaging_charge || 0;
-        const chargesJson = engineCharges
-          ? engineCharges.chargesJson
-          : (currentOrder.charges_breakdown ?? null);
-        db.prepare(`
-          UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, tax_snapshot = ?, discount_amount = ?, total = ?,
-            service_charge = ?, packaging_charge = ?, charges_breakdown = ?, round_off = ?, updated_at = ? WHERE id = ?
-        `).run(
-          subtotal,
-          taxRollup.taxAmount,
-          JSON.stringify(taxRollup.breakdowns),
-          taxRollup.snapshotJson,
-          newDiscountAmount,
-          total,
-          serviceCharge,
-          packagingCharge,
-          chargesJson,
-          roundOff,
-          now(),
-          orderId,
-        );
-        syncUnpaidBillsForOrder(
-          db,
-          orderId,
-          {
-            subtotal,
-            taxAmount: taxRollup.taxAmount,
-            taxBreakdown: JSON.stringify(taxRollup.breakdowns),
-            taxSnapshot: taxRollup.snapshotJson,
-            discountAmount: newDiscountAmount,
-            deliveryCharge: currentOrder.delivery_charge || 0,
-            packagingCharge,
-            serviceCharge,
-            chargesBreakdown: chargesJson,
-            total,
-          },
-          tenantInfo.country,
-        );
 
         recordOrderAudit(db, {
           orderId,
@@ -5304,6 +5354,191 @@ router.patch(
     } catch (err) {
       const error = err as { statusCode?: number; message?: string };
       console.error('[Orders] Edit item error:', error);
+      res
+        .status(error.statusCode || 500)
+        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+    }
+  },
+);
+
+// Weigh a weight-priced line: its unit price becomes the base price per kg times the weight.
+router.patch(
+  '/:orderId/items/:itemId/weight',
+  orderWriteRateLimit,
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.orderId);
+      const itemId = String(req.params.itemId);
+      const actorId = String((req as Request & { user?: { userId?: string } }).user?.userId || '');
+      if (!actorId) return res.status(403).json({ error: 'Authentication required' });
+
+      const weight = Number(req.body?.weight);
+      if (
+        !Number.isFinite(weight) ||
+        weight < 0.3 ||
+        weight > 100 ||
+        Number(weight.toFixed(3)) !== weight
+      ) {
+        return res
+          .status(400)
+          .json({ error: 'weight must be between 0.3 and 100 with at most 3 decimals' });
+      }
+
+      const db = getDatabase();
+      const order = withTxn(() => {
+        const currentOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as
+          | EditableOrderRow
+          | undefined;
+        if (!currentOrder) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+        const item = db
+          .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
+          .get(itemId, orderId) as OrderItemRow | undefined;
+        if (!item) {
+          throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+        }
+        if (!item.weight_pending) {
+          throw Object.assign(new Error('This item is not waiting for a weight'), {
+            statusCode: 409,
+          });
+        }
+        if (isTerminalItemStatus(item.status)) {
+          throw Object.assign(new Error('This item can no longer be edited'), { statusCode: 400 });
+        }
+        if (['completed', 'cancelled'].includes(currentOrder.status)) {
+          throw Object.assign(new Error('Cannot edit items on completed or cancelled orders'), {
+            statusCode: 400,
+          });
+        }
+        const bills = db.prepare('SELECT * FROM bills WHERE order_id = ?').all(orderId) as {
+          split_group_id: string | null;
+          payment_status: string;
+          paid_amount: number | null;
+        }[];
+        if (bills.some((bill) => bill.split_group_id)) {
+          throw Object.assign(new Error('Items cannot be changed after a check has been split'), {
+            statusCode: 409,
+          });
+        }
+        if (
+          bills.some((bill) =>
+            ['paid', 'refunded', 'partially_refunded'].includes(bill.payment_status),
+          )
+        ) {
+          throw Object.assign(new Error('Cannot edit items on a paid or refunded order'), {
+            statusCode: 409,
+          });
+        }
+
+        const product = db
+          .prepare('SELECT * FROM products WHERE id = ?')
+          .get(item.product_id) as ProductRow | undefined;
+        if (!product) {
+          throw Object.assign(new Error(`Product ${item.product_id} not found`), {
+            statusCode: 404,
+          });
+        }
+
+        const tenantInfo = {
+          country: getSettingValue('country') || '',
+          business_type: getSettingValue('business_type') || 'restaurant',
+          state_code: getSettingValue('state_code') || '',
+          currency: getTenantCurrency(),
+          taxes_enabled: getSettingValue('taxes_enabled') === 'true',
+        };
+        const decimals = getCurrencyFractionDigits(tenantInfo.currency);
+        const customer = currentOrder.customer_id
+          ? (db
+              .prepare('SELECT * FROM customers WHERE id = ?')
+              .get(currentOrder.customer_id) as TaxCustomerRow)
+          : null;
+
+        const quantity = Number(item.quantity);
+        const unitPrice = Number((Number(item.unit_price) * weight).toFixed(decimals));
+        const addons = db
+          .prepare('SELECT price, quantity FROM order_item_addons WHERE order_item_id = ?')
+          .all(item.id) as { price: number; quantity: number }[];
+        const addonPerUnitTotal = addons.reduce(
+          (sum, addon) => sum + Number(addon.price || 0) * Number(addon.quantity || 1),
+          0,
+        );
+        const itemBaseTotal = (unitPrice + addonPerUnitTotal) * quantity;
+        const itemDiscount = resolveEditedItemDiscountAmount(
+          db,
+          item,
+          itemBaseTotal,
+          quantity,
+          quantity,
+          decimals,
+        );
+        const itemSubtotal = Math.max(0, Number((itemBaseTotal - itemDiscount).toFixed(decimals)));
+        const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
+        const itemTotal =
+          itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
+
+        db.prepare(`
+          UPDATE order_items
+          SET unit_price = ?,
+              weight = ?,
+              weight_pending = 0,
+              subtotal = ?,
+              tax_amount = ?,
+              tax_breakdown = ?,
+              tax_snapshot = ?,
+              tax_type = ?,
+              discount_amount = ?,
+              total = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).run(
+          unitPrice,
+          weight,
+          itemSubtotal,
+          taxResult.tax_amount,
+          JSON.stringify(taxResult.tax_breakdown),
+          taxResult.tax_snapshot ? JSON.stringify(taxResult.tax_snapshot) : null,
+          taxResult.tax_type,
+          itemDiscount,
+          itemTotal,
+          now(),
+          item.id,
+        );
+
+        persistRecomputedOrderTotals(db, orderId, currentOrder, {
+          tenantInfo,
+          customer,
+          bills,
+          decimals,
+        });
+
+        recordOrderAudit(db, {
+          orderId,
+          orderItemId: itemId,
+          actorUserId: actorId,
+          action: 'item_weighed',
+          details: { weight, base_unit_price: Number(item.unit_price), unit_price: unitPrice },
+        });
+
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
+          string,
+          unknown
+        >;
+        const items = attachEffectiveAddons(
+          db,
+          db
+            .prepare('SELECT * FROM order_items WHERE order_id = ?')
+            .all(orderId)
+            .map(parseItemJson) as { id: number }[],
+        );
+        return { ...updatedOrder, items };
+      });
+
+      cloudSync.recordOrderChanged(orderId, 'order.item_edited');
+      notifyKdsUpdate();
+      res.json({ order });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string };
+      console.error('[Orders] Weigh item error:', error);
       res
         .status(error.statusCode || 500)
         .json({ error: error.statusCode ? error.message : 'Internal server error' });

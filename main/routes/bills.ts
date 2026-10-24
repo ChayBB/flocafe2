@@ -1,3 +1,4 @@
+import { rejectBillWhileWeightPending } from '../lib/weight-pending';
 import { createHash, randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import {
@@ -2271,6 +2272,7 @@ function splitSourceAllocationError(): Error {
 router.post(
   '/:id/split-check',
   requirePermission('bills.generate'),
+  rejectBillWhileWeightPending,
   (req: Request, res: Response) => {
     try {
       const db = getDatabase();
@@ -3641,6 +3643,7 @@ const inFlightPaymentAttempts = new Map<string, InFlightPaymentAttempt>();
 router.post(
   '/:id/payment',
   requirePermission('payments.take'),
+  rejectBillWhileWeightPending,
   asyncHandler(async (req: Request, res: Response) => {
     let operationCommitted = false;
     let inFlightKey: string | null = null;
@@ -3879,6 +3882,7 @@ router.post(
 router.post(
   '/:id/payments',
   requirePermission('payments.take'),
+  rejectBillWhileWeightPending,
   asyncHandler(async (req: Request, res: Response) => {
     let operationCommitted = false;
     let inFlightKey: string | null = null;
@@ -5021,7 +5025,7 @@ router.patch(
   },
 );
 
-router.post('/:id/markPrinted', requirePermission('bills.print'), (req: Request, res: Response) => {
+router.post('/:id/markPrinted', requirePermission('bills.print'), rejectBillWhileWeightPending, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
@@ -5049,6 +5053,7 @@ router.post('/:id/markPrinted', requirePermission('bills.print'), (req: Request,
 router.post(
   '/:id/print',
   requirePermission('printing.execute'),
+  rejectBillWhileWeightPending,
   asyncHandler(async (req: Request, res: Response) => {
     try {
       const { print_type } = req.body;

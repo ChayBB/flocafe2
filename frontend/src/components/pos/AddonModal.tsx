@@ -29,6 +29,8 @@ interface Props {
   onlinePlatformSelected?: boolean;
 }
 
+const WEIGHT_PRICED_GROUP_NAME = 'ราคาตามน้ำหนัก';
+
 function groupInitialAddons(addons: Addon[]): Record<string | number, Addon[]> {
   const grouped: Record<string | number, Addon[]> = {};
   for (const addon of addons) {
@@ -82,8 +84,10 @@ export default function AddonModal({
   const tenantFmt = useFormatCurrency();
   const fmt = country ? (n: number) => formatCurrencyForTenant(n, country, currency) : tenantFmt;
   const [selected, setSelected] = useState<Record<string | number, Addon[]>>(() => groupInitialAddons(initialAddons));
-  const [quantity, setQuantity] = useState(initialQuantity);
-  const [qtyDraft, setQtyDraft] = useState(() => String(initialQuantity));
+  const awaitingWeight = (product.addon_groups || []).some((g) => g.name?.trim() === WEIGHT_PRICED_GROUP_NAME);
+  const startQuantity = awaitingWeight ? 1 : initialQuantity;
+  const [quantity, setQuantity] = useState(startQuantity);
+  const [qtyDraft, setQtyDraft] = useState(() => String(startQuantity));
   const [instructions, setInstructions] = useState(initialInstructions);
 
   const variants = activeVariants(product.variants);
@@ -428,65 +432,73 @@ export default function AddonModal({
 
         <div className="p-5 border-t border-border">
           <div className="flex items-center justify-center gap-4 mb-4">
-            <button
-              onClick={() =>
-                step == null
-                  ? setQty(Math.max(1, quantity - 1))
-                  : setQty(Math.max(step, roundToQuantityPrecision(quantity - step, step)))
-              }
-              className="touch-target rounded-full bg-muted flex items-center justify-center hover:bg-muted active:bg-muted"
-              aria-label={t('remove')}
-            >
-              <Minus size={18} />
-            </button>
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((quickQty) => {
-                const disabled = !canQuantityCoverAddons(quickQty);
-                return (
-                  <button
-                    key={quickQty}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setQty(quickQty)}
-                    className={`touch-target rounded-lg border px-3 text-sm font-bold tabular-nums disabled:cursor-not-allowed disabled:opacity-50 ${
-                      quantity === quickQty ? 'border-brand bg-brand text-white' : 'border-border bg-card text-foreground'
-                    }`}
-                  >
-                    {quickQty}
-                  </button>
-                );
-              })}
-            </div>
-            {step == null ? (
-              <span className="text-lg font-bold w-10 text-center tabular-nums">{quantity}</span>
+            {awaitingWeight ? (
+              <span className="min-h-11 flex items-center rounded-lg border border-dashed border-green-500 bg-green-50 px-4 text-sm font-semibold text-green-700 dark:border-green-600 dark:bg-green-950/40 dark:text-green-300">
+                {t('awaitingWeight')}
+              </span>
             ) : (
-              <input
-                type="number"
-                inputMode="decimal"
-                min={step}
-                step={step}
-                value={qtyDraft}
-                onChange={(e) => setQtyDraft(e.target.value)}
-                onBlur={commitQtyDraft}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitQtyDraft();
-                }}
-                aria-label={t('quantity')}
-                className="w-16 text-lg font-bold text-center tabular-nums border border-border bg-background rounded-md px-1 py-0.5 outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-              />
+              <>
+                <button
+                  onClick={() =>
+                    step == null
+                      ? setQty(Math.max(1, quantity - 1))
+                      : setQty(Math.max(step, roundToQuantityPrecision(quantity - step, step)))
+                  }
+                  className="touch-target rounded-full bg-muted flex items-center justify-center hover:bg-muted active:bg-muted"
+                  aria-label={t('remove')}
+                >
+                  <Minus size={18} />
+                </button>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2, 3].map((quickQty) => {
+                    const disabled = !canQuantityCoverAddons(quickQty);
+                    return (
+                      <button
+                        key={quickQty}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setQty(quickQty)}
+                        className={`touch-target rounded-lg border px-3 text-sm font-bold tabular-nums disabled:cursor-not-allowed disabled:opacity-50 ${
+                          quantity === quickQty ? 'border-brand bg-brand text-white' : 'border-border bg-card text-foreground'
+                        }`}
+                      >
+                        {quickQty}
+                      </button>
+                    );
+                  })}
+                </div>
+                {step == null ? (
+                  <span className="text-lg font-bold w-10 text-center tabular-nums">{quantity}</span>
+                ) : (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={step}
+                    step={step}
+                    value={qtyDraft}
+                    onChange={(e) => setQtyDraft(e.target.value)}
+                    onBlur={commitQtyDraft}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitQtyDraft();
+                    }}
+                    aria-label={t('quantity')}
+                    className="w-16 text-lg font-bold text-center tabular-nums border border-border bg-background rounded-md px-1 py-0.5 outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  />
+                )}
+                <button
+                  onClick={() =>
+                    step == null
+                      ? setQty(quantity + 1)
+                      : setQty(roundToQuantityPrecision(quantity + step, step))
+                  }
+                  disabled={!canIncreaseItemQty}
+                  className="touch-target rounded-full bg-muted flex items-center justify-center hover:bg-muted active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={t('addItems')}
+                >
+                  <Plus size={18} />
+                </button>
+              </>
             )}
-            <button
-              onClick={() =>
-                step == null
-                  ? setQty(quantity + 1)
-                  : setQty(roundToQuantityPrecision(quantity + step, step))
-              }
-              disabled={!canIncreaseItemQty}
-              className="touch-target rounded-full bg-muted flex items-center justify-center hover:bg-muted active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={t('addItems')}
-            >
-              <Plus size={18} />
-            </button>
           </div>
           <Button onClick={handleAdd} disabled={!isValid} className="w-full" size="lg">
             {mode === 'edit'

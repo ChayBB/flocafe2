@@ -6,6 +6,7 @@ import { getHttpRequestSignal, trackHttpRequestWork } from '../shutdown';
 import * as whatsapp from '../services/whatsapp';
 import * as QRCode from 'qrcode';
 import { parsePhoneE164 } from '../lib/phone';
+import { billHasWeightPending, sendWeightPendingError } from '../lib/weight-pending';
 
 const router = Router();
 
@@ -109,6 +110,10 @@ router.post('/send', requirePermission('whatsapp.use'), asyncHandler(async (req,
   }
   if (!body || typeof body !== 'string') {
     res.status(400).json({ error: 'body required', reason: 'body_required' });
+    return;
+  }
+  if (bill_id != null && billHasWeightPending(getDatabase(), Number(bill_id))) {
+    sendWeightPendingError(res);
     return;
   }
   const userId = (req as any).user?.userId ?? null;

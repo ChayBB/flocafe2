@@ -456,6 +456,7 @@ function faFallbackErrors(faFlat: Record<string, string>, enFlat: Record<string,
  */
 const FR_INTENTIONAL_IDENTICAL: ReadonlySet<string> = new Set([
   'tables.tableQrTable', // "Table {name}" is the same word in French
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.emailPlaceholder', // example email
   'dashboard.exportCsv', // format label "CSV (.csv)"
   'dashboard.exportXlsx', // format label "Excel (.xlsx)"
@@ -569,6 +570,7 @@ function frFallbackErrors(frFlat: Record<string, string>, enFlat: Record<string,
 }
 
 const TR_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'dashboard.exportCsv', // format label "CSV (.csv)"
   'dashboard.exportXlsx', // format label "Excel (.xlsx)"
   'settings.paymentMethodUpi', // technical acronym (payment rail name)
@@ -624,6 +626,7 @@ function trFallbackErrors(trFlat: Record<string, string>, enFlat: Record<string,
 }
 
 const FIL_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'dashboard.exportCsv', // format label "CSV (.csv)"
   'dashboard.exportXlsx', // format label "Excel (.xlsx)"
   'auth.countryIndia',
@@ -892,6 +895,7 @@ function filFallbackErrors(filFlat: Record<string, string>, enFlat: Record<strin
  * tokens or identical words.
  */
 const DE_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'expenses.status', // "Status" is the German word
   'dashboard.exportCsv', // format label "CSV (.csv)"
   'dashboard.exportXlsx', // format label "Excel (.xlsx)"
@@ -1013,6 +1017,7 @@ function deFallbackErrors(deFlat: Record<string, string>, enFlat: Record<string,
  * names, pure format strings, and Italian words spelled the same as English.
  */
 const IT_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'dashboard.exportCsv', // format label "CSV (.csv)"
   'dashboard.exportXlsx', // format label "Excel (.xlsx)"
   'auth.countryIndia', // country name identical in Italian
@@ -1197,6 +1202,7 @@ function urFallbackErrors(urFlat: Record<string, string>, enFlat: Record<string,
 
 /** Japanese translation safeguards. */
 const JA_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.emailPlaceholder', 'common.appTitle', 'common.brandName', 'common.logoAlt',
   'dashboard.ticketMethodCount', 'kds.emptyColumn', 'nav.kds', 'nav.pos', 'nav.whatsapp',
   'pos.addonPrice', 'pos.loadingEllipsis', 'pos.tagCount', 'pos.taxLine', 'printTest.escpos',
@@ -1277,6 +1283,7 @@ function zhTwFallbackErrors(zhTwFlat: Record<string, string>, enFlat: Record<str
 
 /** Korean translation safeguards. */
 const KO_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.emailPlaceholder', 'common.appTitle', 'common.brandName', 'common.logoAlt',
   'dashboard.exportCsv', 'dashboard.exportXlsx', 'dashboard.ticketMethodCount',
   'kds.emptyColumn', 'nav.kds', 'nav.pos', 'nav.whatsapp', 'pos.addonPrice',
@@ -1312,6 +1319,7 @@ function koFallbackErrors(koFlat: Record<string, string>, enFlat: Record<string,
 
 /** Indonesian translation safeguards. */
 const ID_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'common.appTitle', 'common.brandName', 'common.logoAlt', 'settings.revflo', 'setup.finedineLabel',
   'auth.email', 'auth.recoverPinLabel', 'expenses.status', // "Status" is the Indonesian word
   'kds.connectionPolling', 'kds.emptyColumn', 'kds.viewKanban',
@@ -1352,6 +1360,7 @@ function idFallbackErrors(idFlat: Record<string, string>, enFlat: Record<string,
 
 /** Dutch translation safeguards. */
 const NL_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.countryThailand', 'auth.emailPlaceholder', 'businessType.restaurant',
   'common.appTitle', 'common.brandName', 'common.logoAlt', 'common.percentage',
   'common.timeHoursMinutes', 'common.timeMinutes', 'dashboard.minutesValue', 'dashboard.title',
@@ -1459,6 +1468,7 @@ function bnFallbackErrors(bnFlat: Record<string, string>, enFlat: Record<string,
 
 /** Albanian translation safeguards. */
 const SQ_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.countryIndia', 'auth.email', 'auth.emailPlaceholder', 'common.appTitle', 'common.brandName', 'common.logoAlt',
   'customer.email', 'dashboard.exportCsv', 'dashboard.exportXlsx', 'dashboard.ticketMethodCount',
   'kds.viewKanban', 'nav.kds', 'nav.pos', 'nav.whatsapp', 'orders.online',
@@ -1492,6 +1502,7 @@ function sqFallbackErrors(sqFlat: Record<string, string>, enFlat: Record<string,
 
 /** Vietnamese translation safeguards, including canonical NFC text. */
 const VI_INTENTIONAL_IDENTICAL = new Set<string>([
+  'orders.weightAmount', // weight with the kg unit symbol
   'auth.email',
   'auth.emailPlaceholder',
   'common.appTitle',

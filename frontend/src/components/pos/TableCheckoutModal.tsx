@@ -15,6 +15,7 @@ import { tenantCan } from '@/lib/permissions';
 import MoveTableModal from '@/components/tables/MoveTableModal';
 import EditOrderItemModal from '@/components/orders/EditOrderItemModal';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
+import { itemAwaitingWeight, orderAwaitingWeight } from '@/components/orders/OrderCard';
 
 interface Props {
   table: Table;
@@ -245,6 +246,7 @@ export default function TableCheckoutModal({
     (item: OrderItem) => !isTerminalItemStatus(item.status),
   );
   const splitBills = (order.bills || []).filter((bill) => Boolean(bill.split_group_id));
+  const awaitingWeight = orderAwaitingWeight(order);
 
   return (
     <>
@@ -327,7 +329,7 @@ export default function TableCheckoutModal({
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground ms-2 font-medium">
-                      {formatItemTotal(item.total, item.subtotal)}
+                      {itemAwaitingWeight(item) ? t('awaitingWeight') : formatItemTotal(item.total, item.subtotal)}
                     </span>
                     {canEditItems && order.bill?.payment_status !== 'paid' && (
                       <button
@@ -348,7 +350,7 @@ export default function TableCheckoutModal({
           <div className="p-5 border-t border-border space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{t('subtotal')}</span>
-              <span>{fmt(Number(order.subtotal))}</span>
+              <span>{awaitingWeight ? 'XXXX' : fmt(Number(order.subtotal))}</span>
             </div>
             <TaxBreakdown
               taxAmount={Number(order.tax_amount)}
@@ -357,14 +359,14 @@ export default function TableCheckoutModal({
             />
             <div className="flex justify-between text-lg font-bold">
               <span>{t('total')}</span>
-              <span className="text-brand">{fmt(Number(order.total))}</span>
+              <span className="text-brand">{awaitingWeight ? 'XXXX' : fmt(Number(order.total))}</span>
             </div>
             {order.bill &&
               order.bill.payment_status !== 'paid' &&
               Number(order.bill.balance) > 0 && (
                 <div className="flex justify-between text-sm font-medium">
                   <span className="text-orange-600">{t('balanceDue')}</span>
-                  <span className="text-orange-600">{fmt(Number(order.bill.balance))}</span>
+                  <span className="text-orange-600">{awaitingWeight ? 'XXXX' : fmt(Number(order.bill.balance))}</span>
                 </div>
               )}
 
@@ -465,7 +467,7 @@ export default function TableCheckoutModal({
                   <Button
                     variant="outline"
                     onClick={handlePrintBill}
-                    disabled={generating || printingBill}
+                    disabled={generating || printingBill || awaitingWeight}
                     className="font-medium"
                   >
                     {printingBill ? (
@@ -476,7 +478,7 @@ export default function TableCheckoutModal({
                     {tReceipt('printBill')}
                   </Button>
                 )}
-                <Button onClick={handleCheckout} disabled={generating || printingBill}>
+                <Button onClick={handleCheckout} disabled={generating || printingBill || awaitingWeight}>
                   {generating ? t('generating') : t('checkout')}
                 </Button>
               </div>

@@ -1,3 +1,8 @@
+import {
+  billHasWeightPending,
+  orderHasWeightPending,
+  sendWeightPendingError,
+} from '../lib/weight-pending';
 import { Router, Request, Response } from 'express';
 import {
   getDatabase,
@@ -916,6 +921,9 @@ router.post(
       }
 
       const db = getDatabase();
+      if (billId ? billHasWeightPending(db, billId) : orderHasWeightPending(db, orderId)) {
+        return sendWeightPendingError(res);
+      }
       let printer = db
         .prepare(
           `SELECT * FROM printers

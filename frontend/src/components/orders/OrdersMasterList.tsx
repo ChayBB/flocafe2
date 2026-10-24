@@ -6,7 +6,7 @@ import type { Order } from '@/lib/types';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { parseDbTimestamp, cn } from '@/lib/utils';
-import { orderStatusBadge, ORDER_TYPE_KEYS } from './OrderCard';
+import { orderStatusBadge, orderAwaitingWeight, ORDER_TYPE_KEYS } from './OrderCard';
 
 function OrderTypeIcon({ type }: { type: Order['type'] }) {
   const cls = 'shrink-0 text-muted-foreground';
@@ -33,6 +33,7 @@ export function OrdersMasterList({
 }) {
   const tOrders = useTranslations('orders');
   const tCommon = useTranslations('common');
+  const tPos = useTranslations('pos');
   const fmt = useFormatCurrency();
 
   const getTimeSince = (createdAt: string) => {
@@ -46,6 +47,7 @@ export function OrdersMasterList({
     <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
       {orders.map((order) => {
         const badge = orderStatusBadge[order.status];
+        const awaitingWeight = orderAwaitingWeight(order);
         const active = order.status !== 'cancelled';
         const itemCount = (order.items || []).filter(
           (i) => !['cancelled', 'voided', 'void_adjustment'].includes(i.status),
@@ -61,6 +63,8 @@ export function OrdersMasterList({
                 selectedOrderId === order.id
                   ? 'bg-brand/10 ring-1 ring-inset ring-brand'
                   : 'bg-card hover:bg-muted/60',
+                awaitingWeight &&
+                  'bg-orange-50 dark:bg-orange-950/30 border-s-4 border-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50',
                 !active && 'opacity-80',
               )}
             >
@@ -68,11 +72,18 @@ export function OrdersMasterList({
                 <span className="font-bold text-sm text-foreground tracking-tight">
                   #<Ltr>{order.order_number}</Ltr>
                 </span>
-                {badge && (
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${badge.bg} ${badge.text}`}>
-                    {tOrders(badge.labelKey)}
-                  </span>
-                )}
+                <span className="flex items-center gap-1 shrink-0">
+                  {awaitingWeight && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
+                      {tPos('awaitingWeight')}
+                    </span>
+                  )}
+                  {badge && (
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.bg} ${badge.text}`}>
+                      {tOrders(badge.labelKey)}
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
                 <span className="inline-flex items-center gap-1 font-medium text-foreground shrink-0">
@@ -94,7 +105,7 @@ export function OrdersMasterList({
                   {tOrders('itemCount', { count: itemCount })}
                 </span>
                 <span className="text-sm font-bold text-foreground">
-                  {fmt(Number(order.bill?.total ?? order.total))}
+                  {awaitingWeight ? 'XXXX' : fmt(Number(order.bill?.total ?? order.total))}
                 </span>
               </div>
             </button>

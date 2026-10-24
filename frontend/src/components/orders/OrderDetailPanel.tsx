@@ -55,6 +55,8 @@ import {
   paymentStatusBadge,
   itemStatusDot,
   whatsappReceiptStatusBadge,
+  itemAwaitingWeight,
+  orderAwaitingWeight,
   ORDER_TYPE_KEYS,
 } from './OrderCard';
 
@@ -68,6 +70,7 @@ export interface OrderDetailPanelProps {
   canCancelItems: boolean;
   canEditItems?: boolean;
   onEditItem?: (order: Order, item: OrderItem) => void;
+  onWeighItem?: (order: Order, item: OrderItem) => void;
   canRestoreItems: boolean;
   canRefund: boolean;
   isWhatsAppReady: boolean;
@@ -115,6 +118,7 @@ function OrderDetailContent({
   canCancelItems,
   canEditItems = false,
   onEditItem,
+  onWeighItem,
   canRestoreItems,
   canRefund,
   isWhatsAppReady,
@@ -167,6 +171,8 @@ function OrderDetailContent({
   const itemEditBlocked = (itemId: number) => pendingResolveIds.includes(itemId);
 
   const activeItems = (order.items || []).filter((i) => !isTerminalItemStatus(i.status));
+  const awaitingWeight = orderAwaitingWeight(order);
+  const money = (amount: number) => (awaitingWeight ? 'XXXX' : fmt(amount));
   const inactiveItems = (order.items || []).filter(
     (i) => ['cancelled', 'voided', 'refunded'].includes(i.status) && !i.superseded,
   );
@@ -280,6 +286,11 @@ function OrderDetailContent({
             <span className="font-bold text-lg text-foreground tracking-tight">
               #<Ltr>{order.order_number}</Ltr>
             </span>
+{awaitingWeight && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
+                {tPos('awaitingWeight')}
+              </span>
+            )}
             {statusBadgeInfo && (
               <span
                 className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadgeInfo.bg} ${statusBadgeInfo.text}`}
@@ -305,7 +316,7 @@ function OrderDetailContent({
                   if (bill) onPrint(bill.id);
                   else if (onPrintOrder) onPrintOrder(order);
                 }}
-                disabled={(bill && printingBillId === bill.id) || generatingBillId === order.id}
+                disabled={(bill && printingBillId === bill.id) || generatingBillId === order.id || awaitingWeight}
                 className="size-9 rounded-lg border-border/70 text-muted-foreground hover:text-foreground"
                 title={printCount > 0 ? tCommon('reprint') : tCommon('print')}
               >
@@ -344,7 +355,7 @@ function OrderDetailContent({
                     {order.customer ? tOrders('changeCustomer') : tOrders('linkCustomer')}
                   </DropdownMenuItem>
                 )}
-                {bill && onDownloadPrintPreview && (
+                {bill && !awaitingWeight && onDownloadPrintPreview && (
                   <DropdownMenuItem onClick={() => onDownloadPrintPreview(bill.id)}>
                     <Download size={14} className="me-2" />
                     {tOrders('downloadPrintPreview')}
@@ -586,11 +597,32 @@ function OrderDetailContent({
                     <span className="text-foreground truncate" title={heading}>
                       {heading}
                     </span>
+                    {item.weight != null && (
+                      <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                        {tOrders('weightAmount', { weight: Number(item.weight).toFixed(3) })}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-muted-foreground font-medium">
-                      {fmt(Number(item.total))}
-                    </span>
+                    {itemAwaitingWeight(item) ? (
+                      onWeighItem && !isPaid && order.status !== 'completed' ? (
+                        <button
+                          type="button"
+                          onClick={() => onWeighItem(order, item)}
+                          className="font-semibold text-orange-600 dark:text-orange-400 underline underline-offset-2 hover:text-orange-700 dark:hover:text-orange-300"
+                        >
+                          {tPos('awaitingWeight')}
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-orange-600 dark:text-orange-400">
+                          {tPos('awaitingWeight')}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground font-medium">
+                        {fmt(Number(item.total))}
+                      </span>
+                    )}
                     {canEditItems &&
                       onEditItem &&
                       !isPaid &&
@@ -702,45 +734,45 @@ function OrderDetailContent({
           <div className="border-t border-dashed border-border pt-3 space-y-1">
             <div className="flex justify-between text-muted-foreground">
               <span>{tCommon('subtotal')}</span>
-              <span className="font-medium text-foreground">{fmt(subtotal)}</span>
+              <span className="font-medium text-foreground">{money(subtotal)}</span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
                 <span>{tCommon('discount')}</span>
-                <span>-{fmt(discount)}</span>
+                <span>-{money(discount)}</span>
               </div>
             )}
             {deliveryCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>{tReceipt('deliveryCharge')}</span>
-                <span className="font-medium text-foreground">{fmt(deliveryCharge)}</span>
+                <span className="font-medium text-foreground">{money(deliveryCharge)}</span>
               </div>
             )}
             {serviceCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>{tReceipt('serviceCharge')}</span>
-                <span className="font-medium text-foreground">{fmt(serviceCharge)}</span>
+                <span className="font-medium text-foreground">{money(serviceCharge)}</span>
               </div>
             )}
             {packagingCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>{tPos('packaging')}</span>
-                <span className="font-medium text-foreground">{fmt(packagingCharge)}</span>
+                <span className="font-medium text-foreground">{money(packagingCharge)}</span>
               </div>
             )}
             {customCharges.map((charge) => (
               <div key={charge.id} className="flex justify-between text-muted-foreground">
                 <span>{charge.name}</span>
-                <span className="font-medium text-foreground">{fmt(charge.amount)}</span>
+                <span className="font-medium text-foreground">{money(charge.amount)}</span>
               </div>
             ))}
             <div className="flex justify-between text-muted-foreground">
               <span>{tCommon('tax')}</span>
-              <span className="font-medium text-foreground">{tax > 0 ? fmt(tax) : '-'}</span>
+              <span className="font-medium text-foreground">{tax > 0 ? money(tax) : '-'}</span>
             </div>
             <div className="pt-1.5 border-t border-border flex justify-between text-lg font-bold text-foreground">
               <span>{tCommon('total')}</span>
-              <span>{fmt(total)}</span>
+              <span>{money(total)}</span>
             </div>
           </div>
 
@@ -748,10 +780,10 @@ function OrderDetailContent({
             <div className="mt-2.5 p-2 rounded-lg bg-green-50/70 dark:bg-green-950/40 border border-green-200/60 dark:border-green-900/40 flex items-center justify-between text-xs">
               <span className="text-green-800 dark:text-green-300 flex items-center gap-1.5 font-medium">
                 <CreditCard size={13} />
-                {tOrders('paid')}: {fmt(Number(bill.paid_amount))}
+                {tOrders('paid')}: {money(Number(bill.paid_amount))}
               </span>
               <span className="text-red-600 dark:text-red-400 font-bold">
-                {tOrders('balance')}: {fmt(Number(bill.balance))}
+                {tOrders('balance')}: {money(Number(bill.balance))}
               </span>
             </div>
           )}
@@ -888,7 +920,7 @@ function OrderDetailContent({
           <div className="flex items-center gap-2">
             <Button
               onClick={() => onCheckout(order.id)}
-              disabled={generatingBillId === order.id}
+              disabled={generatingBillId === order.id || awaitingWeight}
               className={`flex-1 h-10 font-semibold text-xs ${
                 payStatus === 'partial'
                   ? 'bg-blue-600 hover:bg-blue-700 text-white'

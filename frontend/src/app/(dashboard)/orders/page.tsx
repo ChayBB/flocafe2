@@ -60,6 +60,7 @@ import { OrderCard } from '@/components/orders/OrderCard';
 import { OrdersMasterList } from '@/components/orders/OrdersMasterList';
 import { OrderDetailPanel } from '@/components/orders/OrderDetailPanel';
 import EditOrderItemModal from '@/components/orders/EditOrderItemModal';
+import WeighOrderItemModal from '@/components/orders/WeighOrderItemModal';
 import { useOrdersLayoutPreference } from '@/hooks/useOrdersLayout';
 import { useManagerApprovers } from '@/hooks/useManagerApprovers';
 import { ApproverSelect } from '@/components/ApproverSelect';
@@ -216,6 +217,9 @@ export default function OrdersPage() {
 
   // Void (in-progress item) modal state
   const [voidItemModal, setVoidItemModal] = useState<VoidItemModal | null>(null);
+  const [weighItemTarget, setWeighItemTarget] = useState<{ order: Order; item: OrderItem } | null>(
+    null,
+  );
   const [editItemTarget, setEditItemTarget] = useState<{ order: Order; item: OrderItem } | null>(
     null,
   );
@@ -1813,6 +1817,7 @@ export default function OrdersPage() {
               canCancelItems={canCancelItems}
               canEditItems={canEditItems}
               onEditItem={(order, item) => setEditItemTarget({ order, item })}
+              onWeighItem={(order, item) => setWeighItemTarget({ order, item })}
               canRestoreItems={canRestoreItems}
               canRefund={canRefund}
               isWhatsAppReady={isWhatsAppReady}
@@ -1895,6 +1900,7 @@ export default function OrdersPage() {
               canCancelItems={canCancelItems}
               canEditItems={canEditItems}
               onEditItem={(order, item) => setEditItemTarget({ order, item })}
+              onWeighItem={(order, item) => setWeighItemTarget({ order, item })}
               canRestoreItems={canRestoreItems}
               canRefund={canRefund}
               isWhatsAppReady={isWhatsAppReady}
@@ -2159,6 +2165,14 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {weighItemTarget && (
+        <WeighOrderItemModal
+          orderId={weighItemTarget.order.id}
+          item={weighItemTarget.item}
+          onClose={() => setWeighItemTarget(null)}
+          onSaved={() => fetchOrders(undefined, { refreshLoadedPages: true })}
+        />
+      )}
       {/* Void In-Progress Item Modal */}
       {editItemTarget && (
         <EditOrderItemModal

@@ -266,6 +266,8 @@ export interface OrderItem {
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled' | 'voided' | 'void_adjustment';
   superseded?: boolean;
   edit_version?: number;
+  weight_pending?: number | boolean;
+  weight?: number | null;
 }
 
 export interface Bill {
