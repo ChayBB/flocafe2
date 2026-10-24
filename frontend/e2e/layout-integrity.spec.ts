@@ -3353,7 +3353,10 @@ test('staff modals close on Escape, ignore non-Escape keys, restore trigger focu
     await expect(resetDialog).toBeVisible();
     expect(await getListenerCount()).toBe(baselineListeners + 1);
 
-    const resetInput = resetDialog.getByPlaceholder('New Password (leave empty to keep)');
+    // Operational accounts take a 4-digit password, so the placeholder depends on the account's role.
+    const resetInput = resetDialog.getByPlaceholder(
+      /New Password \(leave empty to keep\)|Password \(4 digits\)/,
+    );
     await resetInput.click();
     await page.keyboard.type('Secret123');
     await page.keyboard.press('Enter');

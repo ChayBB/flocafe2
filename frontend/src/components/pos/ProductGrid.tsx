@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Category, Product, ProductVariant } from '@/lib/types';
@@ -73,6 +73,7 @@ function CategoryRow({
 }) {
   const allChip = (
     <button
+      data-chip-key="all"
       onClick={() => setSelectedCategory(null)}
       title={collapse ? allLabel : undefined}
       className={`${collapse ? 'min-w-0 truncate ' : ''}px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
@@ -107,7 +108,9 @@ function CategoryRow({
       >
         {allChip}
         {categoryChips.map((chip) => (
-          <div key={chip.key}>{chip.render()}</div>
+          <div key={chip.key} data-chip-key={chip.key}>
+            {chip.render()}
+          </div>
         ))}
       </div>
     );
@@ -297,6 +300,11 @@ interface Props {
   disabled?: boolean;
   /** Cashier-POS opt-in: measured collapsed category row with a toggle. */
   collapseCategories?: boolean;
+  /**
+   * Show every category in one scrolling list under its own heading. The highlighted category
+   * follows the scroll position and choosing a category scrolls to it, instead of filtering.
+   */
+  scrollSpy?: boolean;
 }
 
 export default function ProductGrid({
@@ -317,6 +325,7 @@ export default function ProductGrid({
   searchPlaceholder,
   disabled = false,
   collapseCategories = false,
+  scrollSpy = false,
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cart = useCartStore();
@@ -350,13 +359,199 @@ export default function ProductGrid({
   const activeQuery = parsedSearch ? parsedSearch.query : search;
 
   const filtered = products.filter((p) => {
-    const matchCat = !selectedCategory || p.category_id === selectedCategory;
+    const matchCat = scrollSpy || !selectedCategory || p.category_id === selectedCategory;
     const matchSearch = !activeQuery || p.name.toLowerCase().includes(activeQuery.toLowerCase());
     return matchCat && matchSearch;
   });
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRootRef = useRef<HTMLDivElement>(null);
+  const spyPausedUntil = useRef(0);
+  const spyFrame = useRef<number | null>(null);
+
+  const sections = useMemo(() => {
+    if (!scrollSpy) return [];
+    const known = new Set(categories.map((category) => category.id));
+    const groups = categories
+      .map((category) => ({
+        id: category.id as string | null,
+        name: category.name,
+        items: filtered.filter((product) => product.category_id === category.id),
+      }))
+      .filter((group) => group.items.length > 0);
+    const other = filtered.filter((product) => !product.category_id || !known.has(product.category_id));
+    if (other.length > 0) groups.push({ id: null, name: '', items: other });
+    return groups;
+  }, [scrollSpy, categories, filtered]);
+
+  const updateActiveCategory = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container || !scrollSpy) return;
+    if (performance.now() < spyPausedUntil.current) return;
+    const headings = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-category-section]'),
+    ).filter((node) => node.dataset.categorySection);
+    let active: string | null = null;
+    if (container.scrollTop > 4 && headings.length > 0) {
+      const top = container.getBoundingClientRect().top;
+      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
+      if (atBottom) {
+        active = headings[headings.length - 1].dataset.categorySection ?? null;
+      } else {
+        active = headings[0].dataset.categorySection ?? null;
+        for (const node of headings) {
+          if (node.getBoundingClientRect().top - top <= 12) active = node.dataset.categorySection ?? null;
+        }
+      }
+    }
+    if (active !== (selectedCategory ?? null)) setSelectedCategory(active);
+  }, [scrollSpy, selectedCategory, setSelectedCategory]);
+
+  const onCatalogScroll = () => {
+    if (!scrollSpy || spyFrame.current !== null) return;
+    spyFrame.current = requestAnimationFrame(() => {
+      spyFrame.current = null;
+      updateActiveCategory();
+    });
+  };
+
+  useEffect(
+    () => () => {
+      if (spyFrame.current !== null) cancelAnimationFrame(spyFrame.current);
+    },
+    [],
+  );
+
+  // Keep the highlighted category chip in view while the list scrolls.
+  useEffect(() => {
+    if (!scrollSpy) return;
+    const root = gridRootRef.current;
+    const row = root?.querySelector<HTMLElement>('[data-testid="pos-category-row"]');
+    const chip = row?.querySelector<HTMLElement>(
+      `[data-chip-key="${selectedCategory ?? 'all'}"]`,
+    );
+    if (!row || !chip) return;
+    const left = chip.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft) row.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' });
+    else if (left + chip.offsetWidth > row.scrollLeft + row.clientWidth) {
+      row.scrollTo({ left: left + chip.offsetWidth - row.clientWidth + 8, behavior: 'smooth' });
+    }
+  }, [scrollSpy, selectedCategory]);
+
+  const chooseCategory = (id: string | null) => {
+    if (!scrollSpy) {
+      setSelectedCategory(id);
+      return;
+    }
+    const container = scrollRef.current;
+    setSelectedCategory(id);
+    if (!container) return;
+    spyPausedUntil.current = performance.now() + 800;
+    if (id === null) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const target = container.querySelector<HTMLElement>(`[data-category-section="${CSS.escape(id)}"]`);
+    if (target) {
+      const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      container.scrollTo({ top: container.scrollTop + offset, behavior: 'smooth' });
+    }
+  };
+
+  const renderProductCard = (product: Product) => {
+    const inCartQty = cartQuantities.get(product.id) || 0;
+    return (
+      <button
+        key={product.id}
+        data-testid="pos-product-card"
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          const quantity = parsedSearch?.quantity ?? 1;
+          if (!validateSelectionQuantity(product, quantity)) return;
+          onProductClick(product, quantity);
+        }}
+        className="min-h-36 bg-card rounded-xl p-2.5 border border-border hover:border-brand/40 active:border-brand active:bg-muted/40 hover:shadow-md transition-all text-start relative cursor-pointer overflow-hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+          {!!product.track_inventory && (
+            <>
+              {product.stock_quantity <= 0 ? (
+                <span className="absolute top-2 start-2 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 dark:border-red-800/40 pointer-events-none">
+                  {t('outOfStock')}
+                </span>
+              ) : product.stock_quantity <= (product.low_stock_threshold || 0) ? (
+                <span className="absolute top-2 start-2 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 dark:border-orange-800/40 pointer-events-none">
+                  {t('lowStock')}
+                </span>
+              ) : null}
+            </>
+          )}
+          {inCartQty > 0 && (
+            <span className="absolute top-0 end-0 bg-brand text-white text-xs w-6 h-6 rounded-es-lg flex items-center justify-center font-bold z-10">
+              {inCartQty}
+            </span>
+          )}
+
+          {showProductImages && (
+            <div className="w-full aspect-square rounded-lg mb-3 relative overflow-hidden">
+              {/* Always-visible background tile — no flash when image loads */}
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ backgroundColor: nameToColor(product.name) }}
+              >
+                <span className="text-2xl font-bold text-white/80">
+                  {product.name.substring(0, 2).toUpperCase()}
+                </span>
+              </div>
+
+              {/* Image overlays the tile when available */}
+              {product.has_image && (
+                <img
+                  src={`${api.defaults.baseURL}/products/${product.id}/image?t=${product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0}`}
+                  alt={product.name}
+                  className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )}
+
+              {product.tags && product.tags.length > 0 && (
+                <span className="absolute bottom-1.5 end-1.5 z-10">
+                  <TagBadge tag={product.tags[0]} />
+                </span>
+              )}
+            </div>
+          )}
+
+          <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-snug">
+            {product.name}
+          </h3>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              {!showProductImages && product.tags && product.tags.length > 0 && (
+                <TagBadge tag={product.tags[0]} />
+              )}
+              {productNeedsCustomizer(product) && (
+                <span
+                  className="touch-target -me-2 -my-2 rounded-lg text-muted-foreground"
+                  title={t('customisable')}
+                  aria-label={t('customisable')}
+                >
+                  <SlidersHorizontal size={16} />
+                </span>
+              )}
+            </div>
+          </div>
+      </button>
+    );
+  };
+
   return (
     <div
+      ref={gridRootRef}
       data-testid="pos-product-grid"
       className="flex-1 flex flex-col min-w-0 h-full overflow-hidden"
     >
@@ -429,7 +624,7 @@ export default function ProductGrid({
           collapse={collapseCategories}
           categories={categories}
           selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
+          setSelectedCategory={chooseCategory}
           allLabel={t('allCategories')}
           resetKey={
             collapseCategories
@@ -444,104 +639,37 @@ export default function ProductGrid({
       {/* min-h-0 overrides the content-based automatic minimum size, so a long
           catalog scrolls inside the grid instead of growing past the viewport. */}
       <div
+        ref={scrollRef}
+        onScroll={onCatalogScroll}
         data-testid="pos-catalog-scroll"
         className="flex-1 min-h-0 overflow-y-auto pb-20 md:pb-0"
       >
-        <div
-          className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
-        >
-          {filtered.map((product) => {
-            const inCartQty = cartQuantities.get(product.id) || 0;
-
-            return (
-              <button
-                key={product.id}
-                data-testid="pos-product-card"
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  if (disabled) return;
-                  const quantity = parsedSearch?.quantity ?? 1;
-                  if (!validateSelectionQuantity(product, quantity)) return;
-                  onProductClick(product, quantity);
-                }}
-                className="min-h-36 bg-card rounded-xl p-2.5 border border-border hover:border-brand/40 active:border-brand active:bg-muted/40 hover:shadow-md transition-all text-start relative cursor-pointer overflow-hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
+          {scrollSpy ? (
+            sections.map((section) => (
+              <section
+                key={section.id ?? 'other'}
+                data-category-section={section.id ?? ''}
+                className="mb-4"
               >
-                {!!product.track_inventory && (
-                  <>
-                    {product.stock_quantity <= 0 ? (
-                      <span className="absolute top-2 start-2 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 dark:border-red-800/40 pointer-events-none">
-                        {t('outOfStock')}
-                      </span>
-                    ) : product.stock_quantity <= (product.low_stock_threshold || 0) ? (
-                      <span className="absolute top-2 start-2 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 dark:border-orange-800/40 pointer-events-none">
-                        {t('lowStock')}
-                      </span>
-                    ) : null}
-                  </>
+                {section.name && (
+                  <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
+                    {section.name}
+                  </h2>
                 )}
-                {inCartQty > 0 && (
-                  <span className="absolute top-0 end-0 bg-brand text-white text-xs w-6 h-6 rounded-es-lg flex items-center justify-center font-bold z-10">
-                    {inCartQty}
-                  </span>
-                )}
-
-                {showProductImages && (
-                  <div className="w-full aspect-square rounded-lg mb-3 relative overflow-hidden">
-                    {/* Always-visible background tile — no flash when image loads */}
-                    <div
-                      className="absolute inset-0 flex items-center justify-center"
-                      style={{ backgroundColor: nameToColor(product.name) }}
-                    >
-                      <span className="text-2xl font-bold text-white/80">
-                        {product.name.substring(0, 2).toUpperCase()}
-                      </span>
-                    </div>
-
-                    {/* Image overlays the tile when available */}
-                    {product.has_image && (
-                      <img
-                        src={`${api.defaults.baseURL}/products/${product.id}/image?t=${product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0}`}
-                        alt={product.name}
-                        className="absolute inset-0 w-full h-full object-cover rounded-lg"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    )}
-
-                    {product.tags && product.tags.length > 0 && (
-                      <span className="absolute bottom-1.5 end-1.5 z-10">
-                        <TagBadge tag={product.tags[0]} />
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-snug">
-                  {product.name}
-                </h3>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {!showProductImages && product.tags && product.tags.length > 0 && (
-                      <TagBadge tag={product.tags[0]} />
-                    )}
-                    {productNeedsCustomizer(product) && (
-                      <span
-                        className="touch-target -me-2 -my-2 rounded-lg text-muted-foreground"
-                        title={t('customisable')}
-                        aria-label={t('customisable')}
-                      >
-                        <SlidersHorizontal size={16} />
-                      </span>
-                    )}
-                  </div>
+                <div
+                  className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+                >
+                  {section.items.map(renderProductCard)}
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              </section>
+            ))
+          ) : (
+            <div
+              className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+            >
+              {filtered.map(renderProductCard)}
+            </div>
+          )}
       </div>
     </div>
   );

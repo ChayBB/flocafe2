@@ -99,6 +99,10 @@ test.describe('Server App guest from a table QR', () => {
 
   test('the guest label reads ลูกค้า in Thai', async ({ page }) => {
     const table = await createTable(page);
+    const setServerLanguage = (value: string) =>
+      page.request.put(`${E2E_BASE_URL}/api/settings/language`, { headers: manager(), data: { value } });
+    await setServerLanguage('th');
+    try {
     await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
     await page.evaluate(() => {
       const raw = localStorage.getItem('pos-settings');
@@ -108,6 +112,9 @@ test.describe('Server App guest from a table QR', () => {
     });
     await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}`);
     await expect(page.getByTestId('server-app-guest-name')).toHaveText('ลูกค้า');
+    } finally {
+      await setServerLanguage('en');
+    }
   });
 
   test('signing in shows the staff name and the Select Table button while keeping the QR table', async ({

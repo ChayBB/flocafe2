@@ -1465,6 +1465,7 @@ export default function ServerStandalonePage() {
               showImages={true}
               gridClassName="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
               searchPlaceholder={t('searchMenu')}
+              scrollSpy
             />
           </section>
 
