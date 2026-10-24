@@ -39,6 +39,8 @@ test.describe('Server App guest from a table QR', () => {
     await expect(header.getByTestId('server-app-guest-name')).toHaveText('Guest');
     await expect(header.getByTestId('server-app-login-button')).toBeVisible();
     await expect(header.getByTestId('server-app-login-button')).toHaveClass(/bg-orange-500/);
+    await expect(header.getByTestId('server-app-login-button')).toHaveText('');
+    await expect(header.getByRole('img', { name: 'Flo' })).toHaveCount(0);
     await expect(header.getByTestId('server-app-table-button')).toHaveCount(0);
     await expect(header.getByTestId('server-app-session-button')).toHaveCount(0);
     await expect(header).toContainText(table.name);
@@ -93,6 +95,19 @@ test.describe('Server App guest from a table QR', () => {
       await page.request.get(`${E2E_BASE_URL}/api/tables/owner-candidates`, { headers: ownerHeaders })
     ).json();
     expect(candidates.staff.some((member: { name: string }) => member.name === 'Guest')).toBeFalsy();
+  });
+
+  test('the guest label reads ลูกค้า in Thai', async ({ page }) => {
+    const table = await createTable(page);
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('pos-settings');
+      const parsed = raw ? JSON.parse(raw) : { state: {} };
+      parsed.state = { ...parsed.state, language: 'th' };
+      localStorage.setItem('pos-settings', JSON.stringify(parsed));
+    });
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}`);
+    await expect(page.getByTestId('server-app-guest-name')).toHaveText('ลูกค้า');
   });
 
   test('signing in shows the staff name and the Select Table button while keeping the QR table', async ({

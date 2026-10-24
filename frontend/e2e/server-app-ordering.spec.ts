@@ -131,7 +131,7 @@ test.describe('Server App tableside ordering', () => {
       await expect(tableButton).toBeVisible();
       await expect(logoutButton).toBeVisible();
       await expect(header.getByRole('button')).toHaveCount(2);
-      await expect(header.getByRole('img', { name: 'Flo' })).toBeVisible();
+      await expect(header.getByRole('img', { name: 'Flo' })).toHaveCount(0);
       await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
 
       for (const button of [tableButton, logoutButton]) {

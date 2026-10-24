@@ -1343,7 +1343,6 @@ export default function ServerStandalonePage() {
                 : t('selectTable')}
             </p>
           </div>
-          <img src="/logo.svg" alt="Flo" width={32} height={32} className="h-8 w-8 shrink-0" />
           {user ? (
             <>
               <span
@@ -1382,11 +1381,12 @@ export default function ServerStandalonePage() {
           ) : (
             <button
               onClick={() => setShowLogin(true)}
+              aria-label={tAuth('signIn')}
+              title={tAuth('signIn')}
               data-testid="server-app-login-button"
-              className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg bg-orange-500 px-3 text-sm font-semibold text-white hover:bg-orange-600"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-orange-500 p-2 text-white hover:bg-orange-600"
             >
-              <UserRound size={16} />
-              {tAuth('signIn')}
+              <UserRound size={17} />
             </button>
           )}
         </div>
