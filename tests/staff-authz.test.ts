@@ -169,6 +169,50 @@ async function main() {
   assertEqual(result.status, 201, 'several staff members can have no email');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
+    name: 'Coded server', password: 'StrongPass1', role: 'server', staff_code: '4821',
+  });
+  assertEqual(result.status, 201, 'a server can be created with a 4-digit staff code');
+  assertEqual(Boolean(result.body.staff.has_staff_code), true, 'the staff list reports that a code is set');
+  assertEqual(result.body.staff.staff_code_hash, undefined, 'the staff code hash is never returned');
+  assertEqual(result.body.staff.has_pin, 0, 'a staff code does not give the staff member a PIN');
+  const codedId = result.body.staff.id;
+  assertEqual(
+    (db.prepare('SELECT pin_hash, staff_code_hash FROM users WHERE id = ?').get(codedId) as any).pin_hash,
+    null,
+    'a staff code stays separate from the approval PIN',
+  );
+
+  for (const bad of ['123', '12345', 'abcd', '12 4']) {
+    result = await request(app).post('/api/staff').set(managerAuth).send({
+      name: `Bad code ${bad}`, password: 'StrongPass1', role: 'server', staff_code: bad,
+    });
+    assertEqual(result.status, 400, `staff code "${bad}" is rejected`);
+  }
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
+    name: 'CODED SERVER', password: 'StrongPass1', role: 'server', staff_code: '4821',
+  });
+  assertEqual(result.status, 409, 'the same name cannot reuse the same staff code');
+  assertEqual(result.body.code, 'staff_code_in_use', 'the conflict names its reason');
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
+    name: 'Coded server', password: 'StrongPass1', role: 'server', staff_code: '9035',
+  });
+  assertEqual(result.status, 201, 'the same name may use a different staff code');
+
+  result = await request(app).put(`/api/staff/${codedId}`).set(managerAuth).send({ staff_code: '' });
+  assertEqual(result.status, 200, 'a staff code can be cleared');
+  assertEqual(
+    (db.prepare('SELECT staff_code_hash FROM users WHERE id = ?').get(codedId) as any).staff_code_hash,
+    null,
+    'clearing removes the stored hash',
+  );
+  result = await request(app).put(`/api/staff/${codedId}`).set(managerAuth).send({ name: 'Renamed coded server' });
+  assertEqual(result.status, 200, 'updating without a code leaves it alone');
+  result = await request(app).put(`/api/staff/${codedId}`).set(managerAuth).send({ staff_code: '77' });
+  assertEqual(result.status, 400, 'an invalid staff code is rejected on update');
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
     email: 'nameless@test.local', password: 'StrongPass1', role: 'server',
   });
   assertEqual(result.status, 400, 'staff creation still requires a name');

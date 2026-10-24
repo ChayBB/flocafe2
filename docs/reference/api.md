@@ -529,6 +529,8 @@ Mounted at both `/api/staff` and `/api/users` from one router, so a request to e
 
 `email` is optional on create and update. A blank value stores no email, and a staff member without one cannot sign in on their own.
 
+`staff_code` is an optional 4-digit code for any role, stored hashed and separate from the owner/manager approval `pin`. The Server App signs in with a staff name (or email) plus the staff code, PIN or account password. Two active staff members with the same name cannot share a staff code (`409 staff_code_in_use`), and an empty value on update clears it.
+
 ### Printers
 
 Router: `main/routes/printers.ts`. Full path: `/api/printers`.

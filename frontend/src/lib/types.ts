@@ -335,6 +335,7 @@ export interface Staff {
   email: string | null;
   role: string;
   has_pin?: boolean | number;
+  has_staff_code?: boolean | number;
   is_active: number;
   created_at: string;
   updated_at: string;

@@ -7626,6 +7626,15 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 120,
+    name: 'add_staff_code_hash',
+    up: () => {
+      if (!getColumns(db, 'users').includes('staff_code_hash')) {
+        db.exec(`ALTER TABLE users ADD COLUMN staff_code_hash TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

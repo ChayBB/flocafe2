@@ -299,7 +299,7 @@ router.put('/roles/:role', (req: Request, res: Response) => {
 router.get('/users', (_req: Request, res: Response) => {
   const users = getDatabase()
     .prepare(`
-    SELECT id, name, email, role, (pin_hash IS NOT NULL) AS has_pin, is_active, created_at, updated_at
+    SELECT id, name, email, role, (pin_hash IS NOT NULL) AS has_pin, (staff_code_hash IS NOT NULL) AS has_staff_code, is_active, created_at, updated_at
     FROM users ORDER BY role, name
   `)
     .all();

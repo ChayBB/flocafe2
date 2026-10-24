@@ -30,7 +30,7 @@ async function signIn(page: Page, identifier = SERVER_EMAIL, secret = E2E_PASSWO
 
 async function createStaff(
   page: Page,
-  body: { name: string; password: string; role: string; pin?: string },
+  body: { name: string; password: string; role: string; pin?: string; staff_code?: string },
 ): Promise<void> {
   const res = await page.request.post(`${E2E_BASE_URL}/api/staff`, {
     headers: { Authorization: `Bearer ${getE2eToken('e2e-owner', 'owner@flo.local', 'owner')}` },
@@ -91,6 +91,15 @@ test.describe('Server App session', () => {
     const name = `Pin ${Math.random().toString(36).slice(2, 7)}`;
     await createStaff(page, { name, password: 'E2ePass123!', role: 'manager', pin: '4821' });
     await openLogin(page);
+    await signIn(page, name, '4821');
+  });
+
+  test('a server signs in with the staff name and 4-digit staff code', async ({ page }) => {
+    const name = `Coded ${Math.random().toString(36).slice(2, 7)}`;
+    await createStaff(page, { name, password: 'E2ePass123!', role: 'server', staff_code: '4821' });
+    await openLogin(page);
+    await submitLogin(page, name, '4820');
+    await expect(page.getByTestId('server-app-session-button')).toHaveCount(0);
     await signIn(page, name, '4821');
   });
 

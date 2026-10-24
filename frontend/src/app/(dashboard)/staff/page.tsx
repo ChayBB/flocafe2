@@ -64,6 +64,7 @@ export default function StaffPage() {
     confirmPassword: '',
     role: 'server',
     pin: '',
+    staff_code: '',
     station_ids: [] as string[],
   });
   const [newPassword, setNewPassword] = useState('');
@@ -115,6 +116,7 @@ export default function StaffPage() {
       confirmPassword: '',
       role: 'server',
       pin: '',
+      staff_code: '',
       station_ids: [],
     });
     setShowPassword(false);
@@ -132,6 +134,7 @@ export default function StaffPage() {
       confirmPassword: '',
       role: s.role,
       pin: '',
+      staff_code: '',
       station_ids: [],
     });
     setShowPassword(false);
@@ -162,6 +165,7 @@ export default function StaffPage() {
           role: form.role,
           ...(form.password ? { password: form.password } : {}),
           ...(form.pin ? { pin: form.pin } : {}),
+          ...(form.staff_code ? { staff_code: form.staff_code } : {}),
         });
         toast.success(t('updatedToast'));
       } else {
@@ -171,6 +175,7 @@ export default function StaffPage() {
           password: form.password,
           role: form.role,
           ...(form.pin ? { pin: form.pin } : {}),
+          ...(form.staff_code ? { staff_code: form.staff_code } : {}),
           ...(form.role === 'chef' ? { station_ids: form.station_ids } : {}),
         });
         toast.success(t('addedToast'));
@@ -257,6 +262,9 @@ export default function StaffPage() {
                 <p className="font-bold text-foreground">{s.name}</p>
                 <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
                 {Boolean(s.has_pin) && <p className="text-xs text-green-600 mt-1">{t('pinSet')}</p>}
+                {Boolean(s.has_staff_code) && (
+                  <p className="text-xs text-green-600 mt-1">{t('staffCodeSet')}</p>
+                )}
               </div>
               <span
                 className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${roleColors[s.role] || 'bg-muted text-foreground'}`}
@@ -442,6 +450,23 @@ export default function StaffPage() {
                   </p>
                 </div>
               )}
+              <div>
+                <input
+                  type="text"
+                  placeholder={editingStaff ? t('staffCodePlaceholderEdit') : t('staffCodePlaceholderAdd')}
+                  value={form.staff_code}
+                  onChange={(e) =>
+                    setForm({ ...form, staff_code: e.target.value.replace(/\D/g, '').slice(0, 4) })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                  maxLength={4}
+                  pattern="[0-9]{4}"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  data-testid="staff-code-input"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t('staffCodeHint')}</p>
+              </div>
               {hasRole(form.role, ROLE_ACCESS.ownerManager) && (
                 <div>
                   <div className="relative">

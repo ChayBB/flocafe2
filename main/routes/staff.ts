@@ -29,7 +29,7 @@ const requireStaffWrite = requireAnyPermission(
 
 const VALID_ROLES: readonly string[] = ROLE_KEYS;
 const STAFF_SELECT_FIELDS =
-  'id, name, email, role, (pin_hash IS NOT NULL) AS has_pin, is_active, created_at, updated_at';
+  'id, name, email, role, (pin_hash IS NOT NULL) AS has_pin, (staff_code_hash IS NOT NULL) AS has_staff_code, is_active, created_at, updated_at';
 
 function captureAdministrationAccessGuard(): void {
   const failure = serializeOperationFailure({
@@ -89,6 +89,25 @@ function hasNonEmptyPin(pin: unknown): boolean {
 
 function isValidPin(pin: unknown): boolean {
   return /^\d{4,6}$/.test(String(pin));
+}
+
+function isValidStaffCode(code: unknown): boolean {
+  return /^\d{4}$/.test(String(code));
+}
+
+/** A staff code must tell same-named active staff apart, since Server App sign-in takes a name and a code. */
+function staffCodeTaken(
+  db: ReturnType<typeof getDatabase>,
+  name: string,
+  code: string,
+  excludeId?: string,
+): boolean {
+  const sameName = db
+    .prepare(
+      'SELECT staff_code_hash FROM users WHERE is_active = 1 AND name = ? COLLATE NOCASE AND id != ? AND staff_code_hash IS NOT NULL',
+    )
+    .all(name, excludeId ?? '') as { staff_code_hash: string }[];
+  return sameName.some((row) => bcrypt.compareSync(code, row.staff_code_hash));
 }
 
 function normalizeStaffEmail(email: unknown): string {
@@ -210,7 +229,7 @@ router.get('/:id', requirePermission('staff.view'), (req: Request, res: Response
 
 router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Response) => {
   try {
-    const { name, email, password, role, pin, station_ids } = req.body;
+    const { name, email, password, role, pin, station_ids, staff_code } = req.body;
     const normalizedEmail = normalizeStaffEmail(email);
     const normalizedStationIds = normalizeStationIds(station_ids);
 
@@ -274,7 +293,19 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
       return res.status(400).json({ error: 'PIN must be between 4 and 6 numeric digits' });
     }
 
+    if (hasNonEmptyPin(staff_code) && !isValidStaffCode(staff_code)) {
+      captureStaffValidation('fc.backend.staff.create.validation', 'staff_code_invalid');
+      return res.status(400).json({ error: 'Staff code must be exactly 4 digits' });
+    }
+
     const db = getDatabase();
+
+    if (hasNonEmptyPin(staff_code) && staffCodeTaken(db, String(name), String(staff_code))) {
+      return res.status(409).json({
+        error: 'Another active staff member with this name already uses that staff code',
+        code: 'staff_code_in_use',
+      });
+    }
 
     const existing = normalizedEmail
       ? db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail)
@@ -309,11 +340,14 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
     const hashedPassword = bcrypt.hashSync(password, 10);
 
     const hashedPin = hasNonEmptyPin(pin) ? bcrypt.hashSync(String(pin), 10) : null;
+    const hashedStaffCode = hasNonEmptyPin(staff_code)
+      ? bcrypt.hashSync(String(staff_code), 10)
+      : null;
 
     const createStaff = db.transaction(() => {
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, pin_hash, station_assignments_configured, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        INSERT INTO users (id, name, email, password, role, pin_hash, staff_code_hash, station_assignments_configured, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(
         id,
         name,
@@ -321,6 +355,7 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
         hashedPassword,
         role,
         hashedPin,
+        hashedStaffCode,
         normalizedStationIds.length > 0 ? 1 : 0,
         now(),
         now(),
@@ -353,7 +388,7 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
 
 router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Response) => {
   try {
-    const { name, email, password, role, pin, is_active } = req.body;
+    const { name, email, password, role, pin, is_active, staff_code } = req.body;
     const emailProvided = email !== undefined;
     const normalizedEmail = emailProvided ? normalizeStaffEmail(email) : undefined;
     const db = getDatabase();
@@ -429,6 +464,20 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
       });
     }
 
+    if (hasNonEmptyPin(staff_code) && !isValidStaffCode(staff_code)) {
+      captureStaffValidation('fc.backend.staff.update.validation', 'staff_code_invalid');
+      return res.status(400).json({ error: 'Staff code must be exactly 4 digits' });
+    }
+    if (
+      hasNonEmptyPin(staff_code) &&
+      staffCodeTaken(db, String(name || member.name), String(staff_code), String(req.params.id))
+    ) {
+      return res.status(409).json({
+        error: 'Another active staff member with this name already uses that staff code',
+        code: 'staff_code_in_use',
+      });
+    }
+
     const passwordChanged = Boolean(
       password && (!member.password || !bcrypt.compareSync(password, member.password)),
     );
@@ -451,8 +500,22 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
           : null
         : member.pin_hash;
 
+    const staffCodeProvided = staff_code !== undefined;
+    const staffCodeChanged =
+      staffCodeProvided &&
+      (hasNonEmptyPin(staff_code)
+        ? !member.staff_code_hash || !bcrypt.compareSync(String(staff_code), member.staff_code_hash)
+        : Boolean(member.staff_code_hash));
+    const hashedStaffCode = !staffCodeProvided
+      ? (member.staff_code_hash ?? null)
+      : hasNonEmptyPin(staff_code)
+        ? staffCodeChanged
+          ? bcrypt.hashSync(String(staff_code), 10)
+          : member.staff_code_hash
+        : null;
+
     // Revoke outstanding sessions only when credentials actually change.
-    const credentialsChanged = passwordChanged || pinChanged;
+    const credentialsChanged = passwordChanged || pinChanged || staffCodeChanged;
     const tokensValidAfter = credentialsChanged ? now() : member.tokens_valid_after;
 
     const demotesActiveOwner =
@@ -471,6 +534,7 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
         password   = ?,
         role       = COALESCE(?, role),
         pin_hash   = ?,
+        staff_code_hash = ?,
         tokens_valid_after = ?,
         updated_at = ?
       WHERE id = ?
@@ -486,6 +550,7 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
         hashedPassword,
         role || null,
         hashedPin,
+        hashedStaffCode,
         tokensValidAfter,
         now(),
         req.params.id,

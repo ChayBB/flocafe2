@@ -301,7 +301,10 @@ export function startServerApp(): Promise<void> {
           }
         };
         const matches = candidates.filter(
-          (candidate) => compare(secret, candidate.pin_hash) || compare(secret, candidate.password),
+          (candidate) =>
+            compare(secret, candidate.staff_code_hash) ||
+            compare(secret, candidate.pin_hash) ||
+            compare(secret, candidate.password),
         );
         if (matches.length > 1) {
           incrementFailedLogin(ip);
