@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 cijfers)",
     "pinPlaceholderEdit": "Nieuw PIN (leeg laten om te behouden)",
     "pinSet": "✓ PIN ingesteld",
+    "operationalPasswordPlaceholder": "Wachtwoord (4 cijfers)",
+    "operationalPasswordHint": "Accounts voor kassa, bediening en keuken gebruiken een numeriek wachtwoord van 4 cijfers.",
     "staffCodeHint": "Wordt samen met de naam van de medewerker gebruikt om in te loggen bij de Server-app.",
     "staffCodePlaceholderAdd": "Medewerkerscode (4 cijfers)",
     "staffCodePlaceholderEdit": "Nieuwe medewerkerscode (leeg laten om te behouden)",

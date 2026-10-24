@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 اعداد)",
     "pinPlaceholderEdit": "نیا PIN (وہی رکھنے کے لیے خالی چھوڑیں)",
     "pinSet": "✓ PIN مقرر ہے",
+    "operationalPasswordPlaceholder": "پاس ورڈ (4 ہندسے)",
+    "operationalPasswordHint": "کیشیئر، سرور اور شیف اکاؤنٹس 4 ہندسوں کا عددی پاس ورڈ استعمال کرتے ہیں۔",
     "staffCodeHint": "Server App میں سائن اِن کرنے کے لیے عملے کے نام کے ساتھ استعمال ہوتا ہے۔",
     "staffCodePlaceholderAdd": "عملے کا کوڈ (4 ہندسے)",
     "staffCodePlaceholderEdit": "نیا عملے کا کوڈ (برقرار رکھنے کے لیے خالی چھوڑیں)",

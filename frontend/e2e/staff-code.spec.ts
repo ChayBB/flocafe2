@@ -13,8 +13,10 @@ test('owner gives a server a 4-digit staff code from the staff page', async ({ p
   const name = `Code ${Math.random().toString(36).slice(2, 7)}`;
   await page.getByRole('button', { name: 'Add Staff' }).click();
   await page.getByPlaceholder('Name', { exact: true }).fill(name);
-  await page.getByPlaceholder('Password', { exact: true }).fill('E2ePass123!');
-  await page.getByPlaceholder('Confirm password').fill('E2ePass123!');
+  const passwordInput = page.getByPlaceholder('Password (4 digits)');
+  await passwordInput.pressSequentially('13x579');
+  await expect(passwordInput).toHaveValue('1357');
+  await page.getByPlaceholder('Confirm password').pressSequentially('1357');
 
   const codeInput = page.getByTestId('staff-code-input');
   await codeInput.pressSequentially('48a2159');

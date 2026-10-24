@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 dígitos)",
     "pinPlaceholderEdit": "Nuevo PIN (dejalo vacío para mantener)",
     "pinSet": "✓ PIN configurado",
+    "operationalPasswordPlaceholder": "Contraseña (4 dígitos)",
+    "operationalPasswordHint": "Las cuentas de cajero, mesero y cocinero usan una contraseña numérica de 4 dígitos.",
     "staffCodeHint": "Se usa con el nombre del empleado para entrar en la app de servicio.",
     "staffCodePlaceholderAdd": "Código del empleado (4 dígitos)",
     "staffCodePlaceholderEdit": "Nuevo código del empleado (déjalo vacío para conservarlo)",

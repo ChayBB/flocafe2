@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "পিন (৪-৬ সংখ্যা)",
     "pinPlaceholderEdit": "নতুন পিন (রাখতে খালি ছেড়ে দিন)",
     "pinSet": "✓ পিন সেট",
+    "operationalPasswordPlaceholder": "পাসওয়ার্ড (৪ অঙ্ক)",
+    "operationalPasswordHint": "ক্যাশিয়ার, সার্ভার ও শেফ অ্যাকাউন্ট ৪ অঙ্কের সংখ্যার পাসওয়ার্ড ব্যবহার করে।",
     "staffCodeHint": "কর্মীর নামের সাথে Server App-এ সাইন ইন করতে ব্যবহৃত।",
     "staffCodePlaceholderAdd": "কর্মী কোড (৪ অঙ্ক)",
     "staffCodePlaceholderEdit": "নতুন কর্মী কোড (অপরিবর্তিত রাখতে ফাঁকা রাখুন)",

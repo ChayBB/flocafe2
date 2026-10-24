@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 shifra)",
     "pinPlaceholderEdit": "PIN i ri (lër bosh për ta mbajtur)",
     "pinSet": "✓ PIN u caktua",
+    "operationalPasswordPlaceholder": "Fjalëkalimi (4 shifra)",
+    "operationalPasswordHint": "Llogaritë e arkëtarit, kamerierit dhe kuzhinierit përdorin fjalëkalim numerik me 4 shifra.",
     "staffCodeHint": "Përdoret me emrin e stafit për të hyrë në aplikacionin e shërbimit.",
     "staffCodePlaceholderAdd": "Kodi i stafit (4 shifra)",
     "staffCodePlaceholderEdit": "Kod i ri stafi (lëre bosh për ta mbajtur)",

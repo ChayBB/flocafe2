@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6자리)",
     "pinPlaceholderEdit": "새 PIN (비워 두면 유지)",
     "pinSet": "✓ PIN 설정됨",
+    "operationalPasswordPlaceholder": "비밀번호(4자리)",
+    "operationalPasswordHint": "계산원, 서버, 셰프 계정은 4자리 숫자 비밀번호를 사용합니다.",
     "staffCodeHint": "직원 이름과 함께 Server App에 로그인할 때 사용합니다.",
     "staffCodePlaceholderAdd": "직원 코드(4자리)",
     "staffCodePlaceholderEdit": "새 직원 코드(유지하려면 비워 두세요)",

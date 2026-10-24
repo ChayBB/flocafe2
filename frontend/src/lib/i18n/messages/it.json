@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 cifre)",
     "pinPlaceholderEdit": "Nuovo PIN (lascia vuoto per mantenere)",
     "pinSet": "✓ PIN impostato",
+    "operationalPasswordPlaceholder": "Password (4 cifre)",
+    "operationalPasswordHint": "Gli account di cassiere, cameriere e cuoco usano una password numerica di 4 cifre.",
     "staffCodeHint": "Si usa con il nome del dipendente per accedere alla Server App.",
     "staffCodePlaceholderAdd": "Codice dipendente (4 cifre)",
     "staffCodePlaceholderEdit": "Nuovo codice dipendente (lascia vuoto per mantenerlo)",

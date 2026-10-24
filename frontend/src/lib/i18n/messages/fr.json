@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "Code PIN (4 à 6 chiffres)",
     "pinPlaceholderEdit": "Nouveau code PIN (laisser vide pour conserver l’actuel)",
     "pinSet": "✓ Code PIN défini",
+    "operationalPasswordPlaceholder": "Mot de passe (4 chiffres)",
+    "operationalPasswordHint": "Les comptes caissier, serveur et chef utilisent un mot de passe numérique à 4 chiffres.",
     "staffCodeHint": "Utilisé avec le nom de l'employé pour se connecter à l'app Serveur.",
     "staffCodePlaceholderAdd": "Code employé (4 chiffres)",
     "staffCodePlaceholderEdit": "Nouveau code employé (laisser vide pour conserver)",

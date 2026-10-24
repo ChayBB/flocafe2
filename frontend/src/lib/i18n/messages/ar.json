@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "رقم التعريف الشخصي (4-6 أرقام)",
     "pinPlaceholderEdit": "رقم التعريف الشخصي الجديد (اترك الحقل فارغًا للاحتفاظ بالرقم الحالي)",
     "pinSet": "✓ تم تعيين رقم التعريف الشخصي (PIN)",
+    "operationalPasswordPlaceholder": "كلمة المرور (4 أرقام)",
+    "operationalPasswordHint": "حسابات أمين الصندوق والنادل والطاهي تستخدم كلمة مرور من 4 أرقام.",
     "staffCodeHint": "يُستخدم مع اسم الموظف لتسجيل الدخول إلى تطبيق الخدمة.",
     "staffCodePlaceholderAdd": "رمز الموظف (4 أرقام)",
     "staffCodePlaceholderEdit": "رمز موظف جديد (اتركه فارغاً للإبقاء)",

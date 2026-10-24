@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN（4-6 位）",
     "pinPlaceholderEdit": "新 PIN（留空則保持不變）",
     "pinSet": "✓ PIN 已設定",
+    "operationalPasswordPlaceholder": "密碼（4 位數字）",
+    "operationalPasswordHint": "收銀員、服務生和廚師帳號使用 4 位數字密碼。",
     "staffCodeHint": "與員工姓名一起用於登入 Server App。",
     "staffCodePlaceholderAdd": "員工代碼（4 位數字）",
     "staffCodePlaceholderEdit": "新員工代碼（留空則保持不變）",

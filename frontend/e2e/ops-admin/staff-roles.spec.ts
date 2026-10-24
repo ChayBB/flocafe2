@@ -12,6 +12,8 @@ import { login, ownerAuth, type Role } from './helpers';
  */
 
 const PASSWORD = 'OpsPass123';
+// Cashier, server and chef accounts take a 4-digit password.
+const passwordFor = (role: string) => (['cashier', 'server', 'chef'].includes(role) ? '4821' : PASSWORD);
 const RUN = Date.now().toString(36);
 
 type StaffRole = Role | 'cashier';
@@ -32,7 +34,7 @@ async function makeAccount(request: import('@playwright/test').APIRequestContext
   const email = `ops-${tag}-${RUN}@flo.local`;
   const res = await request.post(`${E2E_BASE_URL}/api/staff`, {
     headers: ownerAuth(),
-    data: { name: `Ops ${tag}`, email, password: PASSWORD, role },
+    data: { name: `Ops ${tag}`, email, password: passwordFor(role), role },
   });
   expect(res.status(), `creating a ${role} account must succeed (got ${res.status()} ${await res.text()})`).toBe(201);
   const { staff: user } = (await res.json()) as { staff: Account };
@@ -42,7 +44,7 @@ async function makeAccount(request: import('@playwright/test').APIRequestContext
 
 async function tokenFor(request: import('@playwright/test').APIRequestContext, account: Account): Promise<string> {
   const res = await request.post(`${E2E_BASE_URL}/api/auth/login`, {
-    data: { email: account.email, password: PASSWORD },
+    data: { email: account.email, password: passwordFor(account.role) },
   });
   expect(res.ok(), `${account.role} must be able to sign in (got ${res.status()} ${await res.text()})`).toBeTruthy();
   return (await res.json()).access_token;
@@ -71,7 +73,7 @@ test.describe('@ci-tier2 operations admin - staff and roles', () => {
     // Each role account authenticates against the real login route.
     for (const account of [server, cashier, retired]) {
       const res = await request.post(`${E2E_BASE_URL}/api/auth/login`, {
-        data: { email: account.email, password: PASSWORD },
+        data: { email: account.email, password: passwordFor(account.role) },
       });
       expect(res.ok(), `${account.role} must sign in`).toBeTruthy();
       const { user } = (await res.json()) as { user: { role: string; id: string } };
@@ -82,7 +84,7 @@ test.describe('@ci-tier2 operations admin - staff and roles', () => {
     // And the sign-in form works for one of them, end to end through the UI.
     await page.goto(`${E2E_BASE_URL}/auth/login`);
     await page.locator('#email').fill(server.email);
-    await page.locator('#password').fill(PASSWORD);
+    await page.locator('#password').fill(passwordFor(server.role));
     await page.locator('button[type="submit"]').click();
     await page.waitForURL((url) => !url.pathname.includes('/auth/login'), { timeout: 20_000 });
   });
@@ -93,13 +95,13 @@ test.describe('@ci-tier2 operations admin - staff and roles', () => {
       expect(deactivation.ok(), `deactivating an account must succeed (got ${deactivation.status()})`).toBeTruthy();
 
       const api = await request.post(`${E2E_BASE_URL}/api/auth/login`, {
-        data: { email: retired.email, password: PASSWORD },
+        data: { email: retired.email, password: passwordFor(retired.role) },
       });
       expect(api.status(), 'a deactivated account must not authenticate').toBe(401);
 
       await page.goto(`${E2E_BASE_URL}/auth/login`);
       await page.locator('#email').fill(retired.email);
-      await page.locator('#password').fill(PASSWORD);
+      await page.locator('#password').fill(passwordFor(retired.role));
       await page.locator('button[type="submit"]').click();
       await page.waitForTimeout(3000);
       await expect(page).toHaveURL(/\/auth\/login/);
@@ -260,7 +262,7 @@ test.describe('@ci-tier2 operations admin - staff and roles', () => {
     // The operational role it does hold still works.
     const operational = await request.post(`${E2E_BASE_URL}/api/staff`, {
       headers: { Authorization: `Bearer ${managerToken}` },
-      data: { name: 'Ops Cashier', email: `ops-mgr-cashier-${RUN}@flo.local`, password: PASSWORD, role: 'cashier' },
+      data: { name: 'Ops Cashier', email: `ops-mgr-cashier-${RUN}@flo.local`, password: passwordFor('cashier'), role: 'cashier' },
     });
     expect(operational.status(), `a manager must be able to create a cashier (got ${operational.status()} ${await operational.text()})`).toBe(201);
     const { staff: user } = (await operational.json()) as { staff: Account };

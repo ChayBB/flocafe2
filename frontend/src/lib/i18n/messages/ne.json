@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (४-६ अंक)",
     "pinPlaceholderEdit": "नयाँ पिन (राख्न खाली छोड्नुहोस्)",
     "pinSet": "✓ PIN सेट",
+    "operationalPasswordPlaceholder": "पासवर्ड (४ अङ्क)",
+    "operationalPasswordHint": "क्यासियर, सर्भर र सेफ खाताले ४ अङ्कको सङ्ख्यात्मक पासवर्ड प्रयोग गर्छन्।",
     "staffCodeHint": "कर्मचारीको नामसँग Server App मा साइन इन गर्न प्रयोग हुन्छ।",
     "staffCodePlaceholderAdd": "कर्मचारी कोड (४ अङ्क)",
     "staffCodePlaceholderEdit": "नयाँ कर्मचारी कोड (राख्न खाली छोड्नुहोस्)",

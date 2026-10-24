@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 หลัก)",
     "pinPlaceholderEdit": "PIN ใหม่ (เว้นว่างหากไม่เปลี่ยน)",
     "pinSet": "✓ ตั้ง PIN แล้ว",
+    "operationalPasswordPlaceholder": "รหัสผ่าน (ตัวเลข 4 หลัก)",
+    "operationalPasswordHint": "บัญชีแคชเชียร์ เสิร์ฟ และเชฟใช้รหัสผ่านเป็นตัวเลข 4 หลัก",
     "staffCodeHint": "ใช้คู่กับชื่อพนักงานเพื่อเข้าสู่ระบบ Server App",
     "staffCodePlaceholderAdd": "รหัสพนักงาน (4 หลัก)",
     "staffCodePlaceholderEdit": "รหัสพนักงานใหม่ (เว้นว่างเพื่อคงเดิม)",

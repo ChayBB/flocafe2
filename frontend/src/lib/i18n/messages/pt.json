@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 dígitos)",
     "pinPlaceholderEdit": "Novo PIN (deixe em branco para manter)",
     "pinSet": "✓ PIN definido",
+    "operationalPasswordPlaceholder": "Senha (4 dígitos)",
+    "operationalPasswordHint": "As contas de caixa, garçom e cozinheiro usam uma senha numérica de 4 dígitos.",
     "staffCodeHint": "Usado com o nome do funcionário para entrar no app de atendimento.",
     "staffCodePlaceholderAdd": "Código do funcionário (4 dígitos)",
     "staffCodePlaceholderEdit": "Novo código do funcionário (deixe em branco para manter)",

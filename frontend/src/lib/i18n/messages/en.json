@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 digits)",
     "pinPlaceholderEdit": "New PIN (leave empty to keep)",
     "pinSet": "✓ PIN set",
+    "operationalPasswordPlaceholder": "Password (4 digits)",
+    "operationalPasswordHint": "Cashier, server and chef accounts use a 4-digit numeric password.",
     "staffCodeHint": "Used with the staff name to sign in to the Server App.",
     "staffCodePlaceholderAdd": "Staff code (4 digits)",
     "staffCodePlaceholderEdit": "New staff code (leave blank to keep)",

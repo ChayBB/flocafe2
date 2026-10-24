@@ -91,6 +91,22 @@ function isValidPin(pin: unknown): boolean {
   return /^\d{4,6}$/.test(String(pin));
 }
 
+const STRONG_PASSWORD_MESSAGE =
+  'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.';
+const OPERATIONAL_PASSWORD_MESSAGE =
+  'Passwords for cashier, server and chef accounts must be exactly 4 digits.';
+
+/** Operational staff use a 4-digit password; owners and managers keep the strong-password policy. */
+function validateStaffPassword(role: string, password: unknown): boolean {
+  return isOperationalRole(role)
+    ? /^\d{4}$/.test(String(password))
+    : validatePassword(String(password));
+}
+
+function staffPasswordMessage(role: string): string {
+  return isOperationalRole(role) ? OPERATIONAL_PASSWORD_MESSAGE : STRONG_PASSWORD_MESSAGE;
+}
+
 function isValidStaffCode(code: unknown): boolean {
   return /^\d{4}$/.test(String(code));
 }
@@ -241,12 +257,9 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
       captureStaffValidation('fc.backend.staff.create.validation', 'email_invalid');
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
-    if (!validatePassword(password)) {
+    if (!validateStaffPassword(role, password)) {
       captureStaffValidation('fc.backend.staff.create.validation', 'password_policy');
-      return res.status(400).json({
-        error:
-          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.',
-      });
+      return res.status(400).json({ error: staffPasswordMessage(role) });
     }
 
     if (!VALID_ROLES.includes(role)) {
@@ -456,11 +469,14 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
       }
     }
 
-    if (password && !validatePassword(password)) {
+    if (password && !validateStaffPassword(targetRole, password)) {
+      captureStaffValidation('fc.backend.staff.update.validation', 'password_policy');
+      return res.status(400).json({ error: staffPasswordMessage(targetRole) });
+    }
+    if (!password && !isOperationalRole(targetRole) && isOperationalRole(member.role)) {
       captureStaffValidation('fc.backend.staff.update.validation', 'password_policy');
       return res.status(400).json({
-        error:
-          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.',
+        error: `Set a new password when promoting this account. ${STRONG_PASSWORD_MESSAGE}`,
       });
     }
 

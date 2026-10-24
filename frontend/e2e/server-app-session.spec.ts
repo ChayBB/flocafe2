@@ -96,7 +96,7 @@ test.describe('Server App session', () => {
 
   test('a server signs in with the staff name and 4-digit staff code', async ({ page }) => {
     const name = `Coded ${Math.random().toString(36).slice(2, 7)}`;
-    await createStaff(page, { name, password: 'E2ePass123!', role: 'server', staff_code: '4821' });
+    await createStaff(page, { name, password: '1357', role: 'server', staff_code: '4821' });
     await openLogin(page);
     await submitLogin(page, name, '4820');
     await expect(page.getByTestId('server-app-session-button')).toHaveCount(0);
@@ -112,11 +112,11 @@ test.describe('Server App session', () => {
 
   test('two staff with the same name and code are refused as ambiguous', async ({ page }) => {
     const name = `Dup ${Math.random().toString(36).slice(2, 7)}`;
-    await createStaff(page, { name, password: 'SamePass123!', role: 'server' });
-    await createStaff(page, { name, password: 'SamePass123!', role: 'server' });
+    await createStaff(page, { name, password: '2468', role: 'server' });
+    await createStaff(page, { name, password: '2468', role: 'server' });
     await openLogin(page);
     const response = page.waitForResponse((res) => res.url().endsWith('/api/auth/login'));
-    await submitLogin(page, name, 'SamePass123!');
+    await submitLogin(page, name, '2468');
     const login = await response;
     expect(login.status()).toBe(401);
     expect((await login.json()).code).toBe('ambiguous_credentials');

@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 digit)",
     "pinPlaceholderEdit": "PIN Baru (biarkan kosong untuk mempertahankan)",
     "pinSet": "✓ PIN diatur",
+    "operationalPasswordPlaceholder": "Kata sandi (4 digit)",
+    "operationalPasswordHint": "Akun kasir, pelayan, dan koki memakai kata sandi angka 4 digit.",
     "staffCodeHint": "Dipakai bersama nama staf untuk masuk ke Server App.",
     "staffCodePlaceholderAdd": "Kode staf (4 digit)",
     "staffCodePlaceholderEdit": "Kode staf baru (kosongkan untuk mempertahankan)",

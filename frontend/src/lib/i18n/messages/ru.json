@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4–6 цифр)",
     "pinPlaceholderEdit": "Новый PIN-код (оставьте пустым, чтобы сохранить)",
     "pinSet": "✓ PIN-код установлен",
+    "operationalPasswordPlaceholder": "Пароль (4 цифры)",
+    "operationalPasswordHint": "Учётные записи кассира, официанта и повара используют цифровой пароль из 4 цифр.",
     "staffCodeHint": "Используется вместе с именем сотрудника для входа в приложение официанта.",
     "staffCodePlaceholderAdd": "Код сотрудника (4 цифры)",
     "staffCodePlaceholderEdit": "Новый код сотрудника (оставьте пустым, чтобы сохранить)",

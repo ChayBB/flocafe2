@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "رمز (۴-۶ رقم)",
     "pinPlaceholderEdit": "رمز تازه (برای نگه‌داشتن، خالی بگذارید)",
     "pinSet": "✓ رمز تنظیم شد",
+    "operationalPasswordPlaceholder": "رمز عبور (۴ رقم)",
+    "operationalPasswordHint": "حساب‌های صندوقدار، سرور و سرآشپز از رمز عبور عددی ۴ رقمی استفاده می‌کنند.",
     "staffCodeHint": "همراه با نام کارمند برای ورود به برنامه سرویس استفاده می‌شود.",
     "staffCodePlaceholderAdd": "کد کارمند (۴ رقم)",
     "staffCodePlaceholderEdit": "کد کارمند جدید (برای حفظ، خالی بگذارید)",

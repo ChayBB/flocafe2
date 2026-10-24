@@ -117,7 +117,7 @@ async function main() {
   const managerCreated: Record<string, string> = {};
   for (const role of ['cashier', 'server', 'chef']) {
     result = await request(app).post('/api/staff').set(managerAuth).send({
-      name: `Managed ${role}`, email: `managed-${role}@test.local`, password: 'StrongPass1', role,
+      name: `Managed ${role}`, email: `managed-${role}@test.local`, password: '4821', role,
     });
     assertEqual(result.status, 201, `manager can create ${role}`);
     managerCreated[role] = result.body.staff?.id;
@@ -128,7 +128,7 @@ async function main() {
   }
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Station Chef', email: 'station-chef@test.local', password: 'StrongPass1', role: 'chef', station_ids: ['station-145'],
+    name: 'Station Chef', email: 'station-chef@test.local', password: '4821', role: 'chef', station_ids: ['station-145'],
   });
   assertEqual(result.status, 201, 'chef can be optionally assigned to a station during creation');
   assertEqual(result.body.staff.station_ids[0], 'station-145', 'created chef response includes the station assignment');
@@ -138,14 +138,14 @@ async function main() {
   assertEqual(stationLink.station_id, 'station-145', 'chef station assignment is persisted');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Unassigned Chef', email: 'unassigned-chef@test.local', password: 'StrongPass1', role: 'chef', station_ids: [],
+    name: 'Unassigned Chef', email: 'unassigned-chef@test.local', password: '4821', role: 'chef', station_ids: [],
   });
   assertEqual(result.status, 201, 'chef creation does not require a station');
   const unassignedChef = db.prepare('SELECT station_assignments_configured FROM users WHERE id = ?').get(result.body.staff.id) as any;
   assertEqual(unassignedChef.station_assignments_configured, 0, 'unassigned chef remains unrestricted by station configuration');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Invalid Station Cashier', email: 'station-cashier@test.local', password: 'StrongPass1', role: 'cashier', station_ids: ['station-145'],
+    name: 'Invalid Station Cashier', email: 'station-cashier@test.local', password: '4821', role: 'cashier', station_ids: ['station-145'],
   });
   assertEqual(result.status, 400, 'non-chef accounts cannot receive kitchen station assignments');
 
@@ -157,19 +157,19 @@ async function main() {
   }
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Email-less server', password: 'StrongPass1', role: 'server',
+    name: 'Email-less server', password: '4821', role: 'server',
   });
   assertEqual(result.status, 201, 'staff creation does not require an email');
   assertEqual(result.body.staff.email, null, 'a staff member created without an email has none');
   const emailLessId = result.body.staff.id;
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Second email-less server', email: '   ', password: 'StrongPass1', role: 'server',
+    name: 'Second email-less server', email: '   ', password: '4821', role: 'server',
   });
   assertEqual(result.status, 201, 'several staff members can have no email');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Coded server', password: 'StrongPass1', role: 'server', staff_code: '4821',
+    name: 'Coded server', password: '4821', role: 'server', staff_code: '4821',
   });
   assertEqual(result.status, 201, 'a server can be created with a 4-digit staff code');
   assertEqual(Boolean(result.body.staff.has_staff_code), true, 'the staff list reports that a code is set');
@@ -184,19 +184,19 @@ async function main() {
 
   for (const bad of ['123', '12345', 'abcd', '12 4']) {
     result = await request(app).post('/api/staff').set(managerAuth).send({
-      name: `Bad code ${bad}`, password: 'StrongPass1', role: 'server', staff_code: bad,
+      name: `Bad code ${bad}`, password: '4821', role: 'server', staff_code: bad,
     });
     assertEqual(result.status, 400, `staff code "${bad}" is rejected`);
   }
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'CODED SERVER', password: 'StrongPass1', role: 'server', staff_code: '4821',
+    name: 'CODED SERVER', password: '4821', role: 'server', staff_code: '4821',
   });
   assertEqual(result.status, 409, 'the same name cannot reuse the same staff code');
   assertEqual(result.body.code, 'staff_code_in_use', 'the conflict names its reason');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Coded server', password: 'StrongPass1', role: 'server', staff_code: '9035',
+    name: 'Coded server', password: '4821', role: 'server', staff_code: '9035',
   });
   assertEqual(result.status, 201, 'the same name may use a different staff code');
 
@@ -212,20 +212,51 @@ async function main() {
   result = await request(app).put(`/api/staff/${codedId}`).set(managerAuth).send({ staff_code: '77' });
   assertEqual(result.status, 400, 'an invalid staff code is rejected on update');
 
+  console.log('\n-- Operational staff use 4-digit passwords --');
+  for (const bad of ['StrongPass1', '123', '12345', 'abcd', '12 4']) {
+    result = await request(app).post('/api/staff').set(managerAuth).send({
+      name: `Digits ${bad}`, password: bad, role: 'cashier',
+    });
+    assertEqual(result.status, 400, `a cashier password of "${bad}" is rejected`);
+    assert(String(result.body.error).includes('4 digits'), `"${bad}" is refused with the 4-digit message`);
+  }
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    email: 'nameless@test.local', password: 'StrongPass1', role: 'server',
+    name: 'Digits chef', password: '0042', role: 'chef',
+  });
+  assertEqual(result.status, 201, 'a chef can have a 4-digit password with leading zeros');
+  const digitsId = result.body.staff.id;
+
+  result = await request(app).post('/api/staff').set(ownerAuth).send({
+    name: 'Digit manager', password: '4821', role: 'manager',
+  });
+  assertEqual(result.status, 400, 'a manager still needs a strong password');
+  assert(String(result.body.error).includes('at least 8 characters'), 'the manager error states the strong policy');
+
+  result = await request(app).put(`/api/staff/${digitsId}`).set(managerAuth).send({ password: '12' });
+  assertEqual(result.status, 400, 'an operational password reset must be 4 digits');
+  result = await request(app).put(`/api/staff/${digitsId}`).set(managerAuth).send({ password: '9035' });
+  assertEqual(result.status, 200, 'an operational password can be reset to 4 digits');
+  result = await request(app).put(`/api/staff/${digitsId}`).set(ownerAuth).send({ role: 'manager' });
+  assertEqual(result.status, 400, 'promoting an operational account requires a new strong password');
+  result = await request(app).put(`/api/staff/${digitsId}`).set(ownerAuth).send({ role: 'manager', password: '4821' });
+  assertEqual(result.status, 400, 'a promoted account cannot keep a 4-digit password');
+  result = await request(app).put(`/api/staff/${digitsId}`).set(ownerAuth).send({ role: 'manager', password: 'StrongPass1' });
+  assertEqual(result.status, 200, 'promotion with a strong password succeeds');
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
+    email: 'nameless@test.local', password: '4821', role: 'server',
   });
   assertEqual(result.status, 400, 'staff creation still requires a name');
   assertEqual(result.body.error, 'name, password, and role are required', 'missing name returns a clear validation error');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Invalid email server', email: 'not-an-email', password: 'StrongPass1', role: 'server',
+    name: 'Invalid email server', email: 'not-an-email', password: '4821', role: 'server',
   });
   assertEqual(result.status, 400, 'staff creation rejects invalid email');
   assertEqual(result.body.error, 'Enter a valid email address', 'invalid email returns a clear validation error');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Normalized email server', email: '  Mixed.Server@Test.Local  ', password: 'StrongPass1', role: 'server',
+    name: 'Normalized email server', email: '  Mixed.Server@Test.Local  ', password: '4821', role: 'server',
   });
   assertEqual(result.status, 201, 'staff creation trims and normalizes required email');
   assertEqual(result.body.staff.email, 'mixed.server@test.local', 'created staff email is stored normalized');
@@ -238,7 +269,7 @@ async function main() {
   assertEqual(result.status, 200, 'an email-less staff member can be edited without adding an email');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Pinned cashier', email: 'pinned-cashier@test.local', password: 'StrongPass1', role: 'cashier', pin: '1234',
+    name: 'Pinned cashier', email: 'pinned-cashier@test.local', password: '4821', role: 'cashier', pin: '1234',
   });
   assertEqual(result.status, 400, 'operational roles reject a non-empty PIN');
 
@@ -322,7 +353,7 @@ async function main() {
   // canModifyTargetStaff refuses the same account on edit, deactivate and
   // reactivate of a cashier; admitting creation here would be incoherent.
   result = await request(app).post('/api/staff').set(adminOwnerA).send({
-    name: 'Cashier by limited owner', email: 'limited-owner-cashier@test.local', password: 'StrongPass1', role: 'cashier',
+    name: 'Cashier by limited owner', email: 'limited-owner-cashier@test.local', password: '4821', role: 'cashier',
   });
   assertEqual(result.status, 403, 'staff.privileged.manage alone must not create operational staff');
   assertEqual(result.body.error, 'This account cannot create operational staff accounts',

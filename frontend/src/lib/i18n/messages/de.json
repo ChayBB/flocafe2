@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 Ziffern)",
     "pinPlaceholderEdit": "Neue PIN (leer lassen zum Beibehalten)",
     "pinSet": "✓ PIN festgelegt",
+    "operationalPasswordPlaceholder": "Passwort (4 Ziffern)",
+    "operationalPasswordHint": "Konten für Kasse, Service und Küche verwenden ein 4-stelliges Zahlenpasswort.",
     "staffCodeHint": "Wird zusammen mit dem Mitarbeiternamen zur Anmeldung in der Server-App verwendet.",
     "staffCodePlaceholderAdd": "Mitarbeitercode (4 Ziffern)",
     "staffCodePlaceholderEdit": "Neuer Mitarbeitercode (leer lassen, um ihn zu behalten)",

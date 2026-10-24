@@ -11,7 +11,7 @@ import { useTranslations, type AppConfig } from 'use-intl';
 import { useAuthStore } from '@/store/auth';
 import { PermissionMatrix } from '@/components/settings/PermissionMatrix';
 import { PermissionAuditLog } from '@/components/settings/PermissionAuditLog';
-import { ROLE_ACCESS, ROLE_KEYS, hasRole } from '@shared/role-permissions';
+import { OPERATIONAL_ROLES, ROLE_ACCESS, ROLE_KEYS, hasRole } from '@shared/role-permissions';
 import { ROLE_LABEL_KEYS } from '@/lib/i18n-enums';
 import { tenantCan } from '@/lib/permissions';
 
@@ -39,6 +39,9 @@ function extractErrorMessage(error: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+const isOperationalRole = (role: string) => hasRole(role, OPERATIONAL_ROLES);
+const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 4);
 
 export default function StaffPage() {
   const t = useTranslations('staff');
@@ -363,12 +366,24 @@ export default function StaffPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder={
-                    editingStaff ? t('newPasswordPlaceholder') : t('passwordPlaceholder')
+                    isOperationalRole(form.role)
+                      ? t('operationalPasswordPlaceholder')
+                      : editingStaff
+                        ? t('newPasswordPlaceholder')
+                        : t('passwordPlaceholder')
                   }
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      password: isOperationalRole(form.role) ? digitsOnly(e.target.value) : e.target.value,
+                    })
+                  }
                   className="w-full px-3 py-2 pe-10 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                   required={!editingStaff}
+                  {...(isOperationalRole(form.role)
+                    ? { inputMode: 'numeric' as const, maxLength: 4, pattern: '[0-9]{4}' }
+                    : {})}
                 />
                 <button
                   type="button"
@@ -384,17 +399,32 @@ export default function StaffPage() {
                 type={showPassword ? 'text' : 'password'}
                 placeholder={tAuth('confirmPassword')}
                 value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    confirmPassword: isOperationalRole(form.role)
+                      ? digitsOnly(e.target.value)
+                      : e.target.value,
+                  })
+                }
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                 required={!editingStaff || Boolean(form.password)}
+                {...(isOperationalRole(form.role)
+                  ? { inputMode: 'numeric' as const, maxLength: 4, pattern: '[0-9]{4}' }
+                  : {})}
               />
+              {isOperationalRole(form.role) && (
+                <p className="text-xs text-muted-foreground -mt-2">{t('operationalPasswordHint')}</p>
+              )}
               <select
                 value={form.role}
                 onChange={(e) => {
                   const role = e.target.value;
+                  const passwordKindChanged = isOperationalRole(role) !== isOperationalRole(form.role);
                   setForm({
                     ...form,
                     role,
+                    ...(passwordKindChanged ? { password: '', confirmPassword: '' } : {}),
                     pin: hasRole(role, ROLE_ACCESS.ownerManager) ? form.pin : '',
                     station_ids: role === 'chef' ? form.station_ids : [],
                   });
@@ -526,10 +556,21 @@ export default function StaffPage() {
               <div className="relative">
                 <input
                   type={showResetPassword ? 'text' : 'password'}
-                  placeholder={t('newPasswordPlaceholder')}
+                  placeholder={
+                    isOperationalRole(resetPwStaff.role)
+                      ? t('operationalPasswordPlaceholder')
+                      : t('newPasswordPlaceholder')
+                  }
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) =>
+                    setNewPassword(
+                      isOperationalRole(resetPwStaff.role) ? digitsOnly(e.target.value) : e.target.value,
+                    )
+                  }
                   className="w-full px-3 py-2 pe-10 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                  {...(isOperationalRole(resetPwStaff.role)
+                    ? { inputMode: 'numeric' as const, maxLength: 4 }
+                    : {})}
                 />
                 <button
                   type="button"
@@ -545,9 +586,19 @@ export default function StaffPage() {
                 type={showResetPassword ? 'text' : 'password'}
                 placeholder={tAuth('confirmPassword')}
                 value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                onChange={(e) =>
+                  setConfirmNewPassword(
+                    isOperationalRole(resetPwStaff.role) ? digitsOnly(e.target.value) : e.target.value,
+                  )
+                }
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                {...(isOperationalRole(resetPwStaff.role)
+                  ? { inputMode: 'numeric' as const, maxLength: 4 }
+                  : {})}
               />
+              {isOperationalRole(resetPwStaff.role) && (
+                <p className="text-xs text-muted-foreground -mt-2">{t('operationalPasswordHint')}</p>
+              )}
               <Button onClick={handleResetPassword} className="w-full">
                 {t('resetPasswordTitle')}
               </Button>

@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN（4～6桁）",
     "pinPlaceholderEdit": "新しいPIN（変更しない場合は空欄）",
     "pinSet": "✓ PIN設定済み",
+    "operationalPasswordPlaceholder": "パスワード（4桁）",
+    "operationalPasswordHint": "レジ担当・ホール担当・シェフのアカウントは4桁の数字のパスワードを使います。",
     "staffCodeHint": "スタッフ名と組み合わせてServer Appにサインインするために使います。",
     "staffCodePlaceholderAdd": "スタッフコード（4桁）",
     "staffCodePlaceholderEdit": "新しいスタッフコード（変更しない場合は空欄）",

@@ -212,7 +212,7 @@ async function main() {
     name: 'test',
     email: 'weak-password@test.local',
     password: '1',
-    role: 'cashier',
+    role: 'manager',
   });
   assertEqual(
     weakCreateRes.status,
@@ -227,7 +227,7 @@ async function main() {
   const strongCreateRes = await request(app).post('/api/staff').set(ownerAuth).send({
     name: 'test',
     password: 'StrongPass1',
-    role: 'cashier',
+    role: 'manager',
     email: 'test1@test.local',
   });
   assertEqual(

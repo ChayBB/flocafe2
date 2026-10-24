@@ -2613,6 +2613,8 @@
     "pinPlaceholderAdd": "PIN (4-6 chữ số)",
     "pinPlaceholderEdit": "PIN mới (để trống nếu giữ nguyên)",
     "pinSet": "✓ Đã đặt PIN",
+    "operationalPasswordPlaceholder": "Mật khẩu (4 chữ số)",
+    "operationalPasswordHint": "Tài khoản thu ngân, phục vụ và đầu bếp dùng mật khẩu số gồm 4 chữ số.",
     "staffCodeHint": "Dùng cùng tên nhân viên để đăng nhập Server App.",
     "staffCodePlaceholderAdd": "Mã nhân viên (4 chữ số)",
     "staffCodePlaceholderEdit": "Mã nhân viên mới (để trống để giữ nguyên)",
