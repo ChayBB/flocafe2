@@ -2858,6 +2858,7 @@
     "floorplanHint": "Arraste as mesas para posicioná-las no mapa e salve. Clique em uma mesa para editar o nome e os lugares.",
     "floorplanSaved": "Planta salva",
     "floorplanSaveFailed": "Falha ao salvar a planta",
+    "rotateTable": "Girar mesa",
     "floorplanUnplaced": "Mesas não posicionadas",
     "floorplanEmptyCanvas": "Arraste as mesas da bandeja abaixo para o mapa.",
     "floorplanAriaHint": "Arraste ou use as setas para mover; pressione Enter para editar; segure Shift para mover mais rápido.",

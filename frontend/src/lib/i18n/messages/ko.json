@@ -2858,6 +2858,7 @@
     "floorplanHint": "테이블을 끌어 지도 위에 배치한 뒤 저장하세요. 테이블을 클릭하면 이름과 좌석 수를 편집할 수 있습니다.",
     "floorplanSaved": "홀 배치도가 저장되었습니다",
     "floorplanSaveFailed": "홀 배치도를 저장하지 못했습니다",
+    "rotateTable": "테이블 회전",
     "floorplanUnplaced": "배치되지 않은 테이블",
     "floorplanEmptyCanvas": "아래 목록에서 테이블을 끌어 지도 위에 놓으세요.",
     "floorplanAriaHint": "드래그하거나 방향키로 이동하세요. Enter로 편집하고, Shift를 누르면 더 빠르게 이동합니다.",

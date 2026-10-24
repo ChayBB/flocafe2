@@ -2858,6 +2858,7 @@
     "floorplanHint": "Versleep tafels om ze op de kaart te positioneren en sla ze vervolgens op. Klik op een tafel om de naam en zitplaatsen te bewerken.",
     "floorplanSaved": "Plattegrond opgeslagen",
     "floorplanSaveFailed": "Kan plattegrond niet opslaan",
+    "rotateTable": "Tafel draaien",
     "floorplanUnplaced": "Niet-geplaatste tafels",
     "floorplanEmptyCanvas": "Sleep tafels uit het onderstaande vak naar de kaart.",
     "floorplanAriaHint": "Sleep of gebruik de pijltjestoetsen om te bewegen; druk op Enter om te bewerken; houd Shift ingedrukt om sneller te bewegen.",

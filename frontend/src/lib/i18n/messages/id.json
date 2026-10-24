@@ -2858,6 +2858,7 @@
     "floorplanHint": "Seret meja untuk menempatkannya di peta, lalu simpan. Klik meja untuk mengubah nama dan kursinya.",
     "floorplanSaved": "Denah lantai disimpan",
     "floorplanSaveFailed": "Gagal menyimpan denah lantai",
+    "rotateTable": "Putar meja",
     "floorplanUnplaced": "Meja belum ditempatkan",
     "floorplanEmptyCanvas": "Seret meja dari baki di bawah ke peta.",
     "floorplanAriaHint": "Seret atau gunakan tombol panah untuk memindahkan; tekan Enter untuk mengubah; tahan Shift untuk bergerak lebih cepat.",

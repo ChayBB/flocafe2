@@ -2858,6 +2858,7 @@
     "floorplanHint": "Masaları haritada konumlandırmak için sürükleyin, sonra kaydedin. Adı ve koltukları düzenlemek için bir masaya tıklayın.",
     "floorplanSaved": "Yerleşim planı kaydedildi",
     "floorplanSaveFailed": "Yerleşim planı kaydedilemedi",
+    "rotateTable": "Masayı döndür",
     "floorplanUnplaced": "Yerleştirilmemiş masalar",
     "floorplanEmptyCanvas": "Masaları alttaki tepsiden haritaya sürükleyin.",
     "floorplanAriaHint": "Taşımak için sürükleyin veya ok tuşlarını kullanın; düzenlemek için Enter'a basın; daha hızlı taşımak için Shift'i basılı tutun.",

@@ -2858,6 +2858,7 @@
     "floorplanHint": "Ziehen Sie Tische, um sie auf der Karte zu positionieren, und speichern Sie dann. Klicken Sie auf einen Tisch, um Name und Sitzplätze zu bearbeiten.",
     "floorplanSaved": "Grundriss gespeichert",
     "floorplanSaveFailed": "Grundriss konnte nicht gespeichert werden",
+    "rotateTable": "Tisch drehen",
     "floorplanUnplaced": "Nicht platzierte Tische",
     "floorplanEmptyCanvas": "Ziehen Sie Tische aus dem Fach unten auf die Karte.",
     "floorplanAriaHint": "Ziehen oder Pfeiltasten zum Bewegen; Enter zum Bearbeiten; Umschalt gedrückt halten zum schnelleren Bewegen.",

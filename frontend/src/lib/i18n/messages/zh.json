@@ -2858,6 +2858,7 @@
     "floorplanHint": "拖动桌台到地图上的位置，然后保存。点击桌台可编辑其名称和座位数。",
     "floorplanSaved": "平面图已保存",
     "floorplanSaveFailed": "保存平面图失败",
+    "rotateTable": "旋转桌子",
     "floorplanUnplaced": "未摆放的桌台",
     "floorplanEmptyCanvas": "从下方托盘拖动桌台到地图上。",
     "floorplanAriaHint": "拖动或使用方向键移动；按回车编辑；按住 Shift 可更快移动。",

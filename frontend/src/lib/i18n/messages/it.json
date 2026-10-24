@@ -2858,6 +2858,7 @@
     "floorplanHint": "Trascina i tavoli per posizionarli sulla mappa, poi salva. Fai clic su un tavolo per modificarne nome e posti.",
     "floorplanSaved": "Planimetria salvata",
     "floorplanSaveFailed": "Salvataggio della planimetria non riuscito",
+    "rotateTable": "Ruota tavolo",
     "floorplanUnplaced": "Tavoli non posizionati",
     "floorplanEmptyCanvas": "Trascina i tavoli dal vassoio qui sotto sulla mappa.",
     "floorplanAriaHint": "Trascina o usa le frecce per spostare; premi Invio per modificare; tieni premuto Maiusc per muoverti più velocemente.",

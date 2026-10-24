@@ -2858,6 +2858,7 @@
     "floorplanHint": "Kéo bàn để định vị trên bản đồ rồi lưu. Nhấn vào bàn để sửa tên và số chỗ.",
     "floorplanSaved": "Đã lưu sơ đồ khu vực",
     "floorplanSaveFailed": "Không thể lưu sơ đồ khu vực",
+    "rotateTable": "Xoay bàn",
     "floorplanUnplaced": "Bàn chưa đặt vị trí",
     "floorplanEmptyCanvas": "Kéo bàn từ khay bên dưới lên bản đồ.",
     "floorplanAriaHint": "Kéo hoặc dùng phím mũi tên để di chuyển; nhấn Enter để sửa; giữ Shift để di chuyển nhanh hơn.",

@@ -16,12 +16,13 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  RotateCw,
   Sparkles,
   Table2,
   Trash2,
   Users,
 } from 'lucide-react';
-import type { Order, Table } from '@/lib/types';
+import type { Order, Table, TableOrientation } from '@/lib/types';
 import { useTranslations } from 'use-intl';
 import { TABLE_STATUS_LABEL_KEYS } from '@/lib/i18n';
 import { TableTurnoverBadge } from '@/components/tables/TableTurnoverBadge';
@@ -64,15 +65,24 @@ const VIRTUAL_WIDTH = 1000;
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 // Table geometry and dimensions based on seating capacity.
-function shapeFor(capacity: number, s = 1) {
+function shapeFor(capacity: number, s = 1, orientation: TableOrientation = 'horizontal') {
   if (capacity <= 2) return { w: 78 * s, h: 78 * s, round: true };
   if (capacity <= 4) return { w: 96 * s, h: 96 * s, round: false };
-  if (capacity <= 6) return { w: 138 * s, h: 82 * s, round: false };
-  if (capacity <= 8) return { w: 172 * s, h: 82 * s, round: false };
-  return { w: 214 * s, h: 82 * s, round: false };
+  const [w, h] = capacity <= 6 ? [138, 82] : capacity <= 8 ? [172, 82] : [214, 82];
+  return orientation === 'vertical'
+    ? { w: h * s, h: w * s, round: false }
+    : { w: w * s, h: h * s, round: false };
 }
 
-function chairPoints(capacity: number, w: number, h: number, round: boolean) {
+const ROTATABLE_MIN_SEATS = 5;
+
+function chairPoints(
+  capacity: number,
+  w: number,
+  h: number,
+  round: boolean,
+  orientation: TableOrientation = 'horizontal',
+) {
   const pts: { x: number; y: number }[] = [];
   if (round) {
     const r = w / 2 + 9;
@@ -81,10 +91,15 @@ function chairPoints(capacity: number, w: number, h: number, round: boolean) {
       pts.push({ x: w / 2 + r * Math.cos(a), y: h / 2 + r * Math.sin(a) });
     }
   } else {
-    const top = Math.ceil(capacity / 2);
-    const bottom = capacity - top;
-    for (let i = 0; i < top; i++) pts.push({ x: ((i + 1) / (top + 1)) * w, y: -8 });
-    for (let i = 0; i < bottom; i++) pts.push({ x: ((i + 1) / (bottom + 1)) * w, y: h + 8 });
+    const first = Math.ceil(capacity / 2);
+    const second = capacity - first;
+    if (orientation === 'vertical') {
+      for (let i = 0; i < first; i++) pts.push({ x: -8, y: ((i + 1) / (first + 1)) * h });
+      for (let i = 0; i < second; i++) pts.push({ x: w + 8, y: ((i + 1) / (second + 1)) * h });
+    } else {
+      for (let i = 0; i < first; i++) pts.push({ x: ((i + 1) / (first + 1)) * w, y: -8 });
+      for (let i = 0; i < second; i++) pts.push({ x: ((i + 1) / (second + 1)) * w, y: h + 8 });
+    }
   }
   return pts;
 }
@@ -229,6 +244,7 @@ export default function FloorplanEditor({
   const trayRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragCtx | null>(null);
   const [edits, setEdits] = useState<Record<string, XY>>({});
+  const [rotations, setRotations] = useState<Record<string, TableOrientation>>({});
   const [isOverTray, setIsOverTray] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -325,6 +341,14 @@ export default function FloorplanEditor({
       return changed ? next : prev;
     };
     setEdits(prune);
+    setRotations((prev) => {
+      const next: Record<string, TableOrientation> = {};
+      for (const [id, o] of Object.entries(prev)) {
+        const tb = tables.find((x) => x.id === id);
+        if (tb && (tb.orientation ?? 'horizontal') !== o) next[id] = o;
+      }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
   }
 
   const floors = useMemo(() => {
@@ -360,6 +384,17 @@ export default function FloorplanEditor({
       return { x: tb.position_x, y: tb.position_y };
     return null;
   };
+
+  const orientationOf = (tb: Table): TableOrientation =>
+    rotations[tb.id] ?? tb.orientation ?? 'horizontal';
+  const rotate = (tb: Table) =>
+    setRotations((prev) => {
+      const next: TableOrientation = orientationOf(tb) === 'vertical' ? 'horizontal' : 'vertical';
+      const updated = { ...prev, [tb.id]: next };
+      if (next === (tb.orientation ?? 'horizontal')) delete updated[tb.id];
+      return updated;
+    });
+  const pendingCount = new Set([...Object.keys(edits), ...Object.keys(rotations)]).size;
 
   const floorTables = tables.filter((tb) => (tb.floor || '') === floor);
   const placed = floorTables.filter((tb) => posOf(tb) !== null);
@@ -715,8 +750,9 @@ export default function FloorplanEditor({
     scale?: number;
     dragging?: boolean;
   }) => {
-    const { w, h, round } = shapeFor(tb.capacity, scale);
-    const chairs = chairPoints(tb.capacity, w, h, round);
+    const orientation = orientationOf(tb);
+    const { w, h, round } = shapeFor(tb.capacity, scale, orientation);
+    const chairs = chairPoints(tb.capacity, w, h, round, orientation);
     const reservedName = tb.status === 'reserved' ? tb.reservation_customer_name : null;
     const activeOrder = activeOrderOf(tb);
     const seatedAt = tb.seated_at || activeOrder?.created_at;
@@ -881,6 +917,23 @@ export default function FloorplanEditor({
         style={{ left: `${p.x}%`, top: `${p.y}%` }}
       >
         <TableObject tb={tb} dragging={dragging} />
+        {edit && tb.capacity >= ROTATABLE_MIN_SEATS && (
+          <button
+            type="button"
+            data-testid={`floorplan-rotate-${tb.name}`}
+            aria-label={t('rotateTable')}
+            title={t('rotateTable')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              rotate(tb);
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="absolute right-0 top-0 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <RotateCw size={12} />
+          </button>
+        )}
       </div>
     );
   };
@@ -1095,20 +1148,28 @@ export default function FloorplanEditor({
           )}
           {edit && (
             <>
-              {Object.keys(edits).length > 0 && (
+              {pendingCount > 0 && (
                 <span className="flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                  {Object.keys(edits).length}
+                  {pendingCount}
                 </span>
               )}
-              {Object.keys(edits).length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setEdits({})} disabled={saving}>
+              {pendingCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEdits({});
+                    setRotations({});
+                  }}
+                  disabled={saving}
+                >
                   {tCommon('cancel')}
                 </Button>
               )}
               <Button
                 onClick={save}
-                disabled={saving || Object.keys(edits).length === 0}
+                disabled={saving || pendingCount === 0}
                 className="shadow"
               >
                 {saving ? tCommon('saving') : tCommon('save')}
@@ -1672,16 +1733,21 @@ export default function FloorplanEditor({
   async function save() {
     if (!canManage) return;
     const known = new Set(tables.map((tb) => tb.id));
-    const changed = Object.entries(edits).filter(([id]) => known.has(id));
-    if (changed.length === 0) return;
+    const ids = [...new Set([...Object.keys(edits), ...Object.keys(rotations)])].filter((id) =>
+      known.has(id),
+    );
+    if (ids.length === 0) return;
     setSaving(true);
     try {
       await api.patch('/tables/positions', {
-        positions: changed.map(([id, p]) => ({
-          id,
-          position_x: p ? p.x : null,
-          position_y: p ? p.y : null,
-        })),
+        positions: ids.map((id) => {
+          const p = edits[id];
+          return {
+            id,
+            ...(id in edits ? { position_x: p ? p.x : null, position_y: p ? p.y : null } : {}),
+            ...(id in rotations ? { orientation: rotations[id] } : {}),
+          };
+        }),
       });
       // Keep edits until refetch lands so dirty badge accurately reflects
       // state through any save failures.

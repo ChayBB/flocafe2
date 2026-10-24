@@ -2858,6 +2858,7 @@
     "floorplanHint": "Zvarritni tavolinat për t'i pozicionuar në hartë, më pas ruajeni. Klikoni një tavolinë për të modifikuar emrin dhe vendet e saj.",
     "floorplanSaved": "Plani i katit u ruajt",
     "floorplanSaveFailed": "Ruajtja e planimetrisë dështoi",
+    "rotateTable": "Rrotullo tavolinën",
     "floorplanUnplaced": "Tavolina të pavendosura",
     "floorplanEmptyCanvas": "Tërhiqni tavolinat nga tabaka më poshtë në hartë.",
     "floorplanAriaHint": "Zvarritni ose përdorni tastet e shigjetave për të lëvizur; shtypni Enter për të modifikuar; mbajeni Shift për të lëvizur më shpejt.",

@@ -157,6 +157,8 @@ export interface Addon {
   inherit_parent_tax_category?: boolean;
 }
 
+export type TableOrientation = 'horizontal' | 'vertical';
+
 export interface Table {
   id: string;
   name: string;
@@ -167,6 +169,7 @@ export interface Table {
   section: string | null;
   position_x: number | null;
   position_y: number | null;
+  orientation?: TableOrientation;
   is_active: boolean;
   activeOrder?: Order | null;
   current_order?: Order | null;

@@ -2858,6 +2858,7 @@
     "floorplanHint": "Drag tables to position them on the map, then save. Click a table to edit its name and seats.",
     "floorplanSaved": "Floorplan saved",
     "floorplanSaveFailed": "Failed to save floorplan",
+    "rotateTable": "Rotate table",
     "floorplanUnplaced": "Unplaced tables",
     "floorplanEmptyCanvas": "Drag tables from the tray below onto the map.",
     "floorplanAriaHint": "Drag or use arrow keys to move; press Enter to edit; hold Shift to move faster.",

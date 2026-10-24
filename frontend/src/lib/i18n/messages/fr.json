@@ -2858,6 +2858,7 @@
     "floorplanHint": "Faites glisser les tables pour les positionner sur le plan, puis enregistrez. Cliquez sur une table pour modifier son nom et ses places.",
     "floorplanSaved": "Plan enregistré",
     "floorplanSaveFailed": "Échec de l'enregistrement du plan",
+    "rotateTable": "Pivoter la table",
     "floorplanUnplaced": "Tables non placées",
     "floorplanEmptyCanvas": "Faites glisser les tables de la zone ci-dessous sur le plan.",
     "floorplanAriaHint": "Déplacez en glissant ou avec les flèches ; appuyez sur Entrée pour modifier ; maintenez Maj pour aller plus vite.",

@@ -319,11 +319,18 @@ router.patch('/positions', requirePermission('tables.manage'), (req: Request, re
       return res.status(400).json({ error: 'Positions array is required' });
     }
 
-    const updates: Array<{ id: string; position_x: number | null; position_y: number | null }> = [];
+    const updates: Array<{
+      id: string;
+      hasPosition: boolean;
+      position_x: number | null;
+      position_y: number | null;
+      orientation: string | null;
+    }> = [];
     for (const item of raw) {
       if (!item || typeof item.id !== 'string' || !item.id.trim()) {
         return res.status(400).json({ error: 'Invalid table ID in positions payload' });
       }
+      const hasPosition = 'position_x' in item || 'position_y' in item;
       const x = normalizePositionCoord(item.position_x);
       const y = normalizePositionCoord(item.position_y);
       if (x === undefined || y === undefined) {
@@ -331,7 +338,17 @@ router.patch('/positions', requirePermission('tables.manage'), (req: Request, re
           .status(400)
           .json({ error: 'Coordinates must be numbers between 0 and 100, or null' });
       }
-      updates.push({ id: item.id.trim(), position_x: x, position_y: y });
+      const orientation = item.orientation ?? null;
+      if (orientation !== null && orientation !== 'horizontal' && orientation !== 'vertical') {
+        return res.status(400).json({ error: 'orientation must be horizontal or vertical' });
+      }
+      updates.push({
+        id: item.id.trim(),
+        hasPosition,
+        position_x: x,
+        position_y: y,
+        orientation,
+      });
     }
 
     const db = getDatabase();
@@ -346,16 +363,26 @@ router.patch('/positions', requirePermission('tables.manage'), (req: Request, re
       }
     }
     withTxn(() => {
+      // A rotation-only entry carries no coordinates and must leave the position alone.
       const stmt = db.prepare(`
         UPDATE tables SET
-          position_x = ?,
-          position_y = ?,
+          position_x = CASE WHEN ? = 1 THEN ? ELSE position_x END,
+          position_y = CASE WHEN ? = 1 THEN ? ELSE position_y END,
+          orientation = COALESCE(?, orientation),
           updated_at = ?
         WHERE id = ?
       `);
       const currentTime = now();
       for (const u of updates) {
-        stmt.run(u.position_x, u.position_y, currentTime, u.id);
+        stmt.run(
+          u.hasPosition ? 1 : 0,
+          u.position_x,
+          u.hasPosition ? 1 : 0,
+          u.position_y,
+          u.orientation,
+          currentTime,
+          u.id,
+        );
       }
     });
 

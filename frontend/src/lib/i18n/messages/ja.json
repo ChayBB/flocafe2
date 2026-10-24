@@ -2858,6 +2858,7 @@
     "floorplanHint": "テーブルをドラッグして地図上に配置し、保存します。テーブルをクリックすると名前と席数を編集できます。",
     "floorplanSaved": "フロアプランを保存しました",
     "floorplanSaveFailed": "フロアプランの保存に失敗しました",
+    "rotateTable": "テーブルを回転",
     "floorplanUnplaced": "未配置のテーブル",
     "floorplanEmptyCanvas": "下のトレイからテーブルを地図へドラッグしてください。",
     "floorplanAriaHint": "ドラッグまたは矢印キーで移動、Enterで編集、Shiftを押しながら高速移動します。",

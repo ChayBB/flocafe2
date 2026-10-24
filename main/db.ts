@@ -7583,6 +7583,15 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 119,
+    name: 'add_table_orientation',
+    up: () => {
+      if (!getColumns(db, 'tables').includes('orientation')) {
+        db.exec(`ALTER TABLE tables ADD COLUMN orientation TEXT NOT NULL DEFAULT 'horizontal'`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

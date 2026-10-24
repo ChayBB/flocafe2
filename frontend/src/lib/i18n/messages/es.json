@@ -2858,6 +2858,7 @@
     "floorplanHint": "Arrastra las mesas para ubicarlas en el mapa y guarda. Haz clic en una mesa para editar su nombre y sus asientos.",
     "floorplanSaved": "Plano guardado",
     "floorplanSaveFailed": "Error al guardar el plano",
+    "rotateTable": "Girar mesa",
     "floorplanUnplaced": "Mesas sin ubicar",
     "floorplanEmptyCanvas": "Arrastra las mesas de la bandeja inferior al mapa.",
     "floorplanAriaHint": "Arrastra o usa las flechas para mover; pulsa Enter para editar; mantén Shift para mover más rápido.",

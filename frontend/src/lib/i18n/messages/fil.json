@@ -2858,6 +2858,7 @@
     "floorplanHint": "I-drag ang mga mesa para ilagay ang mga ito sa mapa, pagkatapos ay i-save. Mag-click sa mesa para i-edit ang pangalan at upuan.",
     "floorplanSaved": "Na-save ang floor plan",
     "floorplanSaveFailed": "Hindi na-save ang floor plan",
+    "rotateTable": "I-rotate ang mesa",
     "floorplanUnplaced": "Mga hindi nakalagay na mesa",
     "floorplanEmptyCanvas": "I-drag ang mga mesa mula sa tray sa ibaba papunta sa mapa.",
     "floorplanAriaHint": "I-drag o gamitin ang arrow keys para lumipat; pindutin ang Enter para i-edit; pindutin ang Shift para mas mabilis.",
