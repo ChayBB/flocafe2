@@ -1624,6 +1624,8 @@
     "sendToKitchen": "भान्सामा पठाउनुहोस्",
     "sending": "पठाउँदै...",
     "signInFailed": "साइन इन असफल भयो",
+    "staffCodePlaceholder": "कर्मचारी कोड",
+    "staffNamePlaceholder": "कर्मचारीको नाम",
     "statusPreparing": "तयारी गर्दै",
     "statusReady": "तयार",
     "statusServed": "सेवा गरियो",

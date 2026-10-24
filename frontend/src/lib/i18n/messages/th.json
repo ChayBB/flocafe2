@@ -1624,6 +1624,8 @@
     "sendToKitchen": "ส่งเข้าครัว",
     "sending": "กำลังส่ง...",
     "signInFailed": "เข้าสู่ระบบไม่สำเร็จ",
+    "staffCodePlaceholder": "รหัสพนักงาน",
+    "staffNamePlaceholder": "ชื่อพนักงาน",
     "statusPreparing": "กำลังเตรียม",
     "statusReady": "พร้อม",
     "statusServed": "เสิร์ฟแล้ว",

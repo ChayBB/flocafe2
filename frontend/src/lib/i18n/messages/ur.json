@@ -1624,6 +1624,8 @@
     "sendToKitchen": "کچن کو بھیجیں",
     "sending": "بھیجا جا رہا ہے...",
     "signInFailed": "سائن ان ناکام",
+    "staffCodePlaceholder": "عملے کا کوڈ",
+    "staffNamePlaceholder": "عملے کا نام",
     "statusPreparing": "تیار کیا جا رہا ہے",
     "statusReady": "تیار",
     "statusServed": "پیش شدہ",

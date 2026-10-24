@@ -1624,6 +1624,8 @@
     "sendToKitchen": "キッチンに送信",
     "sending": "送信中…",
     "signInFailed": "ログインに失敗しました",
+    "staffCodePlaceholder": "スタッフコード",
+    "staffNamePlaceholder": "スタッフ名",
     "statusPreparing": "調理中",
     "statusReady": "準備完了",
     "statusServed": "提供済み",

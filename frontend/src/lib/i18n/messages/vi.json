@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Gửi đến bếp",
     "sending": "Đang gửi...",
     "signInFailed": "Đăng nhập thất bại",
+    "staffCodePlaceholder": "Mã nhân viên",
+    "staffNamePlaceholder": "Tên nhân viên",
     "statusPreparing": "Đang chuẩn bị",
     "statusReady": "Sẵn sàng",
     "statusServed": "Đã phục vụ",

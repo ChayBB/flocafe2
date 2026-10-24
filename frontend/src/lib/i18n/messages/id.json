@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Kirim ke dapur",
     "sending": "Mengirim...",
     "signInFailed": "Gagal masuk",
+    "staffCodePlaceholder": "Kode staf",
+    "staffNamePlaceholder": "Nama staf",
     "statusPreparing": "Disiapkan",
     "statusReady": "Siap",
     "statusServed": "Disajikan",

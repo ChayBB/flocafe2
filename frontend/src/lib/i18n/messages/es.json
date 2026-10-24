@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Enviar a cocina",
     "sending": "Enviando...",
     "signInFailed": "No se pudo iniciar sesión",
+    "staffCodePlaceholder": "Código del empleado",
+    "staffNamePlaceholder": "Nombre del empleado",
     "statusPreparing": "En preparación",
     "statusReady": "Listo",
     "statusServed": "Servido",

@@ -1624,6 +1624,8 @@
     "sendToKitchen": "إرسال إلى المطبخ",
     "sending": "جاري الإرسال...",
     "signInFailed": "فشل تسجيل الدخول",
+    "staffCodePlaceholder": "رمز الموظف",
+    "staffNamePlaceholder": "اسم الموظف",
     "statusPreparing": "التحضير",
     "statusReady": "جاهز",
     "statusServed": "تم تقديمه",

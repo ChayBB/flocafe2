@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Dërgo në kuzhinë",
     "sending": "Duke dërguar...",
     "signInFailed": "Identifikimi dështoi",
+    "staffCodePlaceholder": "Kodi i stafit",
+    "staffNamePlaceholder": "Emri i stafit",
     "statusPreparing": "Po përgatitet",
     "statusReady": "Gati",
     "statusServed": "Shërbyer",

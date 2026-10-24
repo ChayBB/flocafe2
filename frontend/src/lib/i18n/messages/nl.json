@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Stuur naar de keuken",
     "sending": "Verzenden...",
     "signInFailed": "Aanmelden mislukt",
+    "staffCodePlaceholder": "Medewerkerscode",
+    "staffNamePlaceholder": "Naam medewerker",
     "statusPreparing": "Voorbereiden",
     "statusReady": "Klaar",
     "statusServed": "Geserveerd",

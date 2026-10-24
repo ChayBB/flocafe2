@@ -1624,6 +1624,8 @@
     "sendToKitchen": "রান্নাঘরে পাঠান",
     "sending": "পাঠানো হচ্ছে...",
     "signInFailed": "সাইন ইন ব্যর্থ হয়েছে।",
+    "staffCodePlaceholder": "কর্মী কোড",
+    "staffNamePlaceholder": "কর্মীর নাম",
     "statusPreparing": "প্রস্তুতি নিচ্ছে",
     "statusReady": "প্রস্তুত",
     "statusServed": "পরিবেশিত",

@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Mutfağa Gönder",
     "sending": "Gönderiliyor...",
     "signInFailed": "Giriş başarısız oldu",
+    "staffCodePlaceholder": "Personel kodu",
+    "staffNamePlaceholder": "Personel adı",
     "statusPreparing": "Hazırlanıyor",
     "statusReady": "Hazır",
     "statusServed": "Servis Edildi",

@@ -279,25 +279,39 @@ export function startServerApp(): Promise<void> {
           });
         }
 
-        const email = normalizeEmail(req.body?.email);
-        const { password } = req.body;
-        if (!email || !password)
-          return res.status(400).json({ error: 'Email and password required' });
+        const identifier = String(req.body?.identifier ?? req.body?.email ?? '').trim();
+        const password = req.body?.password;
+        if (!identifier || !password)
+          return res.status(400).json({ error: 'Staff name or email and code or password required' });
+        const secret = String(password);
 
         const db = getDatabase();
         const bcrypt = require('bcryptjs');
-        const user = db
-          .prepare('SELECT * FROM users WHERE email = ? AND is_active = 1')
-          .get(email) as any;
-        let passwordMatches = false;
-        if (user) {
+        const email = normalizeEmail(identifier);
+        const candidates = db
+          .prepare(
+            'SELECT * FROM users WHERE is_active = 1 AND (name = ? COLLATE NOCASE OR email = ?)',
+          )
+          .all(identifier, email) as any[];
+        const compare = (plain: string, hash: unknown) => {
           try {
-            passwordMatches = bcrypt.compareSync(password, user.password);
+            return typeof hash === 'string' && bcrypt.compareSync(plain, hash);
           } catch {
-            passwordMatches = false;
+            return false;
           }
+        };
+        const matches = candidates.filter(
+          (candidate) => compare(secret, candidate.pin_hash) || compare(secret, candidate.password),
+        );
+        if (matches.length > 1) {
+          incrementFailedLogin(ip);
+          return res.status(401).json({
+            error: 'More than one staff member matches. Ask a manager to change the code.',
+            code: 'ambiguous_credentials',
+          });
         }
-        if (!user || !passwordMatches) {
+        const user = matches[0];
+        if (!user) {
           const attemptsRemaining = incrementFailedLogin(ip);
           return res.status(401).json({
             error: 'Invalid credentials',

@@ -1624,6 +1624,8 @@
     "sendToKitchen": "주방으로 전송",
     "sending": "전송 중...",
     "signInFailed": "로그인 실패",
+    "staffCodePlaceholder": "직원 코드",
+    "staffNamePlaceholder": "직원 이름",
     "statusPreparing": "조리 중",
     "statusReady": "준비 완료",
     "statusServed": "서빙 완료",

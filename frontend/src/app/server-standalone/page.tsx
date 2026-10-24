@@ -571,7 +571,7 @@ export default function ServerStandalonePage() {
     setLoginLoading(true);
     try {
       const res = await api.post('/api/auth/login', {
-        email,
+        identifier: email.trim(),
         password,
       });
       localStorage.setItem(TOKEN_KEY, res.data.access_token);
@@ -1009,9 +1009,9 @@ export default function ServerStandalonePage() {
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              type="email"
-              dir="ltr"
-              placeholder={t('emailPlaceholder')}
+              type="text"
+              autoComplete="username"
+              placeholder={t('staffNamePlaceholder')}
               required
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
@@ -1019,7 +1019,8 @@ export default function ServerStandalonePage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               type="password"
-              placeholder={tAuth('password')}
+              autoComplete="current-password"
+              placeholder={t('staffCodePlaceholder')}
               required
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />

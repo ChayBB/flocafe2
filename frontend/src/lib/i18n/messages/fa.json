@@ -1624,6 +1624,8 @@
     "sendToKitchen": "ارسال به آشپزخانه",
     "sending": "در حال ارسال…",
     "signInFailed": "ورود انجام نشد",
+    "staffCodePlaceholder": "کد کارمند",
+    "staffNamePlaceholder": "نام کارمند",
     "statusPreparing": "در حال آماده‌سازی",
     "statusReady": "آماده",
     "statusServed": "تحویل‌شده",

@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Отправить на кухню",
     "sending": "Отправка...",
     "signInFailed": "Не удалось войти в систему",
+    "staffCodePlaceholder": "Код сотрудника",
+    "staffNamePlaceholder": "Имя сотрудника",
     "statusPreparing": "Подготовка",
     "statusReady": "Готово",
     "statusServed": "Выдано",

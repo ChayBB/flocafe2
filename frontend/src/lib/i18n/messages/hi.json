@@ -1624,6 +1624,8 @@
     "sendToKitchen": "रसोई में भेजें",
     "sending": "भेजा जा रहा है...",
     "signInFailed": "साइन इन विफल",
+    "staffCodePlaceholder": "कर्मचारी कोड",
+    "staffNamePlaceholder": "कर्मचारी का नाम",
     "statusPreparing": "तैयारी",
     "statusReady": "तैयार",
     "statusServed": "परोसा गया",

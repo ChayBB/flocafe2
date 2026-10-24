@@ -1624,6 +1624,8 @@
     "sendToKitchen": "傳送到廚房",
     "sending": "傳送中…",
     "signInFailed": "登入失敗",
+    "staffCodePlaceholder": "員工代碼",
+    "staffNamePlaceholder": "員工姓名",
     "statusPreparing": "製作中",
     "statusReady": "待取餐",
     "statusServed": "已上餐",

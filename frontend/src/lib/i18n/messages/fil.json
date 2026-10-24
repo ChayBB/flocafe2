@@ -1624,6 +1624,8 @@
     "sendToKitchen": "Ipadala sa kusina",
     "sending": "Ipinapadala...",
     "signInFailed": "Nabigo ang pag-sign in",
+    "staffCodePlaceholder": "Code ng staff",
+    "staffNamePlaceholder": "Pangalan ng staff",
     "statusPreparing": "Inihahanda",
     "statusReady": "Handa Na",
     "statusServed": "Naihain",
