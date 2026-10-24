@@ -19,6 +19,12 @@ async function openServerApp(page: Page, serverToken: string): Promise<void> {
   await page.reload();
 }
 
+async function pickTable(page: Page, tableName: string): Promise<void> {
+  const picker = page.getByTestId('server-app-table-button');
+  if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
+  await page.getByRole('button', { name: new RegExp(tableName) }).click();
+}
+
 test.describe('Server App tableside ordering', () => {
   test('sends the order note with the ticket from the shared POS product grid', async ({
     page,
@@ -40,7 +46,7 @@ test.describe('Server App tableside ordering', () => {
     const { table } = await tableRes.json();
 
     await openServerApp(page, serverToken);
-    await page.getByRole('button', { name: new RegExp(tableName) }).click();
+    await pickTable(page, tableName);
 
     const grid = page.getByTestId('pos-product-grid');
     await expect(grid.getByPlaceholder('Search menu')).toBeVisible();
@@ -80,6 +86,32 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
+  test('keeps the table list hidden until Select Table is pressed and closes it after a pick', async ({
+    page,
+  }) => {
+    const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+    const serverToken = getE2eToken('e2e-server', 'server@flo.local', 'server');
+    const tableName = `Picker ${Date.now()}`;
+    const created = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers: { Authorization: `Bearer ${managerToken}` },
+      data: { number: tableName, capacity: 2 },
+    });
+    expect(created.ok()).toBeTruthy();
+
+    await openServerApp(page, serverToken);
+    const picker = page.getByTestId('server-app-table-button');
+    await expect(picker).toHaveText(/Select a table/);
+    await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: new RegExp(tableName) })).toHaveCount(0);
+
+    await picker.click();
+    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
+    await page.getByRole('button', { name: new RegExp(tableName) }).click();
+
+    await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+    await expect(page.locator('header')).toContainText(tableName);
+  });
+
   test('fits mobile viewports without horizontal overflow', async ({ page }) => {
     const serverToken = getE2eToken(
       'e2e-server',
@@ -94,13 +126,15 @@ test.describe('Server App tableside ordering', () => {
       await expect(page.getByTestId('pos-product-grid')).toBeVisible();
 
       const header = page.locator('header');
-      const refreshButton = header.getByRole('button', { name: 'Refresh' });
+      const tableButton = header.getByTestId('server-app-table-button');
       const logoutButton = header.getByRole('button', { name: 'Logout' });
-      await expect(refreshButton).toBeVisible();
+      await expect(tableButton).toBeVisible();
       await expect(logoutButton).toBeVisible();
       await expect(header.getByRole('button')).toHaveCount(2);
+      await expect(header.getByRole('img', { name: 'Flo' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
 
-      for (const button of [refreshButton, logoutButton]) {
+      for (const button of [tableButton, logoutButton]) {
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -115,11 +149,8 @@ test.describe('Server App tableside ordering', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     const header = page.locator('header');
-    const refreshTables = page.waitForResponse(
-      (res) => res.url().includes('/api/tables') && res.ok(),
-    );
-    await header.getByRole('button', { name: 'Refresh' }).click();
-    await refreshTables;
+    await header.getByTestId('server-app-table-button').click();
+    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
 
     await header.getByRole('button', { name: 'Logout' }).click();
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
@@ -150,7 +181,7 @@ test.describe('Server App tableside ordering', () => {
     const { table: tableB } = await tableBRes.json();
 
     await openServerApp(page, serverToken);
-    await page.getByRole('button', { name: new RegExp(tableAName) }).click();
+    await pickTable(page, tableAName);
 
     const grid = page.getByTestId('pos-product-grid');
     const search = grid.getByPlaceholder('Search menu');
@@ -159,6 +190,9 @@ test.describe('Server App tableside ordering', () => {
 
     const notesInput = page.getByPlaceholder('Order notes (optional)').first();
     await notesInput.fill('Initial note');
+
+    // Keep the table list open so the frozen table buttons can be checked during Send.
+    await page.getByTestId('server-app-table-button').click();
 
     // Open the customizer before Send is clicked so its callback is live when Send starts.
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
@@ -220,7 +254,7 @@ test.describe('Server App tableside ordering', () => {
     const removeButton = page.getByRole('button', { name: 'Remove item' }).first();
     const editButton = page.getByRole('button', { name: 'Edit', exact: true }).first();
     const tableBButton = page.getByRole('button', { name: new RegExp(tableBName) });
-    const refreshButton = page.locator('header').getByRole('button', { name: 'Refresh' });
+    const tablePickerButton = page.getByTestId('server-app-table-button');
     const phoneInput = page.getByPlaceholder('Phone').first();
     const nameInput = page.getByPlaceholder('Customer name').first();
 
@@ -228,7 +262,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(removeButton).toBeDisabled();
     await expect(editButton).toBeDisabled();
     await expect(tableBButton).toBeDisabled();
-    await expect(refreshButton).toBeDisabled();
+    await expect(tablePickerButton).toBeDisabled();
     await expect(phoneInput).toBeDisabled();
     await expect(nameInput).toBeDisabled();
     await expect(notesInput).toBeDisabled();
@@ -238,7 +272,7 @@ test.describe('Server App tableside ordering', () => {
     await removeButton.dispatchEvent('click');
     await editButton.dispatchEvent('click');
     await tableBButton.dispatchEvent('click');
-    await refreshButton.dispatchEvent('click');
+    await tablePickerButton.dispatchEvent('click');
     await search.fill('E2E Coffee');
     await search.press('Enter');
 
@@ -295,7 +329,7 @@ test.describe('Server App tableside ordering', () => {
     const { table } = await tableRes.json();
 
     await openServerApp(page, serverToken);
-    await page.getByRole('button', { name: new RegExp(tableName) }).click();
+    await pickTable(page, tableName);
 
     const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
     await search.fill('E2E Coffee');
@@ -354,7 +388,7 @@ test.describe('Server App tableside ordering', () => {
     const { table: tableB } = await tableBRes.json();
 
     await openServerApp(page, serverToken);
-    await page.getByRole('button', { name: new RegExp(tableAName) }).click();
+    await pickTable(page, tableAName);
 
     const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
     await search.fill('2*E2E Coffee');
@@ -402,8 +436,8 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes('/api/orders') &&
         res.url().includes(`table_id=${tableA.id}`),
     );
-    await page.getByRole('button', { name: new RegExp(tableBName) }).click();
-    await page.getByRole('button', { name: new RegExp(tableAName) }).click();
+    await pickTable(page, tableBName);
+    await pickTable(page, tableAName);
     await reloadTableAOrder;
     await expect(page.getByText('2 x E2E Coffee').first()).toBeVisible();
 
@@ -461,7 +495,7 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes('/api/orders') &&
         res.url().includes(`table_id=${tableB.id}`),
     );
-    await page.getByRole('button', { name: new RegExp(tableBName) }).click();
+    await pickTable(page, tableBName);
     await firstTableBOrderGet;
 
     const delayedTableAOrderGet = page.waitForResponse(
@@ -470,7 +504,7 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes('/api/orders') &&
         res.url().includes(`table_id=${tableA.id}`),
     );
-    await page.getByRole('button', { name: new RegExp(tableAName) }).click();
+    await pickTable(page, tableAName);
     await tableAOrderGetIntercepted;
 
     const secondTableBOrderGet = page.waitForResponse(
@@ -479,7 +513,7 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes('/api/orders') &&
         res.url().includes(`table_id=${tableB.id}`),
     );
-    await page.getByRole('button', { name: new RegExp(tableBName) }).click();
+    await pickTable(page, tableBName);
     await secondTableBOrderGet;
 
     releaseTableAOrderGet();
@@ -503,7 +537,7 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes('/api/orders') &&
         res.url().includes(`table_id=${tableA.id}`),
     );
-    await page.getByRole('button', { name: new RegExp(tableAName) }).click();
+    await pickTable(page, tableAName);
     await failedTableALookup;
 
     const sendOnTableAButton = page.getByRole('button', { name: 'Send to kitchen' }).first();
@@ -511,7 +545,7 @@ test.describe('Server App tableside ordering', () => {
     await sendOnTableAButton.dispatchEvent('click');
     expect(postPaths).toHaveLength(2);
 
-    // Refreshing recovers Table A's order lookup and switches the action to append ("Add to order").
+    // Selecting Table A again retries its order lookup and switches the action to append ("Add to order").
     const recoveredTableALookup = page.waitForResponse(
       (res) =>
         res.request().method() === 'GET' &&
@@ -519,7 +553,7 @@ test.describe('Server App tableside ordering', () => {
         res.url().includes(`table_id=${tableA.id}`) &&
         res.ok(),
     );
-    await page.locator('header').getByRole('button', { name: 'Refresh' }).click();
+    await pickTable(page, tableAName);
     await recoveredTableALookup;
     await expect(page.getByRole('button', { name: 'Add to order' }).first()).toBeEnabled();
 

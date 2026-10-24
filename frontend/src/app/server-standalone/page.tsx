@@ -11,13 +11,13 @@ import {
   LayoutGrid,
   Minus,
   Plus,
-  RefreshCw,
   Send,
   ShoppingCart,
   Smartphone,
   SquarePen,
   Trash2,
   UserRound,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -189,7 +189,6 @@ export default function ServerStandalonePage() {
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const tPos = useTranslations('pos');
-  const tSettings = useTranslations('settings');
 
   // Fall back to caller-supplied localized message for server-app errors without dotted error codes.
   const apiErrorT = (key: string): string => key;
@@ -200,6 +199,7 @@ export default function ServerStandalonePage() {
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -536,15 +536,6 @@ export default function ServerStandalonePage() {
     setCustomerMatch(null);
     setCustomerSearched(false);
     setSelectedTableId(tableId);
-  }
-
-  function handleRefresh() {
-    if (sendInFlightRef.current) return;
-    const tableId = selectedTableIdRef.current;
-    Promise.all([loadAll(), tableId ? loadOrder(tableId) : Promise.resolve()]).catch((error) => {
-      if (error?.response?.status === 401) setUser(null);
-      else toast.error(t('refreshFailed'));
-    });
   }
 
   function openAddonModal(
@@ -1226,13 +1217,17 @@ export default function ServerStandalonePage() {
                 : t('selectTable')}
             </p>
           </div>
+          <img src="/logo.svg" alt="Flo" width={32} height={32} className="h-8 w-8 shrink-0" />
           <button
+            type="button"
             disabled={sending}
-            onClick={handleRefresh}
-            aria-label={tSettings('refresh')}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border p-2 text-muted-foreground disabled:opacity-50"
+            onClick={() => setTablePickerOpen((open) => !open)}
+            aria-expanded={tablePickerOpen}
+            data-testid="server-app-table-button"
+            className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
           >
-            <RefreshCw size={17} />
+            <UtensilsCrossed size={14} />
+            {t('selectTable')}
           </button>
           <button
             onClick={logout}
@@ -1253,7 +1248,10 @@ export default function ServerStandalonePage() {
           <p className="max-w-sm text-sm text-muted-foreground">{t('noTablesHint')}</p>
         </div>
       ) : (
-        <main className="mx-auto grid max-w-6xl min-w-0 gap-3 p-3 lg:grid-cols-[220px_1fr_340px]">
+        <main
+          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${tablePickerOpen ? 'lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
+        >
+          {tablePickerOpen && (
           <section className="min-w-0 rounded-lg border border-border bg-card p-3">
             <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               {t('tables')}
@@ -1266,7 +1264,10 @@ export default function ServerStandalonePage() {
                   <button
                     key={table.id}
                     disabled={sending}
-                    onClick={() => selectTable(table.id)}
+                    onClick={() => {
+                      selectTable(table.id);
+                      setTablePickerOpen(false);
+                    }}
                     className={`min-h-14 rounded-lg border px-2 py-2 text-start disabled:opacity-50 ${selected ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}
                   >
                     <span className="block truncate text-sm font-semibold">
@@ -1280,6 +1281,7 @@ export default function ServerStandalonePage() {
               })}
             </div>
           </section>
+          )}
 
           <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
             <ProductGrid
