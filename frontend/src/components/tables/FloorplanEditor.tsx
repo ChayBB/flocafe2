@@ -282,6 +282,8 @@ export default function FloorplanEditor({
   const [floorRenameOpen, setFloorRenameOpen] = useState<{ from: string; to: string } | null>(null);
   const [floorDeleteTarget, setFloorDeleteTarget] = useState<string | null>(null);
   const [floorActionSaving, setFloorActionSaving] = useState(false);
+  const [deleteTableTarget, setDeleteTableTarget] = useState<Table | null>(null);
+  const [deleteTableSaving, setDeleteTableSaving] = useState(false);
   const floorMenuRef = useRef<HTMLDivElement>(null);
 
   // Drop stale action-sheet selection when entering edit mode
@@ -435,7 +437,7 @@ export default function FloorplanEditor({
     });
   const pendingCount = new Set([...Object.keys(edits), ...Object.keys(rotations)]).size;
 
-  const floorTables = tables.filter((tb) => (tb.floor || '') === floor);
+  const floorTables = tables.filter((tb) => tb.is_active && (tb.floor || '') === floor);
   const placed = floorTables.filter((tb) => posOf(tb) !== null);
   const unplaced = floorTables.filter((tb) => posOf(tb) === null);
   // Saved positions only (no pending edits) → canvas size is stable while
@@ -798,6 +800,27 @@ export default function FloorplanEditor({
     }
   };
 
+  // Deactivating keeps order history and reports intact; the list view can turn the table back on.
+  const submitTableDelete = async () => {
+    if (!deleteTableTarget) return;
+    setDeleteTableSaving(true);
+    try {
+      await api.post(`/tables/${deleteTableTarget.id}/deactivate`);
+      toast.success(t('tableDeleted'), { position: 'top-center' });
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[deleteTableTarget.id];
+        return next;
+      });
+      setDeleteTableTarget(null);
+      onSaved?.();
+    } catch {
+      toast.error(t('tableDeleteFailed'), { position: 'top-center' });
+    } finally {
+      setDeleteTableSaving(false);
+    }
+  };
+
   const tablesOnFloor = (floorName: string): number =>
     tables.filter((tb) => (tb.floor || '') === floorName).length;
 
@@ -952,6 +975,22 @@ export default function FloorplanEditor({
         run: () => {
           setActionTable(null);
           openEdit(tb);
+        },
+      });
+      actions.push({
+        label: t('addTable'),
+        icon: <Plus size={15} />,
+        run: () => {
+          setActionTable(null);
+          openCreate();
+        },
+      });
+      actions.push({
+        label: t('deleteTable'),
+        icon: <Trash2 size={15} />,
+        run: () => {
+          setActionTable(null);
+          setDeleteTableTarget(tb);
         },
       });
       if (posOf(tb) !== null) {
@@ -1894,6 +1933,46 @@ export default function FloorplanEditor({
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {deleteTableTarget && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setDeleteTableTarget(null)}
+        >
+          <div
+            className="bg-card text-foreground rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="floorplan-table-delete-form"
+            role="dialog"
+            aria-modal="true"
+          >
+            <h2 className="text-lg font-bold mb-1">
+              {t('deleteTableTitle', { name: deleteTableTarget.name })}
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">{t('deleteTableHint')}</p>
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setDeleteTableTarget(null)}
+                disabled={deleteTableSaving}
+              >
+                {tCommon('cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="flex-1"
+                onClick={submitTableDelete}
+                disabled={deleteTableSaving}
+              >
+                {deleteTableSaving ? tCommon('saving') : t('deleteTable')}
+              </Button>
+            </div>
           </div>
         </div>
       )}
