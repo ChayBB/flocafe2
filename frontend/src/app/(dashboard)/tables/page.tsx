@@ -15,6 +15,7 @@ import {
   MapPinned,
   List,
   ArrowRightLeft,
+  UserCog,
 } from 'lucide-react';
 import type { Table, Customer, Order, OrderItem } from '@/lib/types';
 import FloorplanEditor from '@/components/tables/FloorplanEditor';
@@ -650,6 +651,12 @@ export default function TablesPage() {
                     </div>
                   </div>
 
+                  {table.owner_name && (
+                    <p className="px-4 pt-2 text-xs text-muted-foreground flex items-center gap-1 truncate">
+                      <UserCog size={12} className="shrink-0" />
+                      <span className="truncate" title={tTables('tableOwner')}>{table.owner_name}</span>
+                    </p>
+                  )}
                   {table.status === 'reserved' && table.reservation_customer_name && (
                     <div className="px-4 pt-2">
                       <p className="text-xs text-yellow-700 font-medium truncate">
@@ -806,6 +813,12 @@ export default function TablesPage() {
                   </div>
                 )}
                 <div className="mt-2 flex justify-center">{locationBadge(table)}</div>
+                {table.owner_name && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1 truncate">
+                    <UserCog size={12} className="shrink-0" />
+                    <span className="truncate" title={tTables('tableOwner')}>{table.owner_name}</span>
+                  </p>
+                )}
                 {table.status === 'reserved' && table.reservation_customer_name && (
                   <p className="text-xs text-yellow-700 font-medium mt-1 truncate">
                     {table.reservation_customer_name}

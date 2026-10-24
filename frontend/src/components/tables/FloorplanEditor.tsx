@@ -2,6 +2,8 @@
 
 // Floorplan canvas editor: drag tables and persist X/Y coordinates per floor as percentages.
 
+import TableOwnerModal, { type OwnerScope } from './TableOwnerModal';
+import TableQrSheet from './TableQrSheet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ import {
   Plus,
   RotateCw,
   Sparkles,
+  UserCog,
   Table2,
   Trash2,
   Users,
@@ -160,6 +163,18 @@ function tableRadius(capacity: number): number {
 
 // Find the first empty grid cell (5% step) starting top-left so newly added
 // tables drop into a free corner and never overlap existing ones.
+const MAX_RANGE_TABLES = 100;
+
+/** "19-25" names seven tables, 19 through 25. Anything else is a plain zone name. */
+function tableNamesForZone(zoneName: string): string[] | null {
+  const match = /^\s*(\d{1,4})\s*[-–]\s*(\d{1,4})\s*$/.exec(zoneName);
+  if (!match) return null;
+  const from = Number(match[1]);
+  const to = Number(match[2]);
+  if (to < from || to - from + 1 > MAX_RANGE_TABLES) return null;
+  return Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+}
+
 function findNextFreePosition(
   capacity: number,
   others: Array<{ x: number; y: number; capacity: number }>,
@@ -256,7 +271,12 @@ export default function FloorplanEditor({
   const [floorFormOpen, setFloorFormOpen] = useState(false);
   const [floorForm, setFloorForm] = useState({ name: '', tableName: '', capacity: '4' });
   const [floorFormSaving, setFloorFormSaving] = useState(false);
+  const [floorCapacities, setFloorCapacities] = useState<Record<string, string>>({});
+  const [floorOwner, setFloorOwner] = useState<{ id: string; name: string; move: boolean } | null>(null);
+  const [qrSheet, setQrSheet] = useState<{ tableIds: string[]; zone: string } | null>(null);
+  const rangeNames = tableNamesForZone(floorForm.name);
   const [actionTable, setActionTable] = useState<Table | null>(null);
+  const [ownerScope, setOwnerScope] = useState<OwnerScope | null>(null);
   // Floor management state — Issue #646.
   const [floorMenuFor, setFloorMenuFor] = useState<string | null>(null);
   const [floorRenameOpen, setFloorRenameOpen] = useState<{ from: string; to: string } | null>(null);
@@ -363,6 +383,25 @@ export default function FloorplanEditor({
   const overview = activeFloor === ALL_FLOORS;
   const floor = overview ? '' : floors.includes(activeFloor) ? activeFloor : (floors[0] ?? '');
   const namedFloors = floors.filter((f) => f !== '');
+  const zoneOwners = useMemo(() => {
+    const byZone = new Map<string, Map<string, string>>();
+    for (const tb of tables) {
+      if (!tb.owner_name || !tb.owner_user_id || !tb.is_active) continue;
+      const zone = tb.floor || '';
+      if (!overview && zone !== floor) continue;
+      const owners = byZone.get(zone) ?? new Map<string, string>();
+      owners.set(tb.owner_user_id, tb.owner_name);
+      byZone.set(zone, owners);
+    }
+    return [...byZone.entries()].map(([zone, owners]) => ({
+      zone,
+      ids: [...owners.keys()],
+      names: [...owners.values()].sort(),
+    }));
+  }, [tables, overview, floor]);
+  const hasZoneTables = !overview && tables.some((tb) => tb.is_active && (tb.floor || '') === floor);
+  const openZoneOwner = (zone: string, ids: string[]) =>
+    setOwnerScope({ kind: 'zone', floor: zone, name: zone, ownerIds: ids });
 
   // Load per-floor canvas size from localStorage when the active floor changes,
   // and persist on every size change so the user's W×H (mode/w/h) survives reload.
@@ -658,24 +697,57 @@ export default function FloorplanEditor({
   const submitFloorForm = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = floorForm.name.trim();
-    const tableName = floorForm.tableName.trim();
-    const capacity = parseInt(floorForm.capacity, 10);
-    if (!name || !tableName || !Number.isFinite(capacity) || capacity < 1) return;
+    if (!name) return;
+    // A range such as "19-25" lists its tables; a capacity left blank takes the default.
+    const entries = rangeNames
+      ? rangeNames.map((tableName) => ({
+          tableName,
+          capacity: (floorCapacities[tableName] ?? '').trim(),
+        }))
+      : [{ tableName: floorForm.tableName.trim(), capacity: floorForm.capacity.trim() }];
+    if (entries.some((entry) => !entry.tableName)) return;
+    const parsed = entries.map((entry) => ({
+      tableName: entry.tableName,
+      capacity: entry.capacity === '' ? null : Number.parseInt(entry.capacity, 10),
+    }));
+    if (
+      parsed.some(
+        (entry) =>
+          entry.capacity !== null && (!Number.isFinite(entry.capacity) || entry.capacity < 1),
+      )
+    ) {
+      return;
+    }
+    if (!rangeNames && parsed[0].capacity === null) return;
     setFloorFormSaving(true);
     try {
-      // Place first table of brand-new floor at top-left corner.
-      const pos = findNextFreePosition(capacity, []);
-      await api.post('/tables', {
-        number: tableName,
-        capacity,
+      const placed: Array<{ x: number; y: number; capacity: number }> = [];
+      const tablesPayload = parsed.map((entry) => {
+        const seats = entry.capacity ?? 4;
+        const pos = findNextFreePosition(seats, placed);
+        placed.push({ x: pos.x, y: pos.y, capacity: seats });
+        return {
+          number: entry.tableName,
+          ...(entry.capacity === null ? {} : { capacity: entry.capacity }),
+          position_x: pos.x,
+          position_y: pos.y,
+        };
+      });
+      const { data } = await api.post('/tables/batch', {
         floor: name,
-        position_x: pos.x,
-        position_y: pos.y,
+        tables: tablesPayload,
+        ...(floorOwner ? { owner_user_id: floorOwner.id, move: floorOwner.move } : {}),
       });
       toast.success(t('tableCreated'), { position: 'top-center' });
       setFloorFormOpen(false);
       setActiveFloor(name);
       setFloorForm({ name: '', tableName: '', capacity: '4' });
+      setFloorCapacities({});
+      setFloorOwner(null);
+      setQrSheet({
+        tableIds: (data.tables || []).map((table: { id: string }) => table.id),
+        zone: name,
+      });
       onSaved?.();
     } catch {
       toast.error(t('tableCreateFailed'), { position: 'top-center' });
@@ -867,6 +939,14 @@ export default function FloorplanEditor({
         });
       }
       actions.push({
+        label: t('tableOwner'),
+        icon: <UserCog size={15} />,
+        run: () => {
+          setActionTable(null);
+          setOwnerScope({ kind: 'table', table: tb });
+        },
+      });
+      actions.push({
         label: t('editTable'),
         icon: <Pencil size={15} />,
         run: () => {
@@ -900,7 +980,7 @@ export default function FloorplanEditor({
         data-testid={`floorplan-chip-${tb.name}`}
         aria-label={`${tb.name} — ${t(TABLE_STATUS_LABEL_KEYS[tb.status])}. ${t('floorplanAriaHint')}`}
         aria-keyshortcuts={interactive ? 'Enter ArrowUp ArrowDown ArrowLeft ArrowRight' : undefined}
-        title={interactive ? t('floorplanEditHint') : undefined}
+        title={edit ? t('floorplanEditHint') : undefined}
         onPointerDown={startDrag(tb)}
         onPointerMove={onDragMove}
         onPointerUp={endDrag}
@@ -1057,6 +1137,16 @@ export default function FloorplanEditor({
               title={t('addFloor')}
             >
               <Plus size={14} /> {t('addFloor')}
+            </button>
+          )}
+          {canManage && (
+            <button
+              data-testid="floorplan-add-table-link"
+              onClick={openCreate}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand underline underline-offset-2 hover:text-brand-hover"
+              title={t('addTable')}
+            >
+              <Plus size={14} /> {t('addTable')}
             </button>
           )}
         </div>
@@ -1237,7 +1327,9 @@ export default function FloorplanEditor({
         </div>
       ) : (
         <>
-          <p className="mb-3 text-sm text-muted-foreground">{t('floorplanHint')}</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {edit ? t('floorplanHint') : t('floorplanViewHint')}
+          </p>
 
           <div
             ref={canvasRef}
@@ -1276,16 +1368,59 @@ export default function FloorplanEditor({
         </>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {LEGEND.map((s) => (
-          <span
-            key={s}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground shadow-sm"
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {LEGEND.map((s) => (
+            <span
+              key={s}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground shadow-sm"
+            >
+              <span className={`inline-block h-2 w-2 rounded-full ${statusDot[s]}`} />
+              {t(TABLE_STATUS_LABEL_KEYS[s])}
+            </span>
+          ))}
+        </div>
+        {(zoneOwners.length > 0 || (canManage && hasZoneTables)) && (
+          <div
+            className="flex flex-wrap items-center justify-end gap-2"
+            data-testid="floorplan-zone-owners"
           >
-            <span className={`inline-block h-2 w-2 rounded-full ${statusDot[s]}`} />
-            {t(TABLE_STATUS_LABEL_KEYS[s])}
-          </span>
-        ))}
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <UserCog size={13} />
+              {t('tableOwner')}
+            </span>
+            {zoneOwners.map((entry) =>
+              canManage ? (
+                <button
+                  key={`${entry.zone}|${entry.names.join(',')}`}
+                  type="button"
+                  onClick={() => openZoneOwner(entry.zone, entry.ids)}
+                  className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-brand underline underline-offset-2 shadow-sm hover:bg-accent"
+                >
+                  {overview && entry.zone ? `${entry.zone}: ` : ''}
+                  {entry.names.join(', ')}
+                </button>
+              ) : (
+                <span
+                  key={`${entry.zone}|${entry.names.join(',')}`}
+                  className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground shadow-sm"
+                >
+                  {overview && entry.zone ? `${entry.zone}: ` : ''}
+                  {entry.names.join(', ')}
+                </span>
+              ),
+            )}
+            {canManage && hasZoneTables && zoneOwners.length === 0 && (
+              <button
+                type="button"
+                onClick={() => openZoneOwner(floor, [])}
+                className="rounded-full border border-dashed border-border bg-card px-2.5 py-1 text-xs font-medium text-brand underline underline-offset-2 hover:bg-accent"
+              >
+                {t('tableOwnerAssign')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {!overview && (edit || unplaced.length > 0) && (
@@ -1318,7 +1453,7 @@ export default function FloorplanEditor({
                   data-testid={`floorplan-tray-${tb.name}`}
                   aria-label={`${tb.name} — ${t('floorplanUnplaced')}. ${t('floorplanAriaHint')}`}
                   aria-keyshortcuts={edit || canOpenActionSheet(tb) ? 'Enter' : undefined}
-                  title={edit || canOpenActionSheet(tb) ? t('floorplanEditHint') : undefined}
+                  title={edit ? t('floorplanEditHint') : undefined}
                   onPointerDown={startDrag(tb, true)}
                   onPointerMove={onDragMove}
                   onPointerUp={endDrag}
@@ -1367,6 +1502,11 @@ export default function FloorplanEditor({
                   >
                     {t(TABLE_STATUS_LABEL_KEYS[actionTable.status])} · {seats(actionTable.capacity)}
                   </p>
+                  {actionTable.owner_name && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('tableOwner')}: {actionTable.owner_name}
+                    </p>
+                  )}
                   {actionTable.status === 'occupied' &&
                     (actionTable.seated_at || activeOrderOf(actionTable)?.created_at) && (
                       <TableTurnoverBadge
@@ -1392,6 +1532,22 @@ export default function FloorplanEditor({
             </div>
           </div>
         </div>
+      )}
+
+      {qrSheet && (
+        <TableQrSheet
+          tableIds={qrSheet.tableIds}
+          zoneName={qrSheet.zone}
+          onClose={() => setQrSheet(null)}
+        />
+      )}
+
+      {ownerScope && (
+        <TableOwnerModal
+          scope={ownerScope}
+          onClose={() => setOwnerScope(null)}
+          onSaved={() => onSaved?.()}
+        />
       )}
 
       {formOpen && (
@@ -1536,7 +1692,7 @@ export default function FloorplanEditor({
           onClick={() => setFloorFormOpen(false)}
         >
           <div
-            className="bg-card text-foreground rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            className="bg-card text-foreground rounded-2xl p-6 w-full max-w-md shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             data-testid="floorplan-floor-form"
             role="dialog"
@@ -1561,42 +1717,78 @@ export default function FloorplanEditor({
                   required
                 />
               </div>
-              <p className="text-xs text-muted-foreground">{t('floorplanEmptyCanvas')}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="floorplan-floor-table"
-                    className="block text-sm font-medium text-foreground mb-1"
-                  >
-                    {t('tableName')}
-                  </label>
-                  <input
-                    id="floorplan-floor-table"
-                    type="text"
-                    value={floorForm.tableName}
-                    onChange={(e) => setFloorForm({ ...floorForm, tableName: e.target.value })}
-                    className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                    required
-                  />
+              {rangeNames ? (
+                <div className="space-y-2" data-testid="floorplan-floor-range">
+                  <p className="text-xs text-muted-foreground">
+                    {t('floorRangeHint', { count: rangeNames.length })}
+                  </p>
+                  <div className="max-h-56 space-y-2 overflow-y-auto pe-1">
+                    <div className="grid grid-cols-2 gap-3 text-xs font-medium text-muted-foreground">
+                      <span>{t('tableName')}</span>
+                      <span>{t('capacity')}</span>
+                    </div>
+                    {rangeNames.map((tableName) => (
+                      <div key={tableName} className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm font-medium">
+                          {tableName}
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          aria-label={`${t('capacity')} ${tableName}`}
+                          value={floorCapacities[tableName] ?? ''}
+                          onChange={(e) =>
+                            setFloorCapacities({ ...floorCapacities, [tableName]: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('capacityBlankHint')}</p>
                 </div>
-                <div>
-                  <label
-                    htmlFor="floorplan-floor-capacity"
-                    className="block text-sm font-medium text-foreground mb-1"
-                  >
-                    {t('capacity')}
-                  </label>
-                  <input
-                    id="floorplan-floor-capacity"
-                    type="number"
-                    min="1"
-                    value={floorForm.capacity}
-                    onChange={(e) => setFloorForm({ ...floorForm, capacity: e.target.value })}
-                    className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                    required
-                  />
+              ) : (
+                <>
+                <p className="text-xs text-muted-foreground">{t('floorplanEmptyCanvas')}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      htmlFor="floorplan-floor-table"
+                      className="block text-sm font-medium text-foreground mb-1"
+                    >
+                      {t('tableName')}
+                    </label>
+                    <input
+                      id="floorplan-floor-table"
+                      type="text"
+                      value={floorForm.tableName}
+                      onChange={(e) => setFloorForm({ ...floorForm, tableName: e.target.value })}
+                      className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="floorplan-floor-capacity"
+                      className="block text-sm font-medium text-foreground mb-1"
+                    >
+                      {t('capacity')}
+                    </label>
+                    <input
+                      id="floorplan-floor-capacity"
+                      type="number"
+                      min="1"
+                      value={floorForm.capacity}
+                      onChange={(e) => setFloorForm({ ...floorForm, capacity: e.target.value })}
+                      className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
+
+                </>
+              )}
               <div className="flex gap-2 pt-1">
                 <Button
                   type="button"
@@ -1606,6 +1798,26 @@ export default function FloorplanEditor({
                   disabled={floorFormSaving}
                 >
                   {tCommon('cancel')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-[1.7] min-w-0 px-2"
+                  onClick={() =>
+                    setOwnerScope({
+                      kind: 'draft',
+                      floor: floorForm.name.trim(),
+                      ownerIds: floorOwner ? [floorOwner.id] : [],
+                      onPick: (member, move) =>
+                        setFloorOwner(member ? { id: member.id, name: member.name, move } : null),
+                    })
+                  }
+                  disabled={floorFormSaving}
+                  data-testid="floorplan-floor-owner"
+                  title={floorOwner ? `${t('tableOwner')}: ${floorOwner.name}` : t('tableOwner')}
+                >
+                  <UserCog size={14} className="me-1 shrink-0" />
+                  <span className="truncate">{floorOwner ? floorOwner.name : t('tableOwner')}</span>
                 </Button>
                 <Button type="submit" className="flex-1" disabled={floorFormSaving}>
                   {floorFormSaving ? tCommon('saving') : t('createTable')}

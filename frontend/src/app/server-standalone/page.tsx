@@ -170,6 +170,16 @@ function sendAttemptSignature(
   return `${tableId}|${items}|${customerName.trim()}|${customerPhone.trim()}|${orderNotes.trim()}`;
 }
 
+/** A table QR opens this app with `?table=<id>`; otherwise the first table is selected. */
+function pickInitialTable<T extends { id: string }>(tables: T[]): T | undefined {
+  if (typeof window !== 'undefined') {
+    const wanted = new URLSearchParams(window.location.search).get('table');
+    const match = wanted ? tables.find((table) => table.id === wanted) : undefined;
+    if (match) return match;
+  }
+  return tables[0];
+}
+
 export default function ServerStandalonePage() {
   // Syncs tenant language preference from /api/server-app/info.
   useSyncServerLanguage('/api/server-app/info');
@@ -251,9 +261,10 @@ export default function ServerStandalonePage() {
     const loadedTables = tablesRes.data.tables || [];
     setTables(loadedTables);
     setTablesLoaded(true);
-    if (!selectedTableIdRef.current && loadedTables[0]) {
-      selectedTableIdRef.current = loadedTables[0].id;
-      setSelectedTableId(loadedTables[0].id);
+    const initialTable = pickInitialTable(loadedTables);
+    if (!selectedTableIdRef.current && initialTable) {
+      selectedTableIdRef.current = initialTable.id;
+      setSelectedTableId(initialTable.id);
     }
   }
 
@@ -362,9 +373,10 @@ export default function ServerStandalonePage() {
         const loadedTables = tablesRes.data.tables || [];
         setTables(loadedTables);
         setTablesLoaded(true);
-        if (!selectedTableIdRef.current && loadedTables[0]) {
-          selectedTableIdRef.current = loadedTables[0].id;
-          setSelectedTableId(loadedTables[0].id);
+        const initialTable = pickInitialTable(loadedTables);
+        if (!selectedTableIdRef.current && initialTable) {
+          selectedTableIdRef.current = initialTable.id;
+          setSelectedTableId(initialTable.id);
         }
       })
       .catch(() => toast.error(t('couldNotLoadData')));

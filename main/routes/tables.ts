@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now, parseRowJson, withTxn } from '../db';
+import { getDatabase, isServerAppEnabled, now, parseRowJson, withTxn } from '../db';
+import * as QRCode from 'qrcode';
+import { getLocalIP } from '../server-state';
+import { getServerAppPort } from '../server-app-state';
 import { randomUUID } from 'crypto';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { notifyKdsUpdate } from '../services/kds';
@@ -56,6 +59,11 @@ function tableShape(
   includeReservationCustomer = true,
 ) {
   const currentOrder = activeOrder || null;
+  const owner = table.owner_user_id
+    ? (db.prepare('SELECT name FROM users WHERE id = ?').get(table.owner_user_id) as
+        | { name: string }
+        | undefined)
+    : undefined;
   const visibleCurrentOrder =
     currentOrder && !includeReservationCustomer
       ? { ...currentOrder, customer_id: null, customer: null }
@@ -63,6 +71,7 @@ function tableShape(
   return {
     ...table,
     name: table.number,
+    owner_name: owner?.name ?? null,
     ...(includeReservationCustomer
       ? reservationCustomerShape(db, table)
       : {
@@ -137,6 +146,270 @@ router.get('/', requirePermission('tables.view'), (req: Request, res: Response) 
       tableShape(db, t, activeOrderForTable(db, t.id), includeReservationCustomer),
     );
     res.json({ tables });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** A staff member owns one zone (floor) only. Returns the other zone they already own, if any. */
+function ownerZoneConflict(
+  db: ReturnType<typeof getDatabase>,
+  ownerId: string,
+  tableId: string,
+  floor: string | null,
+): { floor: string } | null {
+  const target = floor ?? '';
+  const others = db
+    .prepare('SELECT floor FROM tables WHERE owner_user_id = ? AND id != ?')
+    .all(ownerId, tableId) as { floor: string | null }[];
+  const conflict = others.find((row) => (row.floor ?? '') !== target);
+  return conflict ? { floor: conflict.floor ?? '' } : null;
+}
+
+// Staff who can be assigned as a table's owner. Owners are informational and never gate orders.
+router.get('/owner-candidates', requirePermission('tables.manage'), (_req: Request, res: Response) => {
+  const db = getDatabase();
+  const rows = db
+    .prepare('SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY name COLLATE NOCASE')
+    .all() as { id: string; name: string; role: string }[];
+  const owned = db
+    .prepare('SELECT owner_user_id AS id, floor FROM tables WHERE owner_user_id IS NOT NULL')
+    .all() as { id: string; floor: string | null }[];
+  const zonesByStaff = new Map<string, Set<string>>();
+  for (const row of owned) {
+    const zones = zonesByStaff.get(row.id) ?? new Set<string>();
+    zones.add(row.floor ?? '');
+    zonesByStaff.set(row.id, zones);
+  }
+  res.json({
+    staff: rows.map((member) => ({ ...member, zones: [...(zonesByStaff.get(member.id) ?? [])] })),
+  });
+});
+
+// Sets (or clears) the single owner of every active table in one zone (floor).
+const MAX_BATCH_TABLES = 100;
+
+// Creates every table of a new zone at once; optionally gives the zone an owner.
+router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const rawTables = req.body?.tables;
+    if (!Array.isArray(rawTables) || rawTables.length === 0 || rawTables.length > MAX_BATCH_TABLES) {
+      return res
+        .status(400)
+        .json({ error: `tables must contain between 1 and ${MAX_BATCH_TABLES} entries` });
+    }
+    const floor = normalizeOptionalTableLabel(req.body?.floor);
+    if (floor === undefined) {
+      return res
+        .status(400)
+        .json({ code: 'TABLE_LOCATION_INVALID', error: 'Floor must be a text value' });
+    }
+
+    const rows: { number: string; capacity: number; x: number | null; y: number | null }[] = [];
+    const seen = new Set<string>();
+    for (const entry of rawTables) {
+      const number = normalizeTableNumber(entry?.number ?? entry?.name);
+      if (!number) {
+        return res
+          .status(400)
+          .json({ code: 'TABLE_NAME_REQUIRED', error: 'Table number is required' });
+      }
+      if (seen.has(number.toLowerCase())) {
+        return res
+          .status(400)
+          .json({ code: 'TABLE_NAME_DUPLICATE', error: `Table ${number} is listed twice`, table: number });
+      }
+      seen.add(number.toLowerCase());
+      const blank = entry?.capacity === undefined || entry?.capacity === null || entry?.capacity === '';
+      const capacity = blank ? 4 : normalizeTableCapacity(entry.capacity);
+      if (capacity === null) {
+        return res.status(400).json({
+          code: 'TABLE_CAPACITY_INVALID',
+          error: 'Capacity must be a positive whole number',
+          table: number,
+        });
+      }
+      const x = normalizePositionCoord(entry?.position_x);
+      const y = normalizePositionCoord(entry?.position_y);
+      if (x === undefined || y === undefined) {
+        return res
+          .status(400)
+          .json({ error: 'Coordinates must be numbers between 0 and 100, or null' });
+      }
+      rows.push({ number, capacity, x, y });
+    }
+
+    for (const row of rows) {
+      const existing = db.prepare('SELECT is_active FROM tables WHERE number = ?').get(row.number) as
+        | { is_active: number }
+        | undefined;
+      if (existing) {
+        return res.status(400).json({
+          code: existing.is_active === 0 ? 'TABLE_INACTIVE_DUPLICATE' : 'TABLE_NAME_DUPLICATE',
+          error: `Table ${row.number} already exists`,
+          table: row.number,
+        });
+      }
+    }
+
+    const rawOwner = req.body?.owner_user_id;
+    let ownerId: string | null = null;
+    if (rawOwner !== null && rawOwner !== undefined && rawOwner !== '') {
+      if (typeof rawOwner !== 'string') {
+        return res.status(400).json({ error: 'owner_user_id must be a string' });
+      }
+      const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(rawOwner);
+      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      const owned = db
+        .prepare("SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1")
+        .get(rawOwner, floor ?? '');
+      if (owned && req.body?.move !== true) {
+        return res.status(409).json({
+          error: 'This staff member already owns another zone',
+          code: 'owner_in_other_zone',
+        });
+      }
+      ownerId = rawOwner;
+    }
+
+    const created = withTxn(() => {
+      if (ownerId) {
+        db.prepare(
+          "UPDATE tables SET owner_user_id = NULL, updated_at = ? WHERE owner_user_id = ? AND COALESCE(floor, '') != ?",
+        ).run(now(), ownerId, floor ?? '');
+      }
+      const insert = db.prepare(
+        'INSERT INTO tables (id, number, capacity, floor, position_x, position_y, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      return rows.map((row) => {
+        const id = `tbl-${randomUUID().slice(0, 8)}`;
+        insert.run(id, row.number, row.capacity, floor, row.x, row.y, ownerId, now(), now());
+        return db.prepare('SELECT * FROM tables WHERE id = ?').get(id);
+      });
+    });
+    res.status(201).json({
+      tables: created.map((table) => tableShape(db, table as any, null)),
+    });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// One QR per table that opens the Server App with that table preselected.
+router.post('/order-qr', requirePermission('tables.manage'), async (req: Request, res: Response) => {
+  try {
+    const ids = req.body?.table_ids;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BATCH_TABLES) {
+      return res
+        .status(400)
+        .json({ error: `table_ids must contain between 1 and ${MAX_BATCH_TABLES} entries` });
+    }
+    const db = getDatabase();
+    const baseUrl = `http://${getLocalIP()}:${getServerAppPort()}/server-standalone/`;
+    const qrs: { id: string; name: string; url: string; data_url: string }[] = [];
+    for (const id of ids) {
+      if (typeof id !== 'string') continue;
+      const table = db.prepare('SELECT id, number FROM tables WHERE id = ?').get(id) as
+        | { id: string; number: string }
+        | undefined;
+      if (!table) continue;
+      const url = `${baseUrl}?table=${encodeURIComponent(table.id)}`;
+      const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 256 });
+      qrs.push({ id: table.id, name: table.number, url, data_url: dataUrl });
+    }
+    res.json({ server_app_enabled: isServerAppEnabled(), base_url: baseUrl, qrs });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/zone-owner', requirePermission('tables.manage'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const rawFloor = req.body?.floor;
+    if (rawFloor !== null && rawFloor !== undefined && typeof rawFloor !== 'string') {
+      return res.status(400).json({ error: 'floor must be a string' });
+    }
+    const floor = (rawFloor ?? '').trim();
+    const zoneTables = db
+      .prepare("SELECT id FROM tables WHERE COALESCE(floor, '') = ? AND is_active = 1")
+      .all(floor) as { id: string }[];
+    if (zoneTables.length === 0) return res.status(404).json({ error: 'Zone not found' });
+
+    const raw = req.body?.user_id;
+    let ownerId: string | null = null;
+    if (raw !== null && raw !== undefined && raw !== '') {
+      if (typeof raw !== 'string') return res.status(400).json({ error: 'user_id must be a string' });
+      const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(raw);
+      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      const owned = db
+        .prepare("SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1")
+        .get(raw, floor);
+      if (owned && req.body?.move !== true) {
+        return res.status(409).json({
+          error: 'This staff member already owns another zone',
+          code: 'owner_in_other_zone',
+        });
+      }
+      ownerId = raw;
+    }
+
+    withTxn(() => {
+      if (ownerId) {
+        db.prepare(
+          "UPDATE tables SET owner_user_id = NULL, updated_at = ? WHERE owner_user_id = ? AND COALESCE(floor, '') != ?",
+        ).run(now(), ownerId, floor);
+      }
+      db.prepare(
+        "UPDATE tables SET owner_user_id = ?, updated_at = ? WHERE COALESCE(floor, '') = ? AND is_active = 1",
+      ).run(ownerId, now(), floor);
+    });
+    res.json({ floor, user_id: ownerId, updated: zoneTables.length });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/:id/owner', requirePermission('tables.manage'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const table = db.prepare('SELECT id, floor FROM tables WHERE id = ?').get(req.params.id) as
+      | { id: string; floor: string | null }
+      | undefined;
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    const raw = req.body?.user_id;
+    let ownerId: string | null = null;
+    if (raw !== null && raw !== undefined && raw !== '') {
+      if (typeof raw !== 'string') return res.status(400).json({ error: 'user_id must be a string' });
+      const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(raw);
+      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      const conflict = ownerZoneConflict(db, raw, table.id, table.floor);
+      if (conflict && req.body?.move === true) {
+        // Daily rotation: the staff member leaves their previous zone and takes this one.
+        db.prepare(
+          'UPDATE tables SET owner_user_id = NULL, updated_at = ? WHERE owner_user_id = ? AND id != ? AND COALESCE(floor, \'\') != ?',
+        ).run(now(), raw, table.id, table.floor ?? '');
+      } else if (conflict) {
+        return res.status(409).json({
+          error: 'This staff member already owns another zone',
+          code: 'owner_in_other_zone',
+          zone: conflict.floor,
+        });
+      }
+      ownerId = raw;
+    }
+    db.prepare('UPDATE tables SET owner_user_id = ?, updated_at = ? WHERE id = ?').run(
+      ownerId,
+      now(),
+      req.params.id,
+    );
+    const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
+    res.json({ table: tableShape(db, updated as any, activeOrderForTable(db, req.params.id as string)) });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -438,6 +711,17 @@ router.put('/:id', requirePermission('tables.manage'), (req: Request, res: Respo
         .json({ code: 'TABLE_LOCATION_INVALID', error: 'Floor and section must be text values' });
     }
 
+    if (table.owner_user_id && (normalizedFloor ?? null) !== (table.floor ?? null)) {
+      const conflict = ownerZoneConflict(db, table.owner_user_id, table.id, normalizedFloor);
+      if (conflict) {
+        return res.status(409).json({
+          error: 'The table owner already owns another zone; change the owner first',
+          code: 'owner_in_other_zone',
+          zone: conflict.floor,
+        });
+      }
+    }
+
     if (hasTableNumber) {
       const existing = db
         .prepare('SELECT * FROM tables WHERE number = ? AND id != ?')
@@ -627,7 +911,10 @@ router.post(
         }
 
         const nowStr = now();
-        db.prepare('UPDATE orders SET table_id = ?, type = ?, updated_at = ? WHERE id = ?').run(
+        db.prepare(
+          'UPDATE orders SET table_id = ?, table_owner_user_id = (SELECT owner_user_id FROM tables WHERE id = ?), type = ?, updated_at = ? WHERE id = ?',
+        ).run(
+          target_table_id,
           target_table_id,
           order.type,
           nowStr,

@@ -177,6 +177,8 @@ export interface Table {
   reservation_customer_id?: string | null;
   reservation_customer_name?: string | null;
   reservation_customer_phone?: string | null;
+  owner_user_id?: string | null;
+  owner_name?: string | null;
 }
 
 export interface Customer {
@@ -202,6 +204,9 @@ export interface Order {
   id: number;
   order_number: string;
   table_id: string | null;
+  /** Staff owner of the table when the order was opened; kept for staff performance reporting. */
+  table_owner_user_id?: string | null;
+  table_owner_name?: string | null;
   customer_id: number | string | null;
   /** Address confirmed for this delivery; printed in full on the courier slip. */
   delivery_address?: string | null;

@@ -38,6 +38,7 @@ import {
   ClipboardList,
   Bike,
   Pencil,
+  UserCog,
 } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { Order, OrderItem, Bill, Customer } from '@/lib/types';
@@ -151,6 +152,7 @@ function OrderDetailContent({
   onItemEditResolved,
 }: OrderDetailPanelProps & { order: Order }) {
   const tOrders = useTranslations('orders');
+  const tTables = useTranslations('tables');
   const tCommon = useTranslations('common');
   const tPos = useTranslations('pos');
   const tReceipt = useTranslations('receipt');
@@ -378,6 +380,12 @@ function OrderDetailContent({
             {order.table && (
               <span className="font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-md">
                 {order.table.name}
+              </span>
+            )}
+            {order.table_owner_name && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground" title={tTables('tableOwner')}>
+                <UserCog size={12} />
+                {order.table_owner_name}
               </span>
             )}
             <span className="inline-flex items-center gap-1 text-muted-foreground">

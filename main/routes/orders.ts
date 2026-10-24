@@ -1111,6 +1111,17 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
     const rows = db.prepare(`SELECT * FROM tables WHERE id IN (${ph})`).all(...tableIds) as any[];
     for (const t of rows) tablesById.set(t.id, t);
   }
+  const ownerIds = Array.from(
+    new Set(parsedOrders.map((o: any) => o.table_owner_user_id).filter(Boolean)),
+  );
+  const ownerNameById = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const ph = ownerIds.map(() => '?').join(',');
+    const rows = db
+      .prepare(`SELECT id, name FROM users WHERE id IN (${ph})`)
+      .all(...ownerIds) as { id: string; name: string }[];
+    for (const u of rows) ownerNameById.set(u.id, u.name);
+  }
   const customersById = new Map<string, any>();
   if (customerIds.length > 0) {
     const ph = customerIds.map(() => '?').join(',');
@@ -1218,6 +1229,9 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
     const itemList = itemsByOrder.get(order.id) || [];
     const tableRow = order.table_id ? tablesById.get(order.table_id) : null;
     const table = tableRow ? { ...tableRow, name: tableRow.number } : null;
+    const tableOwnerName = order.table_owner_user_id
+      ? (ownerNameById.get(order.table_owner_user_id) ?? null)
+      : null;
     const customer = order.customer_id ? customersById.get(order.customer_id) : null;
     const bills = billsByOrderId.get(order.id) || [];
     for (const billRow of bills) {
@@ -1237,6 +1251,7 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
       ...order,
       items: itemList,
       table,
+      table_owner_name: tableOwnerName,
       customer,
       bill,
       bills,
@@ -1639,16 +1654,24 @@ router.post(
             : null;
         const orderCustomerId = customer_id || reservedCustomerId || null;
 
+        const tableOwnerUserId = table_id
+          ? ((
+              db.prepare('SELECT owner_user_id FROM tables WHERE id = ?').get(table_id) as
+                | { owner_user_id: string | null }
+                | undefined
+            )?.owner_user_id ?? null)
+          : null;
         const orderResult = db
           .prepare(`
-        INSERT INTO orders (order_number, table_id, customer_id, user_id, type, delivery_address, expected_payment_method, expected_payment_method_id, delivery_note, guest_count, special_instructions,
+        INSERT INTO orders (order_number, table_id, table_owner_user_id, customer_id, user_id, type, delivery_address, expected_payment_method, expected_payment_method_id, delivery_note, guest_count, special_instructions,
           packaging_charge, delivery_charge, packaging_tax_category_id, delivery_tax_category_id,
           service_charge, service_charge_tax_category_id, online_platform, external_order_id, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `)
           .run(
             orderNumber,
             table_id || null,
+            tableOwnerUserId,
             orderCustomerId,
             authenticatedUserId,
             type,
