@@ -7584,6 +7584,40 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     },
   },
   {
+    version: 116,
+    name: 'add_order_item_weight',
+    up: () => {
+      const itemColumns = getColumns(db, 'order_items');
+      if (!itemColumns.includes('weight_pending')) {
+        db.exec(`ALTER TABLE order_items ADD COLUMN weight_pending INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!itemColumns.includes('weight')) {
+        db.exec(`ALTER TABLE order_items ADD COLUMN weight REAL DEFAULT NULL`);
+      }
+    },
+  },
+  {
+    version: 117,
+    name: 'add_table_owner',
+    up: () => {
+      if (!getColumns(db, 'tables').includes('owner_user_id')) {
+        db.exec(`ALTER TABLE tables ADD COLUMN owner_user_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL`);
+      }
+    },
+  },
+  {
+    version: 118,
+    name: 'add_order_table_owner_snapshot',
+    up: () => {
+      if (!getColumns(db, 'orders').includes('table_owner_user_id')) {
+        db.exec(`ALTER TABLE orders ADD COLUMN table_owner_user_id TEXT DEFAULT NULL`);
+      }
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_orders_table_owner ON orders(table_owner_user_id, created_at)',
+      );
+    },
+  },
+  {
     version: 119,
     name: 'add_table_orientation',
     up: () => {
