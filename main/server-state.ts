@@ -35,6 +35,8 @@ export function rankLocalIPv4(interfaceName: string, address: string): number {
   const octets = address.split('.').map(Number);
   const [a, b] = octets;
   if (a === 172 && b === 17) score -= 100;
+  // VirtualBox host-only (192.168.56.x) and docker-machine (192.168.99.x) look like a home LAN but only reach VMs.
+  else if (a === 192 && b === 168 && (octets[2] === 56 || octets[2] === 99)) score -= 100;
   else if (a === 192 && b === 168) score += 20;
   else if (a === 10) score += 15;
   else if (a === 172 && b >= 16 && b <= 31) score += 10;

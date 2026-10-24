@@ -20,6 +20,8 @@ assert.ok(rankLocalIPv4('en0', '192.168.1.20') > rankLocalIPv4('docker0', '172.1
 assert.ok(rankLocalIPv4('Wi-Fi', '10.0.0.5') > rankLocalIPv4('vEthernet (WSL)', '172.28.0.1'));
 assert.ok(rankLocalIPv4('eth0', '192.168.0.9') > rankLocalIPv4('tailscale0', '100.101.102.103'));
 assert.ok(rankLocalIPv4('Ethernet', '192.168.1.5') > rankLocalIPv4('Ethernet 2', '100.64.0.2'));
+assert.ok(rankLocalIPv4('Wi-Fi', '172.20.10.5') > rankLocalIPv4('Ethernet 2', '192.168.56.1'));
+assert.ok(rankLocalIPv4('Ethernet', '192.168.1.5') > rankLocalIPv4('Ethernet 3', '192.168.99.1'));
 
 withInterfaces(
   {
