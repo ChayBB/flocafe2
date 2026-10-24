@@ -51,6 +51,7 @@ type Table = {
   name?: string;
   number?: string;
   status?: string;
+  owner_user_id?: string | null;
   activeOrder?: Order | null;
   current_order?: Order | null;
 };
@@ -169,14 +170,26 @@ function sendAttemptSignature(
   return `${tableId}|${items}|${customerName.trim()}|${customerPhone.trim()}|${orderNotes.trim()}`;
 }
 
-/** A table QR opens this app with `?table=<id>`; otherwise the first table is selected. */
-function pickInitialTable<T extends { id: string }>(tables: T[]): T | undefined {
+/** Staff who own tables see only those; everyone else sees every table. Ownership never restricts ordering. */
+function ownedOrAllTables<T extends { owner_user_id?: string | null }>(
+  tables: T[],
+  userId: string | undefined,
+): T[] {
+  const owned = userId ? tables.filter((table) => table.owner_user_id === userId) : [];
+  return owned.length > 0 ? owned : tables;
+}
+
+/** A table QR opens this app with `?table=<id>`; otherwise the first table the staff member sees is selected. */
+function pickInitialTable<T extends { id: string; owner_user_id?: string | null }>(
+  tables: T[],
+  userId: string | undefined,
+): T | undefined {
   if (typeof window !== 'undefined') {
     const wanted = new URLSearchParams(window.location.search).get('table');
     const match = wanted ? tables.find((table) => table.id === wanted) : undefined;
     if (match) return match;
   }
-  return tables[0];
+  return ownedOrAllTables(tables, userId)[0];
 }
 
 export default function ServerStandalonePage() {
@@ -259,7 +272,7 @@ export default function ServerStandalonePage() {
     const loadedTables = tablesRes.data.tables || [];
     setTables(loadedTables);
     setTablesLoaded(true);
-    const initialTable = pickInitialTable(loadedTables);
+    const initialTable = pickInitialTable(loadedTables, user?.id);
     if (!selectedTableIdRef.current && initialTable) {
       selectedTableIdRef.current = initialTable.id;
       setSelectedTableId(initialTable.id);
@@ -371,7 +384,7 @@ export default function ServerStandalonePage() {
         const loadedTables = tablesRes.data.tables || [];
         setTables(loadedTables);
         setTablesLoaded(true);
-        const initialTable = pickInitialTable(loadedTables);
+        const initialTable = pickInitialTable(loadedTables, user?.id);
         if (!selectedTableIdRef.current && initialTable) {
           selectedTableIdRef.current = initialTable.id;
           setSelectedTableId(initialTable.id);
@@ -1257,7 +1270,7 @@ export default function ServerStandalonePage() {
               {t('tables')}
             </h2>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              {tables.map((table) => {
+              {ownedOrAllTables(tables, user?.id).map((table) => {
                 const selected = table.id === selectedTableId;
                 const order = table.activeOrder || table.current_order;
                 return (
