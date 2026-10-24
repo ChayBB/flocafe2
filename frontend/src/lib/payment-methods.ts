@@ -12,3 +12,7 @@ export interface CustomPaymentMethod {
   sort_order: number;
   usage_count?: number;
 }
+
+export function isQrCodeMethod(name: string | null | undefined): boolean {
+  return (name ?? '').trim().toLowerCase() === 'qr code';
+}

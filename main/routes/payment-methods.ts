@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now, withTxn } from '../db';
+import { getDatabase, getSettingValue, now, upsertSettings, withTxn } from '../db';
+import * as QRCode from 'qrcode';
+import { buildPromptPayPayload, parsePromptPayAccount } from '../lib/promptpay';
 import { requirePermission, hasPermission } from '../services/authorization';
 import { sendEvent } from '../services/telemetry';
 
@@ -33,6 +35,33 @@ function list(includeInactive = false) {
 
 router.get('/merge-history', requirePermission('payment-methods.manage'), (_req, res) => {
   res.json({ merges: getDatabase().prepare('SELECT * FROM payment_method_merges ORDER BY merged_at DESC, id DESC LIMIT 30').all() });
+});
+
+const QR_ACCOUNT_SETTING = 'qr_payment_account';
+
+router.get('/qr-account', requirePermission('payment-methods.manage'), (_req, res) => {
+  res.json({ account: getSettingValue(QR_ACCOUNT_SETTING) || '' });
+});
+
+router.put('/qr-account', requirePermission('payment-methods.manage'), (req: Request, res: Response) => {
+  const account = typeof req.body?.account === 'string' ? req.body.account.replace(/[s-]/g, '') : '';
+  if (account && !parsePromptPayAccount(account)) {
+    return res.status(400).json({ error: 'Enter a 10-digit phone number, 13-digit ID or 15-digit e-wallet ID' });
+  }
+  upsertSettings({ [QR_ACCOUNT_SETTING]: account });
+  res.json({ account });
+});
+
+router.get('/qr-code', requirePermission('payments.take'), async (req: Request, res: Response) => {
+  const target = parsePromptPayAccount(getSettingValue(QR_ACCOUNT_SETTING));
+  if (!target) return res.status(404).json({ error: 'No QR payment account is set up', code: 'qr_account_missing' });
+  const amount = Number(req.query.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  const payload = buildPromptPayPayload(target, Number(amount.toFixed(2)));
+  const dataUrl = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 });
+  res.json({ payload, data_url: dataUrl, amount: Number(amount.toFixed(2)) });
 });
 
 router.get('/', requirePermission('payment-methods.view'), (req: Request, res: Response) => {

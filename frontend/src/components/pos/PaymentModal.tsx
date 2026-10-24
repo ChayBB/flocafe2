@@ -31,7 +31,8 @@ import { resolveTaxComponents } from '@/lib/printer/tax-components';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslations, useLocale, type AppConfig } from 'use-intl';
-import { PAYMENT_METHODS, type CustomPaymentMethod } from '@/lib/payment-methods';
+import { PAYMENT_METHODS, isQrCodeMethod, type CustomPaymentMethod } from '@/lib/payment-methods';
+import QrPaymentPanel from '@/components/pos/QrPaymentPanel';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatNumber } from '@/hooks/useFormatNumber';
 import { useCurrencyUnitAdapter } from '@/hooks/useCurrencyUnitAdapter';
@@ -2042,6 +2043,11 @@ export default function PaymentModal({
                         {t('equalShareBadge')}
                       </p>
                     )}
+                    {payment.payment_method_id !== undefined &&
+                      isQrCodeMethod(label) &&
+                      (parseFloat(payment.amount) || 0) > 0 && (
+                        <QrPaymentPanel amount={parseFloat(payment.amount)} orderId={bill.order_id} />
+                      )}
                   </div>
                 );
               })}

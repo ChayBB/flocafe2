@@ -1,3 +1,7 @@
+import {
+  renderPaymentRequestSlip,
+  type PaymentRequestSlipData,
+} from './payment-request-slip';
 import * as net from 'net';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1302,6 +1306,103 @@ export async function printDeliverySlip(
     return warnings.length > 0 ? { ...dispatch, warnings } : dispatch;
   } catch (error: unknown) {
     console.error('[Printer] Delivery slip print error:', error);
+    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function printPaymentRequestSlip(
+  slip: Omit<
+    PaymentRequestSlipData,
+    'businessName' | 'businessAddress' | 'businessPhone' | 'taxId'
+  >,
+  targetPrinter?: {
+    readonly id?: unknown;
+    readonly name?: unknown;
+    readonly connection_type?: string;
+    readonly paper_width?: string;
+    readonly profile_id?: string;
+  },
+  signal?: AbortSignal,
+  language?: string,
+): Promise<DispatchResult> {
+  try {
+    if (signal?.aborted) return { ok: false, detail: 'Print cancelled during shutdown' };
+    const printer = targetPrinter || getPrinterConfig();
+    if (!printer) return { ok: false, detail: 'No printer configured' };
+
+    const { profile, columns, capabilities } = resolvePrinterContext(printer);
+    const countryCode = getSettingValue('country') ?? '';
+    const locale = countryCode ? (getCountryByCode(countryCode)?.locale ?? 'en-US') : 'en-US';
+    const currency = resolveTenantCurrency(getSettingValue('currency') ?? '', countryCode);
+    const currencyDisplayValue = getSettingValue('currency_display');
+    const currencyDisplay = ['rial', 'toman', 'toman_short'].includes(currencyDisplayValue ?? '')
+      ? (currencyDisplayValue as CurrencyDisplay)
+      : undefined;
+    const digits: DigitMode = getSettingValue('number_digits') === 'latin' ? 'latin' : 'locale';
+    const slipLanguage = normalizePrintLanguage(language ?? getSettingValue('language') ?? undefined);
+    const widthDots = capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576);
+    const maxBandHeight = capabilities.raster?.maxBandHeight ?? 200;
+    const renderWith = (caps: ThermalPrinterCapabilities) =>
+      renderPaymentRequestSlip(
+        {
+          ...slip,
+          businessName: getSettingValue('bill_show_name') === 'false' ? '' : (getSettingValue('business_name') ?? ''),
+          businessAddress:
+            getSettingValue('bill_show_address') === 'false' ? '' : (getSettingValue('business_address') ?? ''),
+          businessPhone:
+            getSettingValue('bill_show_phone') === 'false' ? '' : (getSettingValue('business_phone') ?? ''),
+          taxId:
+            getSettingValue('bill_show_tax_id') === 'true'
+              ? (getSettingValue('tax_registration_number') ?? '')
+              : '',
+        },
+        {
+          columns,
+          language: slipLanguage,
+          locale,
+          currency,
+          currencyDisplay,
+          digits,
+          useUnicode: false,
+          arabicShaping: caps.shaping.arabic,
+          cutMode: profile.cutMode,
+          capabilities: caps,
+          widthDots,
+          maxBandHeight,
+        },
+      );
+
+    let data: Buffer;
+    const warnings: PrintWarning[] = [];
+    if (rasterCapabilityEnabled(capabilities)) {
+      const documentResult = renderWith(capabilities);
+      const nativeResult = renderWith(nativeFallbackCapabilities(capabilities));
+      const rasterized = await rasterizeDocumentLines(documentResult.lines, documentResult.warnings, {
+        useUnicode: false,
+        cutMode: profile.cutMode,
+        arabicShaping: capabilities.shaping.arabic,
+        columns,
+        language: slipLanguage,
+        capabilities,
+        requestPrefix: 'payment-request',
+      });
+      if (rasterized.rasterSelected && !rasterized.rasterFailed) {
+        data = rasterized.data;
+        warnings.push(...rasterized.warnings);
+      } else {
+        data = nativeResult.data;
+        warnings.push(...nativeResult.warnings, ...rasterized.warnings);
+      }
+    } else {
+      const nativeResult = renderWith(capabilities);
+      data = nativeResult.data;
+      warnings.push(...nativeResult.warnings);
+    }
+
+    const dispatch = await dispatchPrint(printer, data, signal);
+    return warnings.length > 0 ? { ...dispatch, warnings } : dispatch;
+  } catch (error: unknown) {
+    console.error('[Printer] Payment request slip print error:', error);
     return { ok: false, detail: error instanceof Error ? error.message : String(error) };
   }
 }

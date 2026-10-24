@@ -1,3 +1,6 @@
+import { isTerminalItemStatus } from '../../shared/order-item-status';
+import { formatVariantItemHeading, parseVariantSelection } from '../printers/formatting-helpers';
+import { buildPromptPayPayload, parsePromptPayAccount } from '../lib/promptpay';
 import {
   billHasWeightPending,
   orderHasWeightPending,
@@ -11,6 +14,7 @@ import {
   isKotPrintingEnabled,
   isServerBillPrintingEnabled,
   parseItemJson,
+  getSettingValue,
 } from '../db';
 import { getOrderWithItems } from './bills';
 import { loadProductRelationsBatch } from './products';
@@ -22,6 +26,7 @@ import {
   printReceiptDetailed,
   printKOTDetailed,
   printDeliverySlipDetailed,
+  printPaymentRequestSlip,
   detectConnectedPrinters,
   prepareReceipt,
   escPosToText,
@@ -1503,6 +1508,102 @@ router.post(
     } catch (error: unknown) {
       console.error('[Print Delivery Slip] Error:', error);
       console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }),
+);
+
+// POST /api/printers/print-payment-request — slip with a dynamic QR for the amount to collect.
+router.post(
+  '/print-payment-request',
+  requirePermission('printing.execute'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const authUser = (req as any).user;
+    if (authUser?.role === 'server' && !isServerBillPrintingEnabled()) {
+      return res.status(403).json({
+        error:
+          'Bill printing is disabled for the server role. An owner or manager can enable it in Settings.',
+      });
+    }
+    try {
+      const { orderId } = req.body ?? {};
+      const amount = Number(req.body?.amount);
+      if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ error: 'amount must be a positive number' });
+      }
+
+      const db = getDatabase();
+      const order = getOrderWithItems(db, Number(orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      if (['completed', 'cancelled'].includes(order.status)) {
+        return res.status(409).json({ error: 'This order is already closed' });
+      }
+      if (orderHasWeightPending(db, order.id)) return sendWeightPendingError(res);
+      const billTotals = (
+        db.prepare('SELECT total FROM bills WHERE order_id = ?').all(order.id) as { total: number }[]
+      ).map((bill) => Number(bill.total || 0));
+      const ceiling = Math.max(Number(order.total || 0), ...billTotals);
+      if (amount > ceiling + 0.005) {
+        return res.status(400).json({ error: 'amount exceeds the order total' });
+      }
+
+      const target = parsePromptPayAccount(getSettingValue('qr_payment_account'));
+      if (!target) {
+        return res
+          .status(404)
+          .json({ error: 'No QR payment account is set up', code: 'qr_account_missing' });
+      }
+      const printer = db
+        .prepare(
+          `SELECT * FROM printers
+       WHERE connection_type != 'webusb'
+       ORDER BY is_default DESC, name
+       LIMIT 1`,
+        )
+        .get();
+      if (!printer) {
+        return res.status(400).json({
+          error: 'No default printer configured. Add a printer in Settings.',
+          code: 'no_printer',
+        });
+      }
+
+      const rounded = Number(amount.toFixed(2));
+      const result = await printPaymentRequestSlip(
+        {
+          orderNumber: String(order.order_number ?? ''),
+          tableName: String(order.table?.name ?? ''),
+          createdAt: String(order.created_at ?? ''),
+          amount: rounded,
+          orderTotal: Number(order.total || 0),
+          items: getEffectiveOrderItems(db, String(order.id))
+            .filter((item) => !isTerminalItemStatus(item.status))
+            .map((item) => ({
+              name: formatVariantItemHeading(
+                String(item.product_name ?? ''),
+                parseVariantSelection(item.variant_selection),
+              ),
+              quantity: Number(item.quantity) || 0,
+              total: Number(item.total) || 0,
+              addons: (Array.isArray(item.addons) ? item.addons : [])
+                .map((addon: { name?: unknown }) => String(addon?.name ?? ''))
+                .filter(Boolean),
+            })),
+          qrPayload: buildPromptPayPayload(target, rounded),
+        },
+        printer as any,
+        getHttpRequestSignal(req),
+        resolveTenantReceiptLanguages(db).primary,
+      );
+      if (result.ok) return res.json({ success: true, warnings: result.warnings || [] });
+      return res.status(502).json({
+        error: result.detail || 'Payment request print failed. Check printer connection.',
+        detail: result.detail,
+        failure_class: result.failureClass,
+      });
+    } catch (error: unknown) {
+      console.error('[Print Payment Request] Error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }),

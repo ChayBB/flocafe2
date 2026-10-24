@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SettingsTabShell } from '@/components/settings/SettingsTabShell';
 import { useTranslations } from 'use-intl';
 import { useFormatDate } from '@/hooks/useFormatDate';
-import type { CustomPaymentMethod } from '@/lib/payment-methods';
+import { isQrCodeMethod, type CustomPaymentMethod } from '@/lib/payment-methods';
 
 interface MergeRecord {
   id: number;
@@ -35,15 +35,20 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
   const [mergeTargets, setMergeTargets] = useState<Record<number, string>>({});
   const [merges, setMerges] = useState<MergeRecord[]>([]);
   const [splitChecksEnabled, setSplitChecksEnabled] = useState(false);
+  const [qrAccount, setQrAccount] = useState('');
+  const [qrAccountSaved, setQrAccountSaved] = useState('');
 
   const load = async () => {
-    const [methodsRes, historyRes, splitRes] = await Promise.all([
+    const [methodsRes, historyRes, splitRes, qrRes] = await Promise.all([
       api.get('/payment-methods?include_inactive=true'),
       api.get('/payment-methods/merge-history'),
       api
         .get('/settings/split_checks_enabled')
         .catch(() => ({ data: { setting: { value: 'false' } } })),
+      api.get('/payment-methods/qr-account').catch(() => ({ data: { account: '' } })),
     ]);
+    setQrAccount(qrRes.data?.account || '');
+    setQrAccountSaved(qrRes.data?.account || '');
     const rows = methodsRes.data.payment_methods || [];
     setMethods(rows);
     setNames(Object.fromEntries(rows.map((row: CustomPaymentMethod) => [row.id, row.name])));
@@ -73,6 +78,17 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
       await load();
     } catch {
       toast.error(t('saveFailed'));
+    }
+  };
+
+  const saveQrAccount = async () => {
+    try {
+      const { data } = await api.put('/payment-methods/qr-account', { account: qrAccount });
+      setQrAccount(data.account);
+      setQrAccountSaved(data.account);
+      toast.success(t('qrAccountSaved'));
+    } catch {
+      toast.error(t('qrAccountInvalid'));
     }
   };
 
@@ -156,6 +172,32 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
                   <Trash2 size={14} />
                 </Button>
               </div>
+              {isQrCodeMethod(method.name) && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-foreground">
+                    {t('qrAccountLabel')}
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      disabled={!isAdmin}
+                      inputMode="numeric"
+                      value={qrAccount}
+                      onChange={(e) => setQrAccount(e.target.value)}
+                      placeholder={t('qrAccountPlaceholder')}
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!isAdmin || qrAccount === qrAccountSaved}
+                      onClick={saveQrAccount}
+                    >
+                      <Save size={14} />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('qrAccountHint')}</p>
+                </div>
+              )}
               {Boolean(method.usage_count) && isAdmin && (
                 <div className="flex gap-2 items-center">
                   <select
