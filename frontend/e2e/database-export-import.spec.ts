@@ -208,9 +208,14 @@ test.describe('Database Settings JSON Export and Import', () => {
     const uniqueCustomerName = `E2E Customer ${runId}`;
     const uniquePhone = `+1555019${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const exportProbe = await page.request.get(`${BASE}/api/db/export`, {
+      headers: { Authorization: `Bearer ${getE2eToken()}` },
+    });
+    const currentSchemaVersion = String((await exportProbe.json()).schema_version);
+
     const contaminatedPayload = {
       app: 'FloDesktop',
-      schema_version: '115',
+      schema_version: currentSchemaVersion,
       data: {
         settings: [],
         categories: [],
