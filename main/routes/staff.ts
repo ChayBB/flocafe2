@@ -214,11 +214,11 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
     const normalizedEmail = normalizeStaffEmail(email);
     const normalizedStationIds = normalizeStationIds(station_ids);
 
-    if (!name || !normalizedEmail || !password || !role) {
+    if (!name || !password || !role) {
       captureStaffValidation('fc.backend.staff.create.validation', 'required_fields');
-      return res.status(400).json({ error: 'name, email, password, and role are required' });
+      return res.status(400).json({ error: 'name, password, and role are required' });
     }
-    if (!isValidEmail(normalizedEmail)) {
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
       captureStaffValidation('fc.backend.staff.create.validation', 'email_invalid');
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
@@ -276,7 +276,9 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
 
     const db = getDatabase();
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail);
+    const existing = normalizedEmail
+      ? db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail)
+      : undefined;
     if (existing) {
       const failure = serializeOperationFailure({
         capture_point: 'fc.backend.staff.duplicate_email',
@@ -315,7 +317,7 @@ router.post('/', requireStaffWrite, authRateLimit(), (req: Request, res: Respons
       `).run(
         id,
         name,
-        normalizedEmail,
+        normalizedEmail || null,
         hashedPassword,
         role,
         hashedPin,
@@ -397,10 +399,6 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
       return res.status(400).json({ error: 'PIN must be between 4 and 6 numeric digits' });
     }
 
-    if (emailProvided && !normalizedEmail) {
-      captureStaffValidation('fc.backend.staff.update.validation', 'email_missing');
-      return res.status(400).json({ error: 'email is required' });
-    }
     if (normalizedEmail && !isValidEmail(normalizedEmail)) {
       captureStaffValidation('fc.backend.staff.update.validation', 'email_invalid');
       return res.status(400).json({ error: 'Enter a valid email address' });
@@ -469,7 +467,7 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
       .prepare(`
       UPDATE users SET
         name       = COALESCE(?, name),
-        email      = COALESCE(?, email),
+        email      = CASE WHEN ? = 1 THEN ? ELSE email END,
         password   = ?,
         role       = COALESCE(?, role),
         pin_hash   = ?,
@@ -483,6 +481,7 @@ router.put('/:id', requireStaffWrite, authRateLimit(), (req: Request, res: Respo
     `)
       .run(
         name || null,
+        emailProvided ? 1 : 0,
         normalizedEmail || null,
         hashedPassword,
         role || null,

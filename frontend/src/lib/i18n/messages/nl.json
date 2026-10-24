@@ -2577,6 +2577,8 @@
     "failedToSave": "Kan niet opslaan",
     "failedToUpdate": "Kan niet updaten",
     "kitchenStationsOptional": "Keukenstations (optioneel)",
+    "emailOptional": "E-mail (optioneel)",
+    "emailOptionalHint": "Optioneel. Zonder e-mail kan deze persoon niet zelf inloggen.",
     "kitchenStationsOptionalHint": "Selecteer een of meer stations, of laat dit leeg als er geen stationbeperking is.",
     "kitchenStationsRequireKds": "Schakel KDS in Instellingen in om keukenstations toe te wijzen.",
     "modalTitleAdd": "Personeel toevoegen",

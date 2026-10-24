@@ -2577,6 +2577,8 @@
     "failedToSave": "บันทึกไม่สำเร็จ",
     "failedToUpdate": "อัปเดตไม่สำเร็จ",
     "kitchenStationsOptional": "สถานีครัว (ไม่บังคับ)",
+    "emailOptional": "อีเมล (ไม่บังคับ)",
+    "emailOptionalHint": "ไม่บังคับ ถ้าไม่ใส่อีเมล พนักงานคนนี้จะเข้าสู่ระบบด้วยตัวเองไม่ได้",
     "kitchenStationsOptionalHint": "เลือกหนึ่งหรือหลายสถานี หรือเว้นว่างหากไม่จำกัดสถานี",
     "kitchenStationsRequireKds": "เปิดใช้งาน KDS ในการตั้งค่าเพื่อกำหนดสถานีครัว",
     "modalTitleAdd": "เพิ่มพนักงาน",

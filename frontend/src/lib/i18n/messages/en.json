@@ -2577,6 +2577,8 @@
     "failedToSave": "Failed to save",
     "failedToUpdate": "Failed to update",
     "kitchenStationsOptional": "Kitchen stations (optional)",
+    "emailOptional": "Email (optional)",
+    "emailOptionalHint": "Optional. Without an email this person cannot sign in on their own.",
     "kitchenStationsOptionalHint": "Select one or more stations, or leave this empty for no station restriction.",
     "kitchenStationsRequireKds": "Enable KDS in Settings to assign kitchen stations.",
     "modalTitleAdd": "Add Staff",

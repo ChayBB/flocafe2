@@ -2577,6 +2577,8 @@
     "failedToSave": "Speichern fehlgeschlagen",
     "failedToUpdate": "Aktualisieren fehlgeschlagen",
     "kitchenStationsOptional": "Küchenstationen (optional)",
+    "emailOptional": "E-Mail (optional)",
+    "emailOptionalHint": "Optional. Ohne E-Mail kann sich diese Person nicht selbst anmelden.",
     "kitchenStationsOptionalHint": "Wählen Sie eine oder mehrere Stationen aus oder lassen Sie das Feld ohne Stationsbeschränkung leer.",
     "kitchenStationsRequireKds": "Aktivieren Sie KDS in den Einstellungen, um Küchenstationen zuzuweisen.",
     "modalTitleAdd": "Personal hinzufügen",

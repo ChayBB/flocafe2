@@ -2577,6 +2577,8 @@
     "failedToSave": "ذخیره انجام نشد",
     "failedToUpdate": "به‌روزرسانی انجام نشد",
     "kitchenStationsOptional": "ایستگاه‌های آشپزخانه (اختیاری)",
+    "emailOptional": "ایمیل (اختیاری)",
+    "emailOptionalHint": "اختیاری. بدون ایمیل این فرد نمی‌تواند خودش وارد شود.",
     "kitchenStationsOptionalHint": "یک یا چند ایستگاه را انتخاب کنید، یا برای نداشتن محدودیت ایستگاه خالی بگذارید.",
     "kitchenStationsRequireKds": "برای اختصاص ایستگاه‌های آشپزخانه، KDS را در تنظیمات فعال کنید.",
     "modalTitleAdd": "افزودن کارمند",

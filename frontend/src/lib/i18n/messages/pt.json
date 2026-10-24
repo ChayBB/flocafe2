@@ -2577,6 +2577,8 @@
     "failedToSave": "Falha ao salvar",
     "failedToUpdate": "Falha ao atualizar",
     "kitchenStationsOptional": "Estações de cozinha (opcional)",
+    "emailOptional": "E-mail (opcional)",
+    "emailOptionalHint": "Opcional. Sem e-mail, esta pessoa não consegue entrar sozinha.",
     "kitchenStationsOptionalHint": "Selecione uma ou mais estações ou deixe vazio para não restringir por estação.",
     "kitchenStationsRequireKds": "Ative o KDS nas Configurações para atribuir estações de cozinha.",
     "modalTitleAdd": "Adicionar Funcionário",

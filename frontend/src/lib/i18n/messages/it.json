@@ -2577,6 +2577,8 @@
     "failedToSave": "Salvataggio non riuscito",
     "failedToUpdate": "Aggiornamento non riuscito",
     "kitchenStationsOptional": "Postazioni di cucina (facoltative)",
+    "emailOptional": "E-mail (facoltativa)",
+    "emailOptionalHint": "Facoltativa. Senza e-mail questa persona non può accedere da sola.",
     "kitchenStationsOptionalHint": "Seleziona una o più postazioni oppure lascia vuoto per non applicare restrizioni.",
     "kitchenStationsRequireKds": "Abilita il KDS nelle Impostazioni per assegnare le postazioni di cucina.",
     "modalTitleAdd": "Aggiungi personale",

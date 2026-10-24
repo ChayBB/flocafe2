@@ -2577,6 +2577,8 @@
     "failedToSave": "Échec de l’enregistrement",
     "failedToUpdate": "Échec de la mise à jour",
     "kitchenStationsOptional": "Postes de cuisine (facultatif)",
+    "emailOptional": "E-mail (facultatif)",
+    "emailOptionalHint": "Facultatif. Sans e-mail, cette personne ne peut pas se connecter seule.",
     "kitchenStationsOptionalHint": "Sélectionnez un ou plusieurs postes, ou laissez vide pour ne pas limiter par poste.",
     "kitchenStationsRequireKds": "Activez le KDS dans les paramètres pour affecter des postes de cuisine.",
     "modalTitleAdd": "Ajouter un employé",

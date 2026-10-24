@@ -2577,6 +2577,8 @@
     "failedToSave": "Nabigong save",
     "failedToUpdate": "Nabigong i-update ang staff",
     "kitchenStationsOptional": "Mga kitchen station (opsyonal)",
+    "emailOptional": "Email (opsyonal)",
+    "emailOptionalHint": "Opsyonal. Kung walang email, hindi makakapag-sign in nang mag-isa ang taong ito.",
     "kitchenStationsOptionalHint": "Pumili ng isa o higit pang station, o iwang blangko para walang station restriction.",
     "kitchenStationsRequireKds": "I-enable ang KDS sa Settings para makapagtalaga ng mga kitchen station.",
     "modalTitleAdd": "Magdagdag ng Staff",

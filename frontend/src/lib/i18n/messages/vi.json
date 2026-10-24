@@ -2577,6 +2577,8 @@
     "failedToSave": "Không thể lưu",
     "failedToUpdate": "Không thể cập nhật",
     "kitchenStationsOptional": "Khu vực bếp (không bắt buộc)",
+    "emailOptional": "Email (không bắt buộc)",
+    "emailOptionalHint": "Không bắt buộc. Không có email, người này không thể tự đăng nhập.",
     "kitchenStationsOptionalHint": "Chọn một hoặc nhiều khu vực, hoặc để trống nếu không giới hạn.",
     "kitchenStationsRequireKds": "Bật KDS trong Cài đặt để gán khu vực bếp.",
     "modalTitleAdd": "Thêm nhân viên",

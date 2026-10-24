@@ -2577,6 +2577,8 @@
     "failedToSave": "No se pudo guardar",
     "failedToUpdate": "No se pudo actualizar",
     "kitchenStationsOptional": "Estaciones de cocina (opcional)",
+    "emailOptional": "Correo (opcional)",
+    "emailOptionalHint": "Opcional. Sin correo, esta persona no puede iniciar sesión por sí misma.",
     "kitchenStationsOptionalHint": "Seleccioná una o más estaciones, o dejalo vacío para no restringir por estación.",
     "kitchenStationsRequireKds": "Activá el KDS en Configuración para asignar estaciones de cocina.",
     "modalTitleAdd": "Agregar Personal",

@@ -2577,6 +2577,8 @@
     "failedToSave": "Personel kaydedilemedi",
     "failedToUpdate": "Personel güncellenemedi",
     "kitchenStationsOptional": "Mutfak istasyonları (isteğe bağlı)",
+    "emailOptional": "E-posta (isteğe bağlı)",
+    "emailOptionalHint": "İsteğe bağlı. E-posta olmadan bu kişi kendi başına giriş yapamaz.",
     "kitchenStationsOptionalHint": "Bir veya daha fazla istasyon seçin ya da istasyon kısıtlaması olmaması için boş bırakın.",
     "kitchenStationsRequireKds": "Mutfak istasyonu atamak için Ayarlar'dan KDS'yi etkinleştirin.",
     "modalTitleAdd": "Personel Ekle",

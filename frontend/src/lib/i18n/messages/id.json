@@ -2577,6 +2577,8 @@
     "failedToSave": "Gagal menyimpan",
     "failedToUpdate": "Gagal memperbarui",
     "kitchenStationsOptional": "Stasiun dapur (opsional)",
+    "emailOptional": "Email (opsional)",
+    "emailOptionalHint": "Opsional. Tanpa email, orang ini tidak dapat masuk sendiri.",
     "kitchenStationsOptionalHint": "Pilih satu atau beberapa stasiun, atau biarkan kosong tanpa pembatasan stasiun.",
     "kitchenStationsRequireKds": "Aktifkan KDS di Pengaturan untuk menugaskan stasiun dapur.",
     "modalTitleAdd": "Tambah Staf",

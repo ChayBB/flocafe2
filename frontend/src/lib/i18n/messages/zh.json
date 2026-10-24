@@ -2577,6 +2577,8 @@
     "failedToSave": "保存失败",
     "failedToUpdate": "更新失败",
     "kitchenStationsOptional": "厨房工作站（可选）",
+    "emailOptional": "邮箱（选填）",
+    "emailOptionalHint": "选填。没有邮箱的员工无法自行登录。",
     "kitchenStationsOptionalHint": "选择一个或多个工作站，或留空以不限制工作站。",
     "kitchenStationsRequireKds": "请在设置中启用 KDS 后再指派厨房工作站。",
     "modalTitleAdd": "添加员工",

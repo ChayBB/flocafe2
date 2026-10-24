@@ -2577,6 +2577,8 @@
     "failedToSave": "محفوظ نہیں ہو سکا",
     "failedToUpdate": "اپ ڈیٹ نہیں ہو سکا",
     "kitchenStationsOptional": "کچن اسٹیشن (اختیاری)",
+    "emailOptional": "ای میل (اختیاری)",
+    "emailOptionalHint": "اختیاری۔ ای میل کے بغیر یہ شخص خود سائن ان نہیں کر سکتا۔",
     "kitchenStationsOptionalHint": "ایک یا زیادہ اسٹیشن منتخب کریں، یا اسٹیشن کی کوئی پابندی نہ ہو تو خالی چھوڑیں۔",
     "kitchenStationsRequireKds": "کچن اسٹیشن مقرر کرنے کے لیے ترتیبات میں KDS فعال کریں۔",
     "modalTitleAdd": "ملازم شامل کریں",

@@ -2577,6 +2577,8 @@
     "failedToSave": "保存に失敗しました",
     "failedToUpdate": "更新に失敗しました",
     "kitchenStationsOptional": "キッチンステーション（任意）",
+    "emailOptional": "メール（任意）",
+    "emailOptionalHint": "任意です。メールがないと、この人は自分でサインインできません。",
     "kitchenStationsOptionalHint": "1つ以上のステーションを選択するか、ステーション制限なしの場合は空のままにします。",
     "kitchenStationsRequireKds": "キッチンステーションを割り当てるには、設定でKDSを有効にしてください。",
     "modalTitleAdd": "スタッフを追加",

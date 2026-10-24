@@ -2577,6 +2577,8 @@
     "failedToSave": "저장에 실패했습니다",
     "failedToUpdate": "업데이트에 실패했습니다",
     "kitchenStationsOptional": "주방 스테이션(선택 사항)",
+    "emailOptional": "이메일(선택)",
+    "emailOptionalHint": "선택 사항입니다. 이메일이 없으면 이 직원은 직접 로그인할 수 없습니다.",
     "kitchenStationsOptionalHint": "하나 이상의 스테이션을 선택하거나 스테이션 제한 없이 사용하려면 비워 두세요.",
     "kitchenStationsRequireKds": "주방 스테이션을 배정하려면 설정에서 KDS를 활성화하세요.",
     "modalTitleAdd": "직원 추가",

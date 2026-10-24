@@ -2577,6 +2577,8 @@
     "failedToSave": "فشل الحفظ",
     "failedToUpdate": "فشل التحديث",
     "kitchenStationsOptional": "محطات المطبخ (اختيارية)",
+    "emailOptional": "البريد الإلكتروني (اختياري)",
+    "emailOptionalHint": "اختياري. بدون بريد إلكتروني لا يستطيع هذا الشخص تسجيل الدخول بنفسه.",
     "kitchenStationsOptionalHint": "حدد محطة واحدة أو أكثر، أو اترك هذا الحقل فارغًا في حالة عدم وجود قيود على المحطات.",
     "kitchenStationsRequireKds": "قم بتفعيل KDS في «الإعدادات» لتخصيص محطات المطبخ.",
     "modalTitleAdd": "إضافة موظف",

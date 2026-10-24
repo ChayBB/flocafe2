@@ -2577,6 +2577,8 @@
     "failedToSave": "সংরক্ষণ করতে ব্যর্থ হয়েছে",
     "failedToUpdate": "আপডেট করতে ব্যর্থ হয়েছে",
     "kitchenStationsOptional": "রান্নাঘর স্টেশন (ঐচ্ছিক)",
+    "emailOptional": "ইমেইল (ঐচ্ছিক)",
+    "emailOptionalHint": "ঐচ্ছিক। ইমেইল না দিলে এই ব্যক্তি নিজে সাইন ইন করতে পারবেন না।",
     "kitchenStationsOptionalHint": "এক বা একাধিক স্টেশন নির্বাচন করুন, অথবা কোনো স্টেশন সীমাবদ্ধতার জন্য এটি খালি ছেড়ে দিন।",
     "kitchenStationsRequireKds": "রান্নাঘরের স্টেশন বরাদ্দ করতে সেটিংসে KDS সক্ষম করুন।",
     "modalTitleAdd": "স্টাফ যোগ করুন",

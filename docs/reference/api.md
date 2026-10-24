@@ -527,6 +527,8 @@ Mounted at both `/api/staff` and `/api/users` from one router, so a request to e
 | `POST` | `/:id/deactivate` | `ROLE_ACCESS.ownerManager`                | path: `id`                                                                | -                           |
 | `POST` | `/:id/reactivate` | `ROLE_ACCESS.ownerManager`                | path: `id`                                                                | -                           |
 
+`email` is optional on create and update. A blank value stores no email, and a staff member without one cannot sign in on their own.
+
 ### Printers
 
 Router: `main/routes/printers.ts`. Full path: `/api/printers`.

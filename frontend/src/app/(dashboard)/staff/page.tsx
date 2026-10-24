@@ -337,16 +337,20 @@ export default function StaffPage() {
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                 required
               />
-              <input
-                type="email"
-                placeholder={tAuth('email')}
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                autoComplete="email"
-                dir="ltr"
-                required
-              />
+              <div>
+                <input
+                  type="email"
+                  placeholder={t('emailOptional')}
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                  autoComplete="email"
+                  dir="ltr"
+                />
+                {!form.email.trim() && (
+                  <p className="mt-1 text-xs text-muted-foreground">{t('emailOptionalHint')}</p>
+                )}
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}

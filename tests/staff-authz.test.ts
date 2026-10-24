@@ -157,10 +157,22 @@ async function main() {
   }
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
-    name: 'Missing email server', password: 'StrongPass1', role: 'server',
+    name: 'Email-less server', password: 'StrongPass1', role: 'server',
   });
-  assertEqual(result.status, 400, 'staff creation requires email');
-  assertEqual(result.body.error, 'name, email, password, and role are required', 'missing email returns a clear validation error');
+  assertEqual(result.status, 201, 'staff creation does not require an email');
+  assertEqual(result.body.staff.email, null, 'a staff member created without an email has none');
+  const emailLessId = result.body.staff.id;
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
+    name: 'Second email-less server', email: '   ', password: 'StrongPass1', role: 'server',
+  });
+  assertEqual(result.status, 201, 'several staff members can have no email');
+
+  result = await request(app).post('/api/staff').set(managerAuth).send({
+    email: 'nameless@test.local', password: 'StrongPass1', role: 'server',
+  });
+  assertEqual(result.status, 400, 'staff creation still requires a name');
+  assertEqual(result.body.error, 'name, password, and role are required', 'missing name returns a clear validation error');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
     name: 'Invalid email server', email: 'not-an-email', password: 'StrongPass1', role: 'server',
@@ -175,8 +187,11 @@ async function main() {
   assertEqual(result.body.staff.email, 'mixed.server@test.local', 'created staff email is stored normalized');
 
   result = await request(app).put(`/api/staff/${managerCreated.server}`).set(managerAuth).send({ email: '   ' });
-  assertEqual(result.status, 400, 'staff update rejects blank email');
-  assertEqual(result.body.error, 'email is required', 'blank email update returns a clear validation error');
+  assertEqual(result.status, 200, 'staff update accepts a blank email');
+  assertEqual(result.body.staff?.email ?? null, null, 'a blank email update clears the email');
+
+  result = await request(app).put(`/api/staff/${emailLessId}`).set(managerAuth).send({ name: 'Renamed email-less' });
+  assertEqual(result.status, 200, 'an email-less staff member can be edited without adding an email');
 
   result = await request(app).post('/api/staff').set(managerAuth).send({
     name: 'Pinned cashier', email: 'pinned-cashier@test.local', password: 'StrongPass1', role: 'cashier', pin: '1234',

@@ -2577,6 +2577,8 @@
     "failedToSave": "Ruajtja dështoi",
     "failedToUpdate": "Përditësimi dështoi",
     "kitchenStationsOptional": "Stacionet e kuzhinës (opsionale)",
+    "emailOptional": "Email (opsional)",
+    "emailOptionalHint": "Opsional. Pa email, ky person nuk mund të hyjë vetë.",
     "kitchenStationsOptionalHint": "Zgjidhni një ose më shumë stacione ose lëreni bosh pa kufizim stacioni.",
     "kitchenStationsRequireKds": "Aktivizo KDS te Cilësimet për të caktuar stacionet e kuzhinës.",
     "modalTitleAdd": "Shto Staf",

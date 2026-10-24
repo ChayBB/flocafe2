@@ -2577,6 +2577,8 @@
     "failedToSave": "सहेजने में विफल",
     "failedToUpdate": "अद्यतन करने में विफल",
     "kitchenStationsOptional": "रसोई स्टेशन (वैकल्पिक)",
+    "emailOptional": "ईमेल (वैकल्पिक)",
+    "emailOptionalHint": "वैकल्पिक। ईमेल के बिना यह व्यक्ति खुद साइन इन नहीं कर सकता।",
     "kitchenStationsOptionalHint": "एक या अधिक स्टेशनों का चयन करें, या बिना किसी स्टेशन प्रतिबंध के इसे खाली छोड़ दें।",
     "kitchenStationsRequireKds": "रसोई स्टेशन आवंटित करने के लिए सेटिंग्स में केडीएस सक्षम करें।",
     "modalTitleAdd": "स्टाफ़ जोड़ें",

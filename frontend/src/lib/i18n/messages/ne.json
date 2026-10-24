@@ -2577,6 +2577,8 @@
     "failedToSave": "बचत गर्न असफल भयो",
     "failedToUpdate": "अपडेट गर्न सकिएन",
     "kitchenStationsOptional": "भान्सा स्टेशनहरू (वैकल्पिक)",
+    "emailOptional": "इमेल (ऐच्छिक)",
+    "emailOptionalHint": "ऐच्छिक। इमेल नभएमा यो व्यक्तिले आफैं साइन इन गर्न सक्दैन।",
     "kitchenStationsOptionalHint": "एक वा धेरै स्टेशनहरू चयन गर्नुहोस्, वा कुनै स्टेशन प्रतिबन्धको लागि यो खाली छोड्नुहोस्।",
     "kitchenStationsRequireKds": "किचन स्टेशनहरू तोक्न सेटिङहरूमा KDS सक्षम गर्नुहोस्।",
     "modalTitleAdd": "कर्मचारी थप्नुहोस्",
