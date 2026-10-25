@@ -215,6 +215,10 @@ export default function ServerStandalonePage() {
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  useEffect(() => {
+    document.documentElement.classList.add('theme-server-app');
+    return () => document.documentElement.classList.remove('theme-server-app');
+  }, []);
   // undefined while rendering on the server; null when the address carries no QR table.
   const guestTableId = useSyncExternalStore(
     subscribeToNothing,
