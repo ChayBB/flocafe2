@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button';
 import { SettingsTabShell } from '@/components/settings/SettingsTabShell';
 import { useTranslations } from 'use-intl';
 import { useFormatDate } from '@/hooks/useFormatDate';
-import { isQrCodeMethod, type CustomPaymentMethod } from '@/lib/payment-methods';
+import {
+  THAI_BANKS,
+  isBankAccountMethod,
+  isQrCodeMethod,
+  type CustomPaymentMethod,
+} from '@/lib/payment-methods';
+
+type BankQrAccount = { bank_code: string; account_number: string };
+const EMPTY_BANK_ACCOUNT: BankQrAccount = { bank_code: '', account_number: '' };
 
 interface MergeRecord {
   id: number;
@@ -37,18 +45,26 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
   const [splitChecksEnabled, setSplitChecksEnabled] = useState(false);
   const [qrAccount, setQrAccount] = useState('');
   const [qrAccountSaved, setQrAccountSaved] = useState('');
+  const [bankAccount, setBankAccount] = useState<BankQrAccount>(EMPTY_BANK_ACCOUNT);
+  const [bankAccountSaved, setBankAccountSaved] = useState<BankQrAccount>(EMPTY_BANK_ACCOUNT);
 
   const load = async () => {
-    const [methodsRes, historyRes, splitRes, qrRes] = await Promise.all([
+    const [methodsRes, historyRes, splitRes, qrRes, bankRes] = await Promise.all([
       api.get('/payment-methods?include_inactive=true'),
       api.get('/payment-methods/merge-history'),
       api
         .get('/settings/split_checks_enabled')
         .catch(() => ({ data: { setting: { value: 'false' } } })),
       api.get('/payment-methods/qr-account').catch(() => ({ data: { account: '' } })),
+      api
+        .get('/payment-methods/bank-qr-account')
+        .catch(() => ({ data: { account: EMPTY_BANK_ACCOUNT } })),
     ]);
     setQrAccount(qrRes.data?.account || '');
     setQrAccountSaved(qrRes.data?.account || '');
+    const savedBank = { ...EMPTY_BANK_ACCOUNT, ...(bankRes.data?.account || {}) };
+    setBankAccount(savedBank);
+    setBankAccountSaved(savedBank);
     const rows = methodsRes.data.payment_methods || [];
     setMethods(rows);
     setNames(Object.fromEntries(rows.map((row: CustomPaymentMethod) => [row.id, row.name])));
@@ -89,6 +105,18 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
       toast.success(t('qrAccountSaved'));
     } catch {
       toast.error(t('qrAccountInvalid'));
+    }
+  };
+
+  const saveBankAccount = async () => {
+    try {
+      const { data } = await api.put('/payment-methods/bank-qr-account', bankAccount);
+      const saved = { ...EMPTY_BANK_ACCOUNT, ...(data.account || {}) };
+      setBankAccount(saved);
+      setBankAccountSaved(saved);
+      toast.success(t('bankQrAccountSaved'));
+    } catch {
+      toast.error(t('bankQrAccountInvalid'));
     }
   };
 
@@ -196,6 +224,59 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">{t('qrAccountHint')}</p>
+                </div>
+              )}
+              {isBankAccountMethod(method.name) && (
+                <div className="space-y-1" data-testid="bank-qr-account-form">
+                  <label className="block text-xs font-medium text-foreground">
+                    {t('bankQrAccountLabel')}
+                  </label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select
+                      disabled={!isAdmin}
+                      value={bankAccount.bank_code}
+                      onChange={(e) =>
+                        setBankAccount((old) => ({ ...old, bank_code: e.target.value }))
+                      }
+                      aria-label={t('bankQrBankLabel')}
+                      className="px-2 py-2 text-sm border rounded-lg bg-card"
+                    >
+                      <option value="">{t('bankQrSelectBank')}</option>
+                      {THAI_BANKS.map((bank) => (
+                        <option key={bank.code} value={bank.code}>
+                          {bank.short} · {bank.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      disabled={!isAdmin}
+                      inputMode="numeric"
+                      value={bankAccount.account_number}
+                      onChange={(e) =>
+                        setBankAccount((old) => ({
+                          ...old,
+                          account_number: e.target.value.replace(/[^\d-]/g, '').slice(0, 20),
+                        }))
+                      }
+                      placeholder={t('bankQrAccountNumberPlaceholder')}
+                      aria-label={t('bankQrAccountNumberPlaceholder')}
+                      className="flex-1 min-w-40 px-3 py-2 text-sm border rounded-lg"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={t('bankQrAccountLabel')}
+                      disabled={
+                        !isAdmin ||
+                        (bankAccount.bank_code === bankAccountSaved.bank_code &&
+                          bankAccount.account_number === bankAccountSaved.account_number)
+                      }
+                      onClick={saveBankAccount}
+                    >
+                      <Save size={14} />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('bankQrAccountHint')}</p>
                 </div>
               )}
               {Boolean(method.usage_count) && isAdmin && (

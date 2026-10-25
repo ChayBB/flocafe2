@@ -1,6 +1,11 @@
 import { isTerminalItemStatus } from '../../shared/order-item-status';
 import { formatVariantItemHeading, parseVariantSelection } from '../printers/formatting-helpers';
-import { buildPromptPayPayload, parsePromptPayAccount } from '../lib/promptpay';
+import { buildPromptPayPayload } from '../lib/promptpay';
+import {
+  missingQrAccountCode,
+  parsePaymentQrKind,
+  resolvePaymentQrTarget,
+} from '../lib/payment-qr-target';
 import {
   billHasWeightPending,
   orderHasWeightPending,
@@ -1548,11 +1553,12 @@ router.post(
         return res.status(400).json({ error: 'amount exceeds the order total' });
       }
 
-      const target = parsePromptPayAccount(getSettingValue('qr_payment_account'));
+      const qrKind = parsePaymentQrKind(req.body?.kind);
+      const target = resolvePaymentQrTarget(qrKind);
       if (!target) {
         return res
           .status(404)
-          .json({ error: 'No QR payment account is set up', code: 'qr_account_missing' });
+          .json({ error: 'No QR payment account is set up', code: missingQrAccountCode(qrKind) });
       }
       const printer = db
         .prepare(

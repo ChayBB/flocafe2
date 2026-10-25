@@ -31,7 +31,12 @@ import { resolveTaxComponents } from '@/lib/printer/tax-components';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslations, useLocale, type AppConfig } from 'use-intl';
-import { PAYMENT_METHODS, isQrCodeMethod, type CustomPaymentMethod } from '@/lib/payment-methods';
+import {
+  PAYMENT_METHODS,
+  isBankAccountMethod,
+  isQrCodeMethod,
+  type CustomPaymentMethod,
+} from '@/lib/payment-methods';
 import QrPaymentPanel from '@/components/pos/QrPaymentPanel';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatNumber } from '@/hooks/useFormatNumber';
@@ -2044,9 +2049,13 @@ export default function PaymentModal({
                       </p>
                     )}
                     {payment.payment_method_id !== undefined &&
-                      isQrCodeMethod(label) &&
+                      (isQrCodeMethod(label) || isBankAccountMethod(label)) &&
                       (parseFloat(payment.amount) || 0) > 0 && (
-                        <QrPaymentPanel amount={parseFloat(payment.amount)} orderId={bill.order_id} />
+                        <QrPaymentPanel
+                          amount={parseFloat(payment.amount)}
+                          orderId={bill.order_id}
+                          kind={isBankAccountMethod(label) ? 'bank' : 'promptpay'}
+                        />
                       )}
                   </div>
                 );

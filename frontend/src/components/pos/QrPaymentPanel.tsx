@@ -10,7 +10,16 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 type QrState = 'loading' | 'ready' | 'missing' | 'failed';
 
-export default function QrPaymentPanel({ amount, orderId }: { amount: number; orderId?: number | string }) {
+export default function QrPaymentPanel({
+  amount,
+  orderId,
+  kind = 'promptpay',
+}: {
+  amount: number;
+  orderId?: number | string;
+  /** `bank` pays into the shop's bank account instead of its PromptPay ID. */
+  kind?: 'promptpay' | 'bank';
+}) {
   const t = useTranslations('pos');
   const fmt = useFormatCurrency();
   const [state, setState] = useState<QrState>('loading');
@@ -21,7 +30,7 @@ export default function QrPaymentPanel({ amount, orderId }: { amount: number; or
     if (printing || orderId === undefined) return;
     setPrinting(true);
     try {
-      await api.post('/printers/print-payment-request', { orderId, amount });
+      await api.post('/printers/print-payment-request', { orderId, amount, kind });
       toast.success(t('qrPrintSent'));
     } catch (error) {
       const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
@@ -36,7 +45,7 @@ export default function QrPaymentPanel({ amount, orderId }: { amount: number; or
     const timer = setTimeout(() => {
       setState('loading');
       api
-        .get('/payment-methods/qr-code', { params: { amount } })
+        .get('/payment-methods/qr-code', { params: { amount, kind } })
         .then(({ data }) => {
           if (cancelled) return;
           setDataUrl(data.data_url);
@@ -44,14 +53,17 @@ export default function QrPaymentPanel({ amount, orderId }: { amount: number; or
         })
         .catch((error) => {
           if (cancelled) return;
-          setState(error?.response?.data?.code === 'qr_account_missing' ? 'missing' : 'failed');
+          const code = error?.response?.data?.code;
+          setState(
+            code === 'qr_account_missing' || code === 'bank_qr_account_missing' ? 'missing' : 'failed',
+          );
         });
     }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [amount]);
+  }, [amount, kind]);
 
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4">
@@ -83,7 +95,9 @@ export default function QrPaymentPanel({ amount, orderId }: { amount: number; or
         </>
       )}
       {state === 'missing' && (
-        <p className="text-sm text-amber-600 dark:text-amber-400">{t('qrAccountMissing')}</p>
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          {kind === 'bank' ? t('bankQrAccountMissing') : t('qrAccountMissing')}
+        </p>
       )}
       {state === 'failed' && (
         <p className="text-sm text-red-500 dark:text-red-400">{t('qrLoadFailed')}</p>
