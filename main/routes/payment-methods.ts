@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, getSettingValue, now, upsertSettings, withTxn } from '../db';
+import { getDatabase, now, upsertSettings, withTxn } from '../db';
 import * as QRCode from 'qrcode';
-import { buildPromptPayPayload, parseBankAccount, parsePromptPayAccount } from '../lib/promptpay';
+import { buildPromptPayPayload, parsePromptPayAccount } from '../lib/promptpay';
 import {
   BANK_QR_ACCOUNT_SETTING,
   QR_ACCOUNT_SETTING,
   missingQrAccountCode,
   parsePaymentQrKind,
-  readBankQrAccount,
+  readPaymentQrAccount,
   resolvePaymentQrTarget,
 } from '../lib/payment-qr-target';
 import { requirePermission, hasPermission } from '../services/authorization';
@@ -45,38 +45,23 @@ router.get('/merge-history', requirePermission('payment-methods.manage'), (_req,
   res.json({ merges: getDatabase().prepare('SELECT * FROM payment_method_merges ORDER BY merged_at DESC, id DESC LIMIT 30').all() });
 });
 
-router.get('/qr-account', requirePermission('payment-methods.manage'), (_req, res) => {
-  res.json({ account: getSettingValue(QR_ACCOUNT_SETTING) || '' });
-});
+/** Saves a PromptPay ID (phone, 13-digit national/tax ID or e-wallet) for one of the QR payment methods. */
+function promptPayAccountRoutes(path: string, setting: string, kind: 'promptpay' | 'bank') {
+  router.get(path, requirePermission('payment-methods.manage'), (_req, res) => {
+    res.json({ account: readPaymentQrAccount(kind) });
+  });
+  router.put(path, requirePermission('payment-methods.manage'), (req: Request, res: Response) => {
+    const account = typeof req.body?.account === 'string' ? req.body.account.replace(/[\s-]/g, '') : '';
+    if (account && !parsePromptPayAccount(account)) {
+      return res.status(400).json({ error: 'Enter a 10-digit phone number, 13-digit ID or 15-digit e-wallet ID' });
+    }
+    upsertSettings({ [setting]: account });
+    res.json({ account });
+  });
+}
 
-router.put('/qr-account', requirePermission('payment-methods.manage'), (req: Request, res: Response) => {
-  const account = typeof req.body?.account === 'string' ? req.body.account.replace(/[\s-]/g, '') : '';
-  if (account && !parsePromptPayAccount(account)) {
-    return res.status(400).json({ error: 'Enter a 10-digit phone number, 13-digit ID or 15-digit e-wallet ID' });
-  }
-  upsertSettings({ [QR_ACCOUNT_SETTING]: account });
-  res.json({ account });
-});
-
-router.get('/bank-qr-account', requirePermission('payment-methods.manage'), (_req, res) => {
-  res.json({ account: readBankQrAccount() ?? { bank_code: '', account_number: '' } });
-});
-
-router.put('/bank-qr-account', requirePermission('payment-methods.manage'), (req: Request, res: Response) => {
-  const bankCode = typeof req.body?.bank_code === 'string' ? req.body.bank_code : '';
-  const accountNumber =
-    typeof req.body?.account_number === 'string' ? req.body.account_number.replace(/[\s-]/g, '') : '';
-  if (!bankCode && !accountNumber) {
-    upsertSettings({ [BANK_QR_ACCOUNT_SETTING]: '' });
-    return res.json({ account: { bank_code: '', account_number: '' } });
-  }
-  if (!parseBankAccount(bankCode, accountNumber)) {
-    return res.status(400).json({ error: 'Choose a bank and enter a 10-15 digit account number' });
-  }
-  const account = { bank_code: bankCode, account_number: accountNumber };
-  upsertSettings({ [BANK_QR_ACCOUNT_SETTING]: JSON.stringify(account) });
-  res.json({ account });
-});
+promptPayAccountRoutes('/qr-account', QR_ACCOUNT_SETTING, 'promptpay');
+promptPayAccountRoutes('/bank-qr-account', BANK_QR_ACCOUNT_SETTING, 'bank');
 
 router.get('/qr-code', requirePermission('payments.take'), async (req: Request, res: Response) => {
   const kind = parsePaymentQrKind(req.query.kind);

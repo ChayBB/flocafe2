@@ -1,22 +1,7 @@
 export type PromptPayTarget =
   | { kind: 'phone'; value: string }
   | { kind: 'national_id'; value: string }
-  | { kind: 'ewallet'; value: string }
-  | { kind: 'bank_account'; value: string };
-
-/** Thai bank codes accepted for a bank-account payment QR. */
-export const THAI_BANK_CODES: ReadonlySet<string> = new Set([
-  '002', '004', '006', '011', '014', '022', '024', '025', '030', '033', '034', '066', '067', '069', '073',
-]);
-
-/** A bank-account QR target is the 3-digit bank code followed by a 10-15 digit account number. */
-export function parseBankAccount(bankCode: unknown, accountNumber: unknown): PromptPayTarget | null {
-  if (typeof bankCode !== 'string' || !THAI_BANK_CODES.has(bankCode)) return null;
-  if (typeof accountNumber !== 'string') return null;
-  const digits = accountNumber.replace(/[\s-]/g, '');
-  if (!/^\d{10,15}$/.test(digits)) return null;
-  return { kind: 'bank_account', value: `${bankCode}${digits}` };
-}
+  | { kind: 'ewallet'; value: string };
 
 export function parsePromptPayAccount(raw: unknown): PromptPayTarget | null {
   if (typeof raw !== 'string') return null;
@@ -46,14 +31,7 @@ export function crc16Ccitt(text: string): string {
 
 /** Builds the Thai PromptPay (EMVCo) payload; a positive amount makes the QR dynamic. */
 export function buildPromptPayPayload(target: PromptPayTarget, amount?: number): string {
-  const subTag =
-    target.kind === 'phone'
-      ? '01'
-      : target.kind === 'national_id'
-        ? '02'
-        : target.kind === 'ewallet'
-          ? '03'
-          : '04';
+  const subTag = target.kind === 'phone' ? '01' : target.kind === 'national_id' ? '02' : '03';
   const merchant = field('29', field('00', 'A000000677010111') + field(subTag, target.value));
   const hasAmount = typeof amount === 'number' && Number.isFinite(amount) && amount > 0;
   const body =

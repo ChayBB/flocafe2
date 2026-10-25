@@ -895,7 +895,6 @@ function filFallbackErrors(filFlat: Record<string, string>, enFlat: Record<strin
  * tokens or identical words.
  */
 const DE_INTENTIONAL_IDENTICAL = new Set<string>([
-  'settings.bankQrBankLabel', // "Bank" is the German word
   'orders.weightAmount', // weight with the kg unit symbol
   'expenses.status', // "Status" is the German word
   'dashboard.exportCsv', // format label "CSV (.csv)"
@@ -1320,7 +1319,6 @@ function koFallbackErrors(koFlat: Record<string, string>, enFlat: Record<string,
 
 /** Indonesian translation safeguards. */
 const ID_INTENTIONAL_IDENTICAL = new Set<string>([
-  'settings.bankQrBankLabel', // "Bank" is the Indonesian word
   'orders.weightAmount', // weight with the kg unit symbol
   'common.appTitle', 'common.brandName', 'common.logoAlt', 'settings.revflo', 'setup.finedineLabel',
   'auth.email', 'auth.recoverPinLabel', 'expenses.status', // "Status" is the Indonesian word
@@ -1362,7 +1360,6 @@ function idFallbackErrors(idFlat: Record<string, string>, enFlat: Record<string,
 
 /** Dutch translation safeguards. */
 const NL_INTENTIONAL_IDENTICAL = new Set<string>([
-  'settings.bankQrBankLabel', // "Bank" is the Dutch word
   'orders.weightAmount', // weight with the kg unit symbol
   'auth.countryThailand', 'auth.emailPlaceholder', 'businessType.restaurant',
   'common.appTitle', 'common.brandName', 'common.logoAlt', 'common.percentage',

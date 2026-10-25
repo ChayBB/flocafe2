@@ -10,11 +10,11 @@ test.describe('bank account payment QR', () => {
   test.afterEach(async ({ request }) => {
     await request.put(`${BASE}/api/payment-methods/bank-qr-account`, {
       headers: owner(),
-      data: { bank_code: '', account_number: '' },
+      data: { account: '' },
     });
   });
 
-  test('the API validates the bank account and builds a bank-transfer QR for the amount', async ({
+  test('the bank method pays through the PromptPay ID linked to the account', async ({
     request,
   }) => {
     const missing = await request.get(`${BASE}/api/payment-methods/qr-code`, {
@@ -24,24 +24,20 @@ test.describe('bank account payment QR', () => {
     expect(missing.status()).toBe(404);
     expect((await missing.json()).code).toBe('bank_qr_account_missing');
 
-    for (const bad of [
-      { bank_code: '999', account_number: '1234567890' },
-      { bank_code: '004', account_number: '12345' },
-      { bank_code: '', account_number: '1234567890' },
-    ]) {
+    for (const bad of ['1234567890', '12345', '0041234567890123']) {
       const res = await request.put(`${BASE}/api/payment-methods/bank-qr-account`, {
         headers: owner(),
-        data: bad,
+        data: { account: bad },
       });
-      expect(res.status(), JSON.stringify(bad)).toBe(400);
+      expect(res.status(), bad).toBe(400);
     }
 
     const saved = await request.put(`${BASE}/api/payment-methods/bank-qr-account`, {
       headers: owner(),
-      data: { bank_code: '004', account_number: '123-4-56789-0' },
+      data: { account: '081-234-5678' },
     });
     expect(saved.ok()).toBeTruthy();
-    expect((await saved.json()).account).toEqual({ bank_code: '004', account_number: '1234567890' });
+    expect((await saved.json()).account).toBe('0812345678');
 
     const qr = await request.get(`${BASE}/api/payment-methods/qr-code`, {
       headers: owner(),
@@ -49,12 +45,13 @@ test.describe('bank account payment QR', () => {
     });
     expect(qr.ok()).toBeTruthy();
     const body = await qr.json();
-    expect(body.payload).toContain('0016A000000677010111' + '0413' + '0041234567890');
+    expect(body.payload).toContain('0016A000000677010111' + '01130066812345678');
+    expect(body.payload).not.toContain('A00000067701011104');
     expect(body.payload).toContain('5406150.50');
     expect(body.data_url).toMatch(/^data:image\/png;base64,/);
   });
 
-  test('the bank account form sits under the bank account payment method in settings', async ({
+  test('the PromptPay ID form sits under the bank account payment method in settings', async ({
     page,
   }) => {
     const methods = await (
@@ -77,16 +74,15 @@ test.describe('bank account payment QR', () => {
 
     const form = page.getByTestId('bank-qr-account-form');
     await expect(form).toBeVisible();
-    await form.getByRole('combobox', { name: 'Bank' }).selectOption('014');
-    const accountInput = form.getByPlaceholder('Account number');
-    await accountInput.fill('12a3-456-7890');
-    await expect(accountInput).toHaveValue('123-456-7890');
-    await form.getByRole('button', { name: 'Bank account for payment QR' }).click();
+    await expect(form).toContainText('PromptPay ID linked to this bank account');
+    await expect(form.getByRole('combobox')).toHaveCount(0);
+    await form.getByPlaceholder('Phone number, 13-digit ID or tax ID').fill('0105556000000');
+    await form.getByRole('button', { name: 'PromptPay ID linked to this bank account' }).click();
     await expect(page.getByText('Bank account saved')).toBeVisible();
 
     const stored = await (
       await page.request.get(`${BASE}/api/payment-methods/bank-qr-account`, { headers: owner() })
     ).json();
-    expect(stored.account).toEqual({ bank_code: '014', account_number: '1234567890' });
+    expect(stored.account).toBe('0105556000000');
   });
 });
