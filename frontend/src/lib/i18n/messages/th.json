@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "ชื่อตัวเลือกเพิ่ม",
     "addonPricePlaceholder": "ราคา",
     "addonRequired": "จำเป็น",
+    "addonPricePending": "รอระบุราคา",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "กำหนดหมวดหมู่ภาษี",
     "barcodeLabel": "บาร์โค้ด: {barcode}",

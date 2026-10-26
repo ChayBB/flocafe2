@@ -7635,6 +7635,15 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 121,
+    name: 'add_addon_group_price_pending',
+    up: () => {
+      if (!getColumns(db, 'addon_groups').includes('price_pending')) {
+        db.exec(`ALTER TABLE addon_groups ADD COLUMN price_pending INTEGER NOT NULL DEFAULT 0`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

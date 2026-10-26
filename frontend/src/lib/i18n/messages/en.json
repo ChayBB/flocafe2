@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Addon name",
     "addonPricePlaceholder": "Price",
     "addonRequired": "Required",
+    "addonPricePending": "Awaiting price",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Assign tax category",
     "barcodeLabel": "Barcode: {barcode}",

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "ایڈ آن کا نام",
     "addonPricePlaceholder": "قیمت",
     "addonRequired": "لازمی",
+    "addonPricePending": "قیمت باقی",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "ٹیکس زمرہ مقرر کریں",
     "barcodeLabel": "بارکوڈ: {barcode}",

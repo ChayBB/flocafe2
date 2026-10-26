@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Naam van add-on",
     "addonPricePlaceholder": "Prijs",
     "addonRequired": "Vereist",
+    "addonPricePending": "Prijs volgt",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Belastingcategorie toewijzen",
     "barcodeLabel": "Streepjescode: {barcode}",

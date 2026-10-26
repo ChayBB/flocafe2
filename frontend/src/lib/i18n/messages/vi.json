@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Tên tuỳ chọn",
     "addonPricePlaceholder": "Giá",
     "addonRequired": "Bắt buộc",
+    "addonPricePending": "Chờ nhập giá",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Gán danh mục thuế",
     "barcodeLabel": "Mã vạch: {barcode}",

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "एड-ऑन नाम",
     "addonPricePlaceholder": "कीमत",
     "addonRequired": "आवश्यक",
+    "addonPricePending": "कीमत बाकी",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "कर श्रेणी निर्दिष्ट करें",
     "barcodeLabel": "बारकोड: {barcode}",

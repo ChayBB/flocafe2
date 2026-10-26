@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "追加項目名",
     "addonPricePlaceholder": "価格",
     "addonRequired": "必須",
+    "addonPricePending": "価格未定",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "税カテゴリを割り当て",
     "barcodeLabel": "バーコード：{barcode}",

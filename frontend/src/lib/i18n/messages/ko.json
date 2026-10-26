@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "추가 옵션 이름",
     "addonPricePlaceholder": "가격",
     "addonRequired": "필수",
+    "addonPricePending": "가격 입력 대기",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "세금 카테고리 지정",
     "barcodeLabel": "바코드: {barcode}",

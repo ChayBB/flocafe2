@@ -63,6 +63,15 @@ async function main() {
   db.prepare(
     `INSERT INTO addon_group_product (addon_group_id, product_id) VALUES ('ag-weight', 'prod-tofu')`,
   ).run();
+  db.prepare(`INSERT INTO products (id, category_id, name, price, tax_type, is_active, sort_order, created_at, updated_at)
+    VALUES ('prod-fish', 'cat-w', 'Steamed fish', 400, 'none', 1, 3, ?, ?)`).run(now(), now());
+  db.prepare(
+    `INSERT INTO addon_groups (id, name, is_required, price_pending, min_selection, max_selection, allow_multiple_quantities, is_active, created_at, updated_at)
+     VALUES ('ag-market', 'Market price', 0, 1, 0, 10, 0, 1, ?, ?)`,
+  ).run(now(), now());
+  db.prepare(
+    `INSERT INTO addon_group_product (addon_group_id, product_id) VALUES ('ag-market', 'prod-fish')`,
+  ).run();
 
   const cashierAuth = seedUser(db, 'cashier-weight', 'cashier');
   const app = createApp({ '/api/orders': orderRoutes, '/api/bills': billRoutes });
@@ -176,6 +185,20 @@ async function main() {
       VALUES ('BILL-W-PAID', ?, 250, 250, 250, 0, 'paid', ?, ?)`).run(paidOrderId, now(), now());
     const paidAttempt = await weigh(paidOrderId, paidItem.id, 0.4);
     assertEqualOrThrow(paidAttempt.status, 409, 'a line on a paid order cannot be weighed');
+
+    // A group flagged "awaiting price" behaves like the weight-priced group, whatever its name.
+    const market = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      headers: cashierAuth,
+      body: { type: 'takeaway', items: [{ product_id: 'prod-fish', quantity: 1 }] },
+    });
+    assertEqualOrThrow(market.status, 201, 'an order with an awaiting-price item is created');
+    const fishLine = itemsOf(market.data.order.id)[0];
+    assertEqualOrThrow(fishLine.weight_pending, 1, 'an awaiting-price line waits like a weight-priced one');
+    assertEqualOrThrow(fishLine.special_instructions, WEIGHT_PENDING_NOTE, 'it carries the same kitchen note');
+    const weighedFish = await weigh(market.data.order.id, fishLine.id, 0.5);
+    assertEqualOrThrow(weighedFish.status, 200, 'an awaiting-price line is completed through the same flow');
+    assertEqualOrThrow(itemsOf(market.data.order.id)[0].unit_price, 200, 'its price follows the same calculation');
 
     console.log('\nAll weight-priced order line checks passed');
   } finally {

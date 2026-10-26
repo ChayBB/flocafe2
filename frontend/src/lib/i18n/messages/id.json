@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Nama tambahan",
     "addonPricePlaceholder": "Harga",
     "addonRequired": "Wajib",
+    "addonPricePending": "Menunggu harga",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Tetapkan kategori pajak",
     "barcodeLabel": "Barcode: {barcode}",

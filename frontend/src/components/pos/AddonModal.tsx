@@ -84,7 +84,9 @@ export default function AddonModal({
   const tenantFmt = useFormatCurrency();
   const fmt = country ? (n: number) => formatCurrencyForTenant(n, country, currency) : tenantFmt;
   const [selected, setSelected] = useState<Record<string | number, Addon[]>>(() => groupInitialAddons(initialAddons));
-  const awaitingWeight = (product.addon_groups || []).some((g) => g.name?.trim() === WEIGHT_PRICED_GROUP_NAME);
+  const awaitingWeight = (product.addon_groups || []).some(
+    (g) => g.name?.trim() === WEIGHT_PRICED_GROUP_NAME || Boolean(g.price_pending),
+  );
   const startQuantity = awaitingWeight ? 1 : initialQuantity;
   const [quantity, setQuantity] = useState(startQuantity);
   const [qtyDraft, setQtyDraft] = useState(() => String(startQuantity));

@@ -132,6 +132,8 @@ export interface AddonGroup {
   name: string;
   description: string | null;
   is_required: boolean;
+  /** Awaiting price: items from this group are priced after the order, like weight-priced items. */
+  price_pending?: boolean;
   min_selection: number;
   max_selection: number;
   allow_multiple_quantities?: boolean;

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Pangalan ng addon",
     "addonPricePlaceholder": "Presyo",
     "addonRequired": "Kailangan",
+    "addonPricePending": "Hinihintay ang presyo",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Magtalaga ng kategorya ng buwis",
     "barcodeLabel": "Barcode: {barcode}",

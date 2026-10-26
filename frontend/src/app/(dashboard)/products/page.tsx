@@ -178,6 +178,7 @@ export default function ProductsPage() {
     name: '',
     description: '',
     is_required: false,
+    price_pending: false,
     allow_multiple_quantities: false,
     min_selection: 0,
     max_selection: 10,
@@ -771,6 +772,7 @@ export default function ProductsPage() {
       name: '',
       description: '',
       is_required: false,
+      price_pending: false,
       allow_multiple_quantities: false,
       min_selection: 0,
       max_selection: 10,
@@ -786,6 +788,7 @@ export default function ProductsPage() {
       name: group.name,
       description: group.description || '',
       is_required: Boolean(group.is_required),
+      price_pending: Boolean(group.price_pending),
       allow_multiple_quantities: Boolean(group.allow_multiple_quantities),
       min_selection: group.min_selection,
       max_selection: group.max_selection,
@@ -818,6 +821,7 @@ export default function ProductsPage() {
         name: addonForm.name,
         description: addonForm.description || null,
         is_required: addonForm.is_required,
+        price_pending: addonForm.price_pending,
         allow_multiple_quantities: addonForm.allow_multiple_quantities,
         min_selection: addonForm.min_selection,
         max_selection: addonForm.max_selection,
@@ -2380,6 +2384,18 @@ export default function ProductsPage() {
                         className="rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
                       />
                       <span className="text-sm text-foreground">{t('addonRequired')}</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={addonForm.price_pending}
+                        onChange={(e) =>
+                          setAddonForm({ ...addonForm, price_pending: e.target.checked })
+                        }
+                        data-testid="addon-group-price-pending"
+                        className="rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
+                      />
+                      <span className="text-sm text-foreground">{t('addonPricePending')}</span>
                     </label>
                     <label className="flex items-center gap-2">
                       <input

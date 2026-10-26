@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Nome do adicional",
     "addonPricePlaceholder": "Preço",
     "addonRequired": "Obrigatório",
+    "addonPricePending": "Preço pendente",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Atribuir categoria fiscal",
     "barcodeLabel": "Código de barras: {barcode}",

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "অ্যাড-অন নাম",
     "addonPricePlaceholder": "দাম",
     "addonRequired": "প্রয়োজন",
+    "addonPricePending": "দামের অপেক্ষায়",
     "addonSelectionRange": "{min}-{max}",
     "assignTaxCategory": "কর বিভাগ বরাদ্দ করুন",
     "barcodeLabel": "বারকোড:{barcode}",

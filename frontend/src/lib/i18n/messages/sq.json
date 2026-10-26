@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Emri shtesë",
     "addonPricePlaceholder": "Çmimi",
     "addonRequired": "E detyrueshme",
+    "addonPricePending": "Çmimi në pritje",
     "addonSelectionRange": "{min} - {max}",
     "assignTaxCategory": "Cakto kategorinë e taksave",
     "barcodeLabel": "Barkodi: {barcode}",

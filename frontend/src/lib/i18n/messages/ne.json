@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "एडअन नाम",
     "addonPricePlaceholder": "मूल्य",
     "addonRequired": "आवश्यक छ",
+    "addonPricePending": "मूल्य बाँकी",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "कर वर्ग तोक्नुहोस्",
     "barcodeLabel": "बारकोड: {barcode}",

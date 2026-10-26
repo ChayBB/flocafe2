@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Название дополнения",
     "addonPricePlaceholder": "Цена",
     "addonRequired": "Обязательно",
+    "addonPricePending": "Цена позже",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Назначить налоговую категорию",
     "barcodeLabel": "Штрих-код: {barcode}",

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "اسم الملحق",
     "addonPricePlaceholder": "السعر",
     "addonRequired": "مطلوب",
+    "addonPricePending": "بانتظار السعر",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "تحديد الفئة الضريبية",
     "barcodeLabel": "الرمز الشريطي: {barcode}",

@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Eklenti adı",
     "addonPricePlaceholder": "Fiyat",
     "addonRequired": "Zorunlu",
+    "addonPricePending": "Fiyat bekleniyor",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Vergi kategorisi ata",
     "barcodeLabel": "Barkod: {barcode}",

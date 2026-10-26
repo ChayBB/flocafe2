@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "加购名称",
     "addonPricePlaceholder": "价格",
     "addonRequired": "必选",
+    "addonPricePending": "待定价",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "指定税务分类",
     "barcodeLabel": "条码：{barcode}",

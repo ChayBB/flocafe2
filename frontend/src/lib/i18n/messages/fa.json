@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "نام افزودنی",
     "addonPricePlaceholder": "بها",
     "addonRequired": "بایسته",
+    "addonPricePending": "در انتظار قیمت",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "تخصیص دسته‌بندی مالیاتی",
     "barcodeLabel": "بارکد: {barcode}",

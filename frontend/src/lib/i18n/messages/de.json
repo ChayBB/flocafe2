@@ -1315,6 +1315,7 @@
     "addonNamePlaceholder": "Zusatzname",
     "addonPricePlaceholder": "Preis",
     "addonRequired": "Erforderlich",
+    "addonPricePending": "Preis folgt",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Steuerkategorie zuweisen",
     "barcodeLabel": "Barcode: {barcode}",

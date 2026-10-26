@@ -8,6 +8,10 @@ export const WEIGHT_PRICED_GROUP_NAME = 'ราคาตามน้ำหนั
 export const WEIGHT_PENDING_NOTE = 'รอระบุน้ำหนัก';
 export const WEIGHT_PENDING_ERROR = 'Enter the weight of every weight-priced item first';
 
+/**
+ * A product is priced after the order when one of its add-on groups is the weight-priced group
+ * or is flagged "awaiting price"; both use the same weighing flow.
+ */
 export function isWeightPricedProduct(
   db: Db,
   product: { id: string; category_id?: string | null },
@@ -15,7 +19,7 @@ export function isWeightPricedProduct(
   const row = db
     .prepare(
       `SELECT 1 FROM addon_groups g
-       WHERE TRIM(g.name) = ?
+       WHERE (TRIM(g.name) = ? OR g.price_pending = 1)
          AND (g.id IN (SELECT addon_group_id FROM addon_group_product WHERE product_id = ?)
            OR g.id IN (SELECT addon_group_id FROM category_addon_groups WHERE category_id = ?))
        LIMIT 1`,
