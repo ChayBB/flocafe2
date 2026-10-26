@@ -46,6 +46,10 @@ import { columnsForConfiguredPrinter } from '@print/width';
 import { ensureReceiptSettingsLoaded } from '@/hooks/useReceiptSettingsSync';
 import { getCountryByCode, getCurrencySymbol, resolveTenantCurrency } from '@/lib/countries';
 
+/** Matches the backend error for a Windows PDF/XPS/OneNote/fax printer, which cannot take raw receipts. */
+const DOCUMENT_PRINTER_MARKER = 'Document printer';
+const DOCUMENT_PRINTER_TOAST = 'The selected printer saves documents — printing via system print';
+
 type CoreBillTemplate = 'classic' | 'compact';
 
 function nativeFallbackCapabilities(
@@ -325,6 +329,10 @@ export const usePrinterStore = create<PrinterState>()(
                 e.response?.data?.detail || e.response?.data?.error || e.message || 'Print failed';
               if (errorMsg.includes('No default printer configured')) {
                 toast('No thermal printer configured — printing via system print', { icon: 'ℹ️' });
+                return await executeBrowserPrint();
+              }
+              if (errorMsg.includes(DOCUMENT_PRINTER_MARKER)) {
+                toast(DOCUMENT_PRINTER_TOAST, { icon: 'ℹ️' });
                 return await executeBrowserPrint();
               }
               throw new Error(errorMsg);
@@ -860,6 +868,8 @@ export const usePrinterStore = create<PrinterState>()(
                 'Delivery slip print failed';
               if (errorMsg.includes('No default printer configured')) {
                 toast('No thermal printer configured — printing via system print', { icon: 'ℹ️' });
+              } else if (errorMsg.includes(DOCUMENT_PRINTER_MARKER)) {
+                toast(DOCUMENT_PRINTER_TOAST, { icon: 'ℹ️' });
               } else {
                 throw new Error(errorMsg);
               }

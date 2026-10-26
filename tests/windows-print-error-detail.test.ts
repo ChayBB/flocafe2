@@ -19,7 +19,11 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { printViaUSB, describeWindowsPrintProcessFailure } from '../main/printers/thermal';
+import {
+  printViaUSB,
+  describeWindowsPrintProcessFailure,
+  WINDOWS_DOCUMENT_PRINTER_MARKER,
+} from '../main/printers/thermal';
 
 const FAKE_MODE_ENV = 'FLO_FAKE_PS_MODE';
 const MAX_DETAIL_LENGTH = 400;
@@ -48,6 +52,10 @@ case "$FLO_FAKE_PS_MODE" in
       printf 'Exception calling SendRaw with spool detail %s\\n' "$i" >&2
       i=$((i + 1))
     done
+    exit 1
+    ;;
+  document_printer)
+    printf 'Document printer: "Fake Printer" saves documents and cannot print receipts directly\\n' >&2
     exit 1
     ;;
   signal_death)
@@ -193,6 +201,14 @@ async function main(): Promise<void> {
     const signalDeath = await runWindowsDispatch('signal_death');
     assert.equal(signalDeath.detail, 'Windows print helper was terminated (SIGKILL)');
     assertNoSubprocessEvidence(signalDeath.detail || '', 'terminated helper');
+
+    // 9. A PDF/XPS-style document printer is refused with the marker the app falls back on.
+    const documentPrinter = await runWindowsDispatch('document_printer');
+    assert.equal(documentPrinter.ok, false, 'a document printer never accepts a raw receipt');
+    assert.ok(
+      (documentPrinter.detail || '').startsWith(WINDOWS_DOCUMENT_PRINTER_MARKER),
+      'the refusal starts with the document-printer marker',
+    );
 
     console.log('Issue #789 Windows raw-print failure detail tests passed');
   } finally {

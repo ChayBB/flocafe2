@@ -4135,6 +4135,9 @@ public static class FloRawPrinter {
 
 // Executed as -EncodedCommand to bypass ExecutionPolicy restrictions on script files.
 // Arguments passed via environment variables to avoid script parsing issues.
+/** Prefix of the error a Windows document printer (PDF, XPS, OneNote, fax) returns for a raw job. */
+export const WINDOWS_DOCUMENT_PRINTER_MARKER = 'Document printer';
+
 const WINSPOOL_HELPER_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 try {
@@ -4153,6 +4156,13 @@ try {
       Write-Output ('FLO_PRINTER_INFO=' + ($printerInfo | ConvertTo-Json -Compress))
     }
   } catch { }
+
+  # File-producing drivers (PDF, XPS, OneNote, fax) cannot render raw ESC/POS: the spooler
+  # writes an empty or corrupt file. Refuse so the app falls back to the system print dialog.
+  $documentDriver = 'Print To PDF|XPS Document Writer|OneNote|Fax'
+  if (($printerInfo -and $printerInfo.DriverName -match $documentDriver) -or $name -match $documentDriver) {
+    throw ('${WINDOWS_DOCUMENT_PRINTER_MARKER}: "' + $name + '" saves documents and cannot print receipts directly')
+  }
 
   Add-Type -TypeDefinition @'
 ${WINSPOOL_HELPER_SOURCE}
