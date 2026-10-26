@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL as BASE } from './helpers/urls';
 import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
 
-test('an add-on group can be marked "Awaiting price" from the editor, under Required', async ({
+test('an add-on group can be marked "Awaiting price by weight" from the editor, under Required', async ({
   page,
 }) => {
   const headers = { Authorization: `Bearer ${getE2eToken()}` };
@@ -34,7 +34,7 @@ test('an add-on group can be marked "Awaiting price" from the editor, under Requ
   await row.getByRole('button', { name: 'Edit' }).click();
 
   const required = page.getByRole('checkbox', { name: 'Required', exact: true });
-  const pricePending = page.getByRole('checkbox', { name: 'Awaiting price', exact: true });
+  const pricePending = page.getByRole('checkbox', { name: 'Awaiting price by weight', exact: true });
   await expect(pricePending).not.toBeChecked();
   // The new option sits directly under "Required".
   const requiredBox = await required.boundingBox();
@@ -49,14 +49,14 @@ test('an add-on group can be marked "Awaiting price" from the editor, under Requ
   expect((await stored.json()).addon_group.price_pending).toBe(true);
 
   await row.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.getByRole('checkbox', { name: 'Awaiting price', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Awaiting price by weight', exact: true })).toBeChecked();
 
-  // The kitchen-price option sits directly under "Awaiting price".
+  // The kitchen-price option sits directly under "Awaiting price by weight".
   const kitchenPrice = page.getByRole('checkbox', {
     name: 'Special menu, kitchen sets the price',
     exact: true,
   });
-  const awaitingBox = await page.getByRole('checkbox', { name: 'Awaiting price', exact: true }).boundingBox();
+  const awaitingBox = await page.getByRole('checkbox', { name: 'Awaiting price by weight', exact: true }).boundingBox();
   expect((await kitchenPrice.boundingBox())!.y).toBeGreaterThan(awaitingBox!.y);
   await kitchenPrice.check();
   await page.getByRole('button', { name: 'Update', exact: true }).click();

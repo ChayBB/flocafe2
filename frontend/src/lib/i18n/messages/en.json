@@ -1320,7 +1320,7 @@
     "addonNamePlaceholder": "Addon name",
     "addonPricePlaceholder": "Price",
     "addonRequired": "Required",
-    "addonPricePending": "Awaiting price",
+    "addonPricePending": "Awaiting price by weight",
     "addonKitchenPrice": "Special menu, kitchen sets the price",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Assign tax category",
