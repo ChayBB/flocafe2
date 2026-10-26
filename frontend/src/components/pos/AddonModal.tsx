@@ -84,9 +84,12 @@ export default function AddonModal({
   const tenantFmt = useFormatCurrency();
   const fmt = country ? (n: number) => formatCurrencyForTenant(n, country, currency) : tenantFmt;
   const [selected, setSelected] = useState<Record<string | number, Addon[]>>(() => groupInitialAddons(initialAddons));
-  const awaitingWeight = (product.addon_groups || []).some(
-    (g) => g.name?.trim() === WEIGHT_PRICED_GROUP_NAME || Boolean(g.price_pending),
-  );
+  const awaitsKitchenPrice = (product.addon_groups || []).some((g) => Boolean(g.kitchen_price));
+  const awaitingWeight =
+    awaitsKitchenPrice ||
+    (product.addon_groups || []).some(
+      (g) => g.name?.trim() === WEIGHT_PRICED_GROUP_NAME || Boolean(g.price_pending),
+    );
   const startQuantity = awaitingWeight ? 1 : initialQuantity;
   const [quantity, setQuantity] = useState(startQuantity);
   const [qtyDraft, setQtyDraft] = useState(() => String(startQuantity));
@@ -436,7 +439,7 @@ export default function AddonModal({
           <div className="flex items-center justify-center gap-4 mb-4">
             {awaitingWeight ? (
               <span className="min-h-11 flex items-center rounded-lg border border-dashed border-green-500 bg-green-50 px-4 text-sm font-semibold text-green-700 dark:border-green-600 dark:bg-green-950/40 dark:text-green-300">
-                {t('awaitingWeight')}
+                {awaitsKitchenPrice ? t('awaitingKitchenPrice') : t('awaitingWeight')}
               </span>
             ) : (
               <>

@@ -57,6 +57,8 @@ import {
   whatsappReceiptStatusBadge,
   itemAwaitingWeight,
   orderAwaitingWeight,
+  orderPendingLabelKey,
+  pendingPriceLabelKey,
   ORDER_TYPE_KEYS,
 } from './OrderCard';
 
@@ -288,7 +290,7 @@ function OrderDetailContent({
             </span>
 {awaitingWeight && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
-                {tPos('awaitingWeight')}
+                {tPos(orderPendingLabelKey(order))}
               </span>
             )}
             {statusBadgeInfo && (
@@ -611,11 +613,11 @@ function OrderDetailContent({
                           onClick={() => onWeighItem(order, item)}
                           className="font-semibold text-orange-600 dark:text-orange-400 underline underline-offset-2 hover:text-orange-700 dark:hover:text-orange-300"
                         >
-                          {tPos('awaitingWeight')}
+                          {tPos(pendingPriceLabelKey(item))}
                         </button>
                       ) : (
                         <span className="font-semibold text-orange-600 dark:text-orange-400">
-                          {tPos('awaitingWeight')}
+                          {tPos(pendingPriceLabelKey(item))}
                         </span>
                       )
                     ) : (

@@ -150,6 +150,23 @@ export function orderAwaitingWeight(order: Order): boolean {
   return order.status !== 'cancelled' && (order.items || []).some(itemAwaitingWeight);
 }
 
+export function itemAwaitsKitchenPrice(item: OrderItem): boolean {
+  return item.pending_price_mode === 'kitchen_price';
+}
+
+/** Label for a pending line: waiting for a weight or for the kitchen's set price. */
+export function pendingPriceLabelKey(item: OrderItem): 'awaitingWeight' | 'awaitingKitchenPrice' {
+  return itemAwaitsKitchenPrice(item) ? 'awaitingKitchenPrice' : 'awaitingWeight';
+}
+
+/** Order badge: the kitchen-price label only when every pending line waits for the kitchen. */
+export function orderPendingLabelKey(order: Order): 'awaitingWeight' | 'awaitingKitchenPrice' {
+  const pending = (order.items || []).filter(itemAwaitingWeight);
+  return pending.length > 0 && pending.every(itemAwaitsKitchenPrice)
+    ? 'awaitingKitchenPrice'
+    : 'awaitingWeight';
+}
+
 export const ORDER_TYPE_KEYS = {
   dine_in: 'dineIn',
   takeaway: 'takeaway',
@@ -393,7 +410,7 @@ export function OrderCard({
             </span>
 {awaitingWeight && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
-                {tPos('awaitingWeight')}
+                {tPos(orderPendingLabelKey(order))}
               </span>
             )}
             {statusBadgeInfo && (
@@ -739,11 +756,11 @@ export function OrderCard({
                           onClick={() => onWeighItem(order, item)}
                           className="font-semibold text-orange-600 dark:text-orange-400 underline underline-offset-2 hover:text-orange-700 dark:hover:text-orange-300"
                         >
-                          {tPos('awaitingWeight')}
+                          {tPos(pendingPriceLabelKey(item))}
                         </button>
                       ) : (
                         <span className="font-semibold text-orange-600 dark:text-orange-400">
-                          {tPos('awaitingWeight')}
+                          {tPos(pendingPriceLabelKey(item))}
                         </span>
                       )
                     ) : (

@@ -7644,6 +7644,18 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 122,
+    name: 'add_kitchen_set_price',
+    up: () => {
+      if (!getColumns(db, 'addon_groups').includes('kitchen_price')) {
+        db.exec(`ALTER TABLE addon_groups ADD COLUMN kitchen_price INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!getColumns(db, 'order_items').includes('pending_price_mode')) {
+        db.exec(`ALTER TABLE order_items ADD COLUMN pending_price_mode TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

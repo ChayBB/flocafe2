@@ -15,7 +15,7 @@ import { tenantCan } from '@/lib/permissions';
 import MoveTableModal from '@/components/tables/MoveTableModal';
 import EditOrderItemModal from '@/components/orders/EditOrderItemModal';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
-import { itemAwaitingWeight, orderAwaitingWeight } from '@/components/orders/OrderCard';
+import { itemAwaitingWeight, orderAwaitingWeight, pendingPriceLabelKey } from '@/components/orders/OrderCard';
 
 interface Props {
   table: Table;
@@ -329,7 +329,7 @@ export default function TableCheckoutModal({
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground ms-2 font-medium">
-                      {itemAwaitingWeight(item) ? t('awaitingWeight') : formatItemTotal(item.total, item.subtotal)}
+                      {itemAwaitingWeight(item) ? t(pendingPriceLabelKey(item)) : formatItemTotal(item.total, item.subtotal)}
                     </span>
                     {canEditItems && order.bill?.payment_status !== 'paid' && (
                       <button

@@ -1,7 +1,8 @@
 import {
-  WEIGHT_PENDING_NOTE,
-  isWeightPricedProduct,
-  withWeightPendingNote,
+  type PendingPriceMode,
+  pendingPriceModeForProduct,
+  stripPendingPriceNotes,
+  withPendingPriceNote,
 } from '../lib/weight-pending';
 import { createHash } from 'crypto';
 import { Router, Request, Response } from 'express';
@@ -828,6 +829,7 @@ interface OrderItemInput {
   inventory_target_variant_id?: string | null;
   weight_pending?: boolean;
   weight?: number | null;
+  pending_price_mode?: PendingPriceMode | null;
   addons?:
     | {
         id?: string;
@@ -859,8 +861,8 @@ function insertOrderItems(
   const insertItem = db.prepare(`
   INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, inventory_product_id, inventory_variant_id,
     subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-    modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, weight, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, weight, pending_price_mode, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
   const insertedItemIds: (number | bigint)[] = [];
@@ -950,10 +952,13 @@ function insertOrderItems(
       ? JSON.stringify(taxResult.tax_snapshot)
       : null;
 
-    // Quantity edits carry the line's weighing state; new lines start unweighed.
-    const weightPending = context.preserveUnitPrice
-      ? Boolean(item.weight_pending)
-      : isWeightPricedProduct(db, product);
+    // Quantity edits carry the line's pending-price state; new lines start without a price.
+    const pendingMode: PendingPriceMode | null = context.preserveUnitPrice
+      ? item.weight_pending
+        ? (item.pending_price_mode ?? 'weight')
+        : null
+      : pendingPriceModeForProduct(db, product);
+    const weightPending = pendingMode !== null;
     const weight = context.preserveUnitPrice ? (item.weight ?? null) : null;
 
     const itemCreatedAt = now();
@@ -985,13 +990,14 @@ function insertOrderItems(
           ? variantSelectionSnapshot(variant)
           : JSON.stringify(item.variant_selection || null),
       JSON.stringify(item.modifier_selection || null),
-      weightPending && weight === null
-        ? withWeightPendingNote(item.special_instructions)
+      pendingMode && weight === null
+        ? withPendingPriceNote(item.special_instructions, pendingMode)
         : item.special_instructions || null,
       recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
       initialStatus,
       weightPending ? 1 : 0,
       weight,
+      pendingMode,
       itemCreatedAt,
       itemCreatedAt,
     );
@@ -1055,6 +1061,7 @@ interface OrderItemRow {
   recipe_snapshot: string | null;
   weight_pending?: number | null;
   weight?: number | null;
+  pending_price_mode?: string | null;
   updated_at: string;
 }
 
@@ -1726,8 +1733,8 @@ router.post(
         const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, inventory_product_id, inventory_variant_id,
           subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+          modifier_selection, special_instructions, recipe_snapshot, status, weight_pending, pending_price_mode, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
       `);
 
         const validatedItems: Array<{
@@ -1870,7 +1877,7 @@ router.post(
           subtotal += itemSubtotal;
 
           const itemCreatedAt = now();
-          const weightPricedLine = isWeightPricedProduct(db, product);
+          const pendingLineMode = pendingPriceModeForProduct(db, product);
           const recipeSnapshot = buildRecipeSnapshot(
             db,
             product.id,
@@ -1899,11 +1906,12 @@ router.post(
               ? variantSelectionSnapshot(variant)
               : JSON.stringify(item.variant_selection || null),
             JSON.stringify(item.modifier_selection || null),
-            weightPricedLine
-              ? withWeightPendingNote(item.special_instructions)
+            pendingLineMode
+              ? withPendingPriceNote(item.special_instructions, pendingLineMode)
               : item.special_instructions || null,
             recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
-            weightPricedLine ? 1 : 0,
+            pendingLineMode ? 1 : 0,
+            pendingLineMode,
             itemCreatedAt,
             itemCreatedAt,
           );
@@ -5174,6 +5182,7 @@ router.patch(
               special_instructions: oldItem.special_instructions,
               weight_pending: Boolean(oldItem.weight_pending),
               weight: oldItem.weight ?? null,
+              pending_price_mode: (oldItem.pending_price_mode as PendingPriceMode | null) ?? null,
               addons: oldAddons.map((addon) => ({
                 id: addon.addon_id ?? undefined,
                 name: addon.addon_name,
@@ -5202,9 +5211,7 @@ router.patch(
           try {
             validateItemNotes(
               db,
-              newItem.special_instructions
-                ?.replace(`${WEIGHT_PENDING_NOTE} | `, '')
-                .replace(WEIGHT_PENDING_NOTE, ''),
+              stripPendingPriceNotes(newItem.special_instructions),
             );
             if (preserveStoredSelections) {
               // A reduction needs no extra units, so the stored selections stay
@@ -5361,28 +5368,41 @@ router.patch(
   },
 );
 
-// Weigh a weight-priced line: its unit price becomes the base price per kg times the weight.
-router.patch(
-  '/:orderId/items/:itemId/weight',
-  orderWriteRateLimit,
-  requirePermission('orders.create'),
-  (req: Request, res: Response) => {
+/**
+ * Completes a line that was priced after the order. A weighed line's unit price is the base price
+ * per kg times the weight; a kitchen-priced line takes the set price the kitchen gives as entered.
+ */
+function completePendingPriceLine(mode: PendingPriceMode) {
+  return (req: Request, res: Response) => {
     try {
       const orderId = String(req.params.orderId);
       const itemId = String(req.params.itemId);
       const actorId = String((req as Request & { user?: { userId?: string } }).user?.userId || '');
       if (!actorId) return res.status(403).json({ error: 'Authentication required' });
 
-      const weight = Number(req.body?.weight);
+      const weight = mode === 'weight' ? Number(req.body?.weight) : null;
+      const kitchenPrice = mode === 'kitchen_price' ? Number(req.body?.price) : null;
       if (
-        !Number.isFinite(weight) ||
-        weight < 0.3 ||
-        weight > 100 ||
-        Number(weight.toFixed(3)) !== weight
+        weight !== null &&
+        (!Number.isFinite(weight) ||
+          weight < 0.3 ||
+          weight > 100 ||
+          Number(weight.toFixed(3)) !== weight)
       ) {
         return res
           .status(400)
           .json({ error: 'weight must be between 0.3 and 100 with at most 3 decimals' });
+      }
+      if (
+        kitchenPrice !== null &&
+        (!Number.isFinite(kitchenPrice) ||
+          kitchenPrice <= 0 ||
+          kitchenPrice > 1_000_000 ||
+          Number(kitchenPrice.toFixed(2)) !== kitchenPrice)
+      ) {
+        return res
+          .status(400)
+          .json({ error: 'price must be above 0 and at most 1,000,000 with at most 2 decimals' });
       }
 
       const db = getDatabase();
@@ -5397,10 +5417,16 @@ router.patch(
         if (!item) {
           throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
         }
-        if (!item.weight_pending) {
-          throw Object.assign(new Error('This item is not waiting for a weight'), {
-            statusCode: 409,
-          });
+        const itemMode = item.pending_price_mode === 'kitchen_price' ? 'kitchen_price' : 'weight';
+        if (!item.weight_pending || itemMode !== mode) {
+          throw Object.assign(
+            new Error(
+              mode === 'weight'
+                ? 'This item is not waiting for a weight'
+                : 'This item is not waiting for a kitchen price',
+            ),
+            { statusCode: 409 },
+          );
         }
         if (isTerminalItemStatus(item.status)) {
           throw Object.assign(new Error('This item can no longer be edited'), { statusCode: 400 });
@@ -5454,7 +5480,10 @@ router.patch(
           : null;
 
         const quantity = Number(item.quantity);
-        const unitPrice = Number((Number(item.unit_price) * weight).toFixed(decimals));
+        const unitPrice =
+          weight !== null
+            ? Number((Number(item.unit_price) * weight).toFixed(decimals))
+            : Number(Number(kitchenPrice).toFixed(decimals));
         const addons = db
           .prepare('SELECT price, quantity FROM order_item_addons WHERE order_item_id = ?')
           .all(item.id) as { price: number; quantity: number }[];
@@ -5515,8 +5544,11 @@ router.patch(
           orderId,
           orderItemId: itemId,
           actorUserId: actorId,
-          action: 'item_weighed',
-          details: { weight, base_unit_price: Number(item.unit_price), unit_price: unitPrice },
+          action: mode === 'weight' ? 'item_weighed' : 'item_kitchen_priced',
+          details:
+            mode === 'weight'
+              ? { weight, base_unit_price: Number(item.unit_price), unit_price: unitPrice }
+              : { kitchen_price: unitPrice, previous_unit_price: Number(item.unit_price) },
         });
 
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
@@ -5543,7 +5575,21 @@ router.patch(
         .status(error.statusCode || 500)
         .json({ error: error.statusCode ? error.message : 'Internal server error' });
     }
-  },
+  };
+}
+
+router.patch(
+  '/:orderId/items/:itemId/weight',
+  orderWriteRateLimit,
+  requirePermission('orders.create'),
+  completePendingPriceLine('weight'),
+);
+
+router.patch(
+  '/:orderId/items/:itemId/price',
+  orderWriteRateLimit,
+  requirePermission('orders.create'),
+  completePendingPriceLine('kitchen_price'),
 );
 
 // Restore cancelled order item (frontend calls this)

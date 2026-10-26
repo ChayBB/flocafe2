@@ -179,6 +179,7 @@ export default function ProductsPage() {
     description: '',
     is_required: false,
     price_pending: false,
+    kitchen_price: false,
     allow_multiple_quantities: false,
     min_selection: 0,
     max_selection: 10,
@@ -773,6 +774,7 @@ export default function ProductsPage() {
       description: '',
       is_required: false,
       price_pending: false,
+      kitchen_price: false,
       allow_multiple_quantities: false,
       min_selection: 0,
       max_selection: 10,
@@ -789,6 +791,7 @@ export default function ProductsPage() {
       description: group.description || '',
       is_required: Boolean(group.is_required),
       price_pending: Boolean(group.price_pending),
+      kitchen_price: Boolean(group.kitchen_price),
       allow_multiple_quantities: Boolean(group.allow_multiple_quantities),
       min_selection: group.min_selection,
       max_selection: group.max_selection,
@@ -822,6 +825,7 @@ export default function ProductsPage() {
         description: addonForm.description || null,
         is_required: addonForm.is_required,
         price_pending: addonForm.price_pending,
+        kitchen_price: addonForm.kitchen_price,
         allow_multiple_quantities: addonForm.allow_multiple_quantities,
         min_selection: addonForm.min_selection,
         max_selection: addonForm.max_selection,
@@ -2396,6 +2400,18 @@ export default function ProductsPage() {
                         className="rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
                       />
                       <span className="text-sm text-foreground">{t('addonPricePending')}</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={addonForm.kitchen_price}
+                        onChange={(e) =>
+                          setAddonForm({ ...addonForm, kitchen_price: e.target.checked })
+                        }
+                        data-testid="addon-group-kitchen-price"
+                        className="rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
+                      />
+                      <span className="text-sm text-foreground">{t('addonKitchenPrice')}</span>
                     </label>
                     <label className="flex items-center gap-2">
                       <input

@@ -415,6 +415,7 @@ function serializeAddonGroup(group: any): any {
     ...group,
     is_required: toBoolean(group.is_required),
     price_pending: toBoolean(group.price_pending),
+    kitchen_price: toBoolean(group.kitchen_price),
     allow_multiple_quantities: toBoolean(group.allow_multiple_quantities),
     is_active: toBoolean(group.is_active),
     addons: Array.isArray(group.addons) ? group.addons.map(serializeAddon) : group.addons,

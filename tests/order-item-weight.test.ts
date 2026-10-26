@@ -32,7 +32,7 @@ const {
 } = require('./helpers/test-setup');
 const { getJWTSecret } = require('../main/routes/auth');
 const { orderRoutes } = require('../main/routes/orders');
-const { WEIGHT_PENDING_NOTE } = require('../main/lib/weight-pending');
+const { WEIGHT_PENDING_NOTE, KITCHEN_PRICE_NOTE } = require('../main/lib/weight-pending');
 const { billRoutes } = require('../main/routes/bills');
 
 
@@ -71,6 +71,15 @@ async function main() {
   ).run(now(), now());
   db.prepare(
     `INSERT INTO addon_group_product (addon_group_id, product_id) VALUES ('ag-market', 'prod-fish')`,
+  ).run();
+  db.prepare(`INSERT INTO products (id, category_id, name, price, tax_type, is_active, sort_order, created_at, updated_at)
+    VALUES ('prod-special', 'cat-w', 'Chef special', 0, 'none', 1, 4, ?, ?)`).run(now(), now());
+  db.prepare(
+    `INSERT INTO addon_groups (id, name, is_required, kitchen_price, min_selection, max_selection, allow_multiple_quantities, is_active, created_at, updated_at)
+     VALUES ('ag-chef', 'Chef choice', 0, 1, 0, 10, 0, 1, ?, ?)`,
+  ).run(now(), now());
+  db.prepare(
+    `INSERT INTO addon_group_product (addon_group_id, product_id) VALUES ('ag-chef', 'prod-special')`,
   ).run();
 
   const cashierAuth = seedUser(db, 'cashier-weight', 'cashier');
@@ -199,6 +208,62 @@ async function main() {
     const weighedFish = await weigh(market.data.order.id, fishLine.id, 0.5);
     assertEqualOrThrow(weighedFish.status, 200, 'an awaiting-price line is completed through the same flow');
     assertEqualOrThrow(itemsOf(market.data.order.id)[0].unit_price, 200, 'its price follows the same calculation');
+
+    // A "kitchen sets the price" group waits for a set price that is stored exactly as entered.
+    const special = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      headers: cashierAuth,
+      body: {
+        type: 'takeaway',
+        items: [{ product_id: 'prod-special', quantity: 2, special_instructions: 'no chilli' }],
+      },
+    });
+    assertEqualOrThrow(special.status, 201, 'an order with a kitchen-priced item is created');
+    const specialOrderId = special.data.order.id;
+    const specialLine = itemsOf(specialOrderId)[0];
+    assertEqualOrThrow(specialLine.weight_pending, 1, 'a kitchen-priced line waits like a weight-priced one');
+    assertEqualOrThrow(specialLine.pending_price_mode, 'kitchen_price', 'the line records how it gets its price');
+    assertEqualOrThrow(
+      specialLine.special_instructions,
+      `${KITCHEN_PRICE_NOTE} | no chilli`,
+      'the kitchen-price note is written into the special instructions automatically',
+    );
+    const specialBill = db.prepare('SELECT id FROM bills WHERE order_id = ?').get(specialOrderId) as any;
+    if (specialBill) {
+      const blocked = await api(baseUrl, `/api/bills/${specialBill.id}/markPrinted`, {
+        method: 'POST',
+        headers: cashierAuth,
+      });
+      assertEqualOrThrow(blocked.status, 409, 'billing is blocked until the kitchen price is in');
+    }
+    const wrongRoute = await weigh(specialOrderId, specialLine.id, 0.5);
+    assertEqualOrThrow(wrongRoute.status, 409, 'a kitchen-priced line cannot be weighed');
+    const setPrice = (price: unknown) =>
+      api(baseUrl, `/api/orders/${specialOrderId}/items/${specialLine.id}/price`, {
+        method: 'PATCH',
+        headers: cashierAuth,
+        body: { price },
+      });
+    for (const bad of [0, -5, 'abc', 12.345, 2_000_000]) {
+      const response = await setPrice(bad);
+      assertEqualOrThrow(response.status, 400, `kitchen price ${String(bad)} is rejected`);
+    }
+    const priced = await setPrice(359);
+    assertEqualOrThrow(priced.status, 200, `the kitchen price is saved (${JSON.stringify(priced.data)})`);
+    const pricedLine = itemsOf(specialOrderId)[0];
+    assertEqualOrThrow(pricedLine.weight_pending, 0, 'the priced line is no longer pending');
+    assertEqualOrThrow(pricedLine.unit_price, 359, 'the set price is stored as entered, with no weight calculation');
+    assertEqualOrThrow(pricedLine.weight, null, 'no weight is recorded');
+    assertEqualOrThrow(pricedLine.total, 718, 'the line total is the set price times the sets ordered');
+    assertEqualOrThrow(orderRow(specialOrderId).total, 718, 'the order total is recomputed');
+    const pricedAgain = await setPrice(400);
+    assertEqualOrThrow(pricedAgain.status, 409, 'a priced line cannot be priced twice');
+    const plainPrice = await api(baseUrl, `/api/orders/${orderId}/items/${plain.id}/price`, {
+      method: 'PATCH',
+      headers: cashierAuth,
+      body: { price: 10 },
+    });
+    assertEqualOrThrow(plainPrice.status, 409, 'an ordinary line cannot take a kitchen price');
 
     console.log('\nAll weight-priced order line checks passed');
   } finally {

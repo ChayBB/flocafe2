@@ -204,6 +204,7 @@ function serializeAddonGroup(group: any): any {
     ...group,
     is_required: toBoolean(group.is_required),
     price_pending: toBoolean(group.price_pending),
+    kitchen_price: toBoolean(group.kitchen_price),
     allow_multiple_quantities: toBoolean(group.allow_multiple_quantities),
     is_active: toBoolean(group.is_active),
     addons: Array.isArray(group.addons) ? group.addons.map(serializeAddon) : group.addons,
@@ -360,6 +361,7 @@ router.post(
         description,
         is_required,
         price_pending,
+        kitchen_price,
         min_selection,
         max_selection,
         allow_multiple_quantities,
@@ -426,14 +428,15 @@ router.post(
       const groupId = randomUUID();
       const { group, groupAddons } = withTxn(() => {
         db.prepare(`
-        INSERT INTO addon_groups (id, name, description, is_required, price_pending, min_selection, max_selection, allow_multiple_quantities, sort_order, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO addon_groups (id, name, description, is_required, price_pending, kitchen_price, min_selection, max_selection, allow_multiple_quantities, sort_order, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
           groupId,
           groupName,
           description || null,
           normalizeBoolean(is_required, false) ? 1 : 0,
           normalizeBoolean(price_pending, false) ? 1 : 0,
+          normalizeBoolean(kitchen_price, false) ? 1 : 0,
           min,
           max,
           normalizeBoolean(allow_multiple_quantities, false) ? 1 : 0,
@@ -510,6 +513,7 @@ router.put(
         description,
         is_required,
         price_pending,
+        kitchen_price,
         min_selection,
         max_selection,
         allow_multiple_quantities,
@@ -618,6 +622,8 @@ router.put(
         is_required === undefined ? null : normalizeBoolean(is_required, false) ? 1 : 0;
       const reqPricePending =
         price_pending === undefined ? null : normalizeBoolean(price_pending, false) ? 1 : 0;
+      const reqKitchenPrice =
+        kitchen_price === undefined ? null : normalizeBoolean(kitchen_price, false) ? 1 : 0;
       const reqMin = min_selection === undefined ? null : effectiveMin;
       const reqMax = max_selection === undefined ? null : effectiveMax;
       const reqAllowMult =
@@ -636,6 +642,7 @@ router.put(
         db.prepare(`
         UPDATE addon_groups SET name = COALESCE(?, name), description = CASE WHEN ? = 1 THEN ? ELSE description END,
           is_required = COALESCE(?, is_required), price_pending = COALESCE(?, price_pending),
+          kitchen_price = COALESCE(?, kitchen_price),
           min_selection = COALESCE(?, min_selection),
           max_selection = COALESCE(?, max_selection), allow_multiple_quantities = COALESCE(?, allow_multiple_quantities),
           sort_order = COALESCE(?, sort_order), is_active = COALESCE(?, is_active), updated_at = ?
@@ -646,6 +653,7 @@ router.put(
           reqDesc,
           reqReq,
           reqPricePending,
+          reqKitchenPrice,
           reqMin,
           reqMax,
           reqAllowMult,

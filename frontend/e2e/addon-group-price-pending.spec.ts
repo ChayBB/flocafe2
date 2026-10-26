@@ -50,4 +50,17 @@ test('an add-on group can be marked "Awaiting price" from the editor, under Requ
 
   await row.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByRole('checkbox', { name: 'Awaiting price', exact: true })).toBeChecked();
+
+  // The kitchen-price option sits directly under "Awaiting price".
+  const kitchenPrice = page.getByRole('checkbox', {
+    name: 'Special menu, kitchen sets the price',
+    exact: true,
+  });
+  const awaitingBox = await page.getByRole('checkbox', { name: 'Awaiting price', exact: true }).boundingBox();
+  expect((await kitchenPrice.boundingBox())!.y).toBeGreaterThan(awaitingBox!.y);
+  await kitchenPrice.check();
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.getByText('Addon group updated')).toBeVisible();
+  const storedKitchen = await page.request.get(`${BASE}/api/addon-groups/${group.id}`, { headers });
+  expect((await storedKitchen.json()).addon_group.kitchen_price).toBe(true);
 });

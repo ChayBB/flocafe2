@@ -7,6 +7,10 @@ type Db = ReturnType<typeof getDatabase>;
 export const WEIGHT_PRICED_GROUP_NAME = 'ราคาตามน้ำหนัก';
 export const WEIGHT_PENDING_NOTE = 'รอระบุน้ำหนัก';
 export const WEIGHT_PENDING_ERROR = 'Enter the weight of every weight-priced item first';
+export const KITCHEN_PRICE_NOTE = 'เมนูพิเศษครัวระบุราคา';
+
+/** How a line that is priced after the order gets its price. */
+export type PendingPriceMode = 'weight' | 'kitchen_price';
 
 /**
  * A product is priced after the order when one of its add-on groups is the weight-priced group
@@ -26,6 +30,44 @@ export function isWeightPricedProduct(
     )
     .get(WEIGHT_PRICED_GROUP_NAME, product.id, product.category_id ?? null);
   return Boolean(row);
+}
+
+/**
+ * A product linked to a "kitchen sets the price" group waits for the kitchen's set price;
+ * otherwise a weight-priced or "awaiting price" group makes it wait for a weight.
+ */
+export function pendingPriceModeForProduct(
+  db: Db,
+  product: { id: string; category_id?: string | null },
+): PendingPriceMode | null {
+  const kitchen = db
+    .prepare(
+      `SELECT 1 FROM addon_groups g
+       WHERE g.kitchen_price = 1
+         AND (g.id IN (SELECT addon_group_id FROM addon_group_product WHERE product_id = ?)
+           OR g.id IN (SELECT addon_group_id FROM category_addon_groups WHERE category_id = ?))
+       LIMIT 1`,
+    )
+    .get(product.id, product.category_id ?? null);
+  if (kitchen) return 'kitchen_price';
+  return isWeightPricedProduct(db, product) ? 'weight' : null;
+}
+
+/** The note a pending line carries for the kitchen, by how its price is set. */
+export function withPendingPriceNote(note: string | null | undefined, mode: PendingPriceMode): string {
+  if (mode === 'weight') return withWeightPendingNote(note);
+  const current = (note ?? '').trim();
+  if (current.includes(KITCHEN_PRICE_NOTE)) return current;
+  return current ? `${KITCHEN_PRICE_NOTE} | ${current}` : KITCHEN_PRICE_NOTE;
+}
+
+/** Removes the automatic pending-price markers before a note is validated as user text. */
+export function stripPendingPriceNotes(note: string | null | undefined): string | undefined {
+  return note
+    ?.replace(`${WEIGHT_PENDING_NOTE} | `, '')
+    .replace(WEIGHT_PENDING_NOTE, '')
+    .replace(`${KITCHEN_PRICE_NOTE} | `, '')
+    .replace(KITCHEN_PRICE_NOTE, '');
 }
 
 /** Prepends the kitchen marker to a line's note unless it is already there. */

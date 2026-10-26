@@ -134,6 +134,8 @@ export interface AddonGroup {
   is_required: boolean;
   /** Awaiting price: items from this group are priced after the order, like weight-priced items. */
   price_pending?: boolean;
+  /** Special menu: the kitchen gives the set price after the order, entered as is. */
+  kitchen_price?: boolean;
   min_selection: number;
   max_selection: number;
   allow_multiple_quantities?: boolean;
@@ -270,6 +272,8 @@ export interface OrderItem {
   edit_version?: number;
   weight_pending?: number | boolean;
   weight?: number | null;
+  /** How a pending line gets its price; absent on lines saved before the kitchen-price option. */
+  pending_price_mode?: 'weight' | 'kitchen_price' | null;
 }
 
 export interface Bill {

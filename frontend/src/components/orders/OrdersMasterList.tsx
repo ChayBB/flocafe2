@@ -6,7 +6,12 @@ import type { Order } from '@/lib/types';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { parseDbTimestamp, cn } from '@/lib/utils';
-import { orderStatusBadge, orderAwaitingWeight, ORDER_TYPE_KEYS } from './OrderCard';
+import {
+  orderStatusBadge,
+  orderAwaitingWeight,
+  orderPendingLabelKey,
+  ORDER_TYPE_KEYS,
+} from './OrderCard';
 
 function OrderTypeIcon({ type }: { type: Order['type'] }) {
   const cls = 'shrink-0 text-muted-foreground';
@@ -75,7 +80,7 @@ export function OrdersMasterList({
                 <span className="flex items-center gap-1 shrink-0">
                   {awaitingWeight && (
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
-                      {tPos('awaitingWeight')}
+                      {tPos(orderPendingLabelKey(order))}
                     </span>
                   )}
                   {badge && (
