@@ -1322,6 +1322,7 @@
     "addonRequired": "आवश्यक",
     "addonPricePending": "कीमत बाकी",
     "addonKitchenPrice": "विशेष मेन्यू, किचन कीमत तय करता है",
+    "kitchenPriceForApproval": "किचन मंज़ूरी के लिए कीमत तय करता है",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "कर श्रेणी निर्दिष्ट करें",
     "barcodeLabel": "बारकोड: {barcode}",

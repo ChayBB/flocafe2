@@ -1322,6 +1322,7 @@
     "addonRequired": "Required",
     "addonPricePending": "Awaiting price by weight",
     "addonKitchenPrice": "Special menu, kitchen sets the price",
+    "kitchenPriceForApproval": "Kitchen sets the price for approval",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Assign tax category",
     "barcodeLabel": "Barcode: {barcode}",

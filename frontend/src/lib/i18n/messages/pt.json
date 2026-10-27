@@ -1322,6 +1322,7 @@
     "addonRequired": "Obrigatório",
     "addonPricePending": "Preço pendente",
     "addonKitchenPrice": "Menu especial, a cozinha define o preço",
+    "kitchenPriceForApproval": "A cozinha define o preço para aprovação",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Atribuir categoria fiscal",
     "barcodeLabel": "Código de barras: {barcode}",

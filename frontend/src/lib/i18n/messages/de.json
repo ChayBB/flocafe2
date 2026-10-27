@@ -1322,6 +1322,7 @@
     "addonRequired": "Erforderlich",
     "addonPricePending": "Preis folgt",
     "addonKitchenPrice": "Sondermenü, Küche legt den Preis fest",
+    "kitchenPriceForApproval": "Küche legt den Preis zur Freigabe fest",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Steuerkategorie zuweisen",
     "barcodeLabel": "Barcode: {barcode}",

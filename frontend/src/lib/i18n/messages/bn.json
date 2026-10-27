@@ -1322,6 +1322,7 @@
     "addonRequired": "প্রয়োজন",
     "addonPricePending": "দামের অপেক্ষায়",
     "addonKitchenPrice": "বিশেষ মেনু, রান্নাঘর দাম ঠিক করে",
+    "kitchenPriceForApproval": "অনুমোদনের জন্য রান্নাঘর দাম ঠিক করে",
     "addonSelectionRange": "{min}-{max}",
     "assignTaxCategory": "কর বিভাগ বরাদ্দ করুন",
     "barcodeLabel": "বারকোড:{barcode}",

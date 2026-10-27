@@ -1322,6 +1322,7 @@
     "addonRequired": "आवश्यक छ",
     "addonPricePending": "मूल्य बाँकी",
     "addonKitchenPrice": "विशेष मेनु, भान्साले मूल्य तोक्छ",
+    "kitchenPriceForApproval": "स्वीकृतिका लागि भान्साले मूल्य तोक्छ",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "कर वर्ग तोक्नुहोस्",
     "barcodeLabel": "बारकोड: {barcode}",

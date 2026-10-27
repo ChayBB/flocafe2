@@ -1322,6 +1322,7 @@
     "addonRequired": "필수",
     "addonPricePending": "가격 입력 대기",
     "addonKitchenPrice": "특별 메뉴, 주방이 가격 결정",
+    "kitchenPriceForApproval": "주방이 가격을 정해 승인받습니다",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "세금 카테고리 지정",
     "barcodeLabel": "바코드: {barcode}",

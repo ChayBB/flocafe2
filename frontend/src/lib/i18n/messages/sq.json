@@ -1322,6 +1322,7 @@
     "addonRequired": "E detyrueshme",
     "addonPricePending": "Çmimi në pritje",
     "addonKitchenPrice": "Menu speciale, kuzhina cakton çmimin",
+    "kitchenPriceForApproval": "Kuzhina cakton çmimin për miratim",
     "addonSelectionRange": "{min} - {max}",
     "assignTaxCategory": "Cakto kategorinë e taksave",
     "barcodeLabel": "Barkodi: {barcode}",

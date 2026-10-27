@@ -1322,6 +1322,7 @@
     "addonRequired": "Kailangan",
     "addonPricePending": "Hinihintay ang presyo",
     "addonKitchenPrice": "Espesyal na menu, kusina ang magtatakda ng presyo",
+    "kitchenPriceForApproval": "Kusina ang magtatakda ng presyo para maaprubahan",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Magtalaga ng kategorya ng buwis",
     "barcodeLabel": "Barcode: {barcode}",

@@ -214,6 +214,14 @@ export default function ProductsPage() {
     addon_group_ids: [] as string[],
     image_url: null as string | null,
   });
+  // A product in a "kitchen sets the price" group (its own or its category's) has no menu price.
+  const selectedCategoryGroupIds =
+    categories.find((category) => category.id === form.category_id)?.addon_group_ids ?? [];
+  const kitchenPricedProduct = addonGroups.some(
+    (group) =>
+      Boolean(group.kitchen_price) &&
+      (form.addon_group_ids.includes(group.id) || selectedCategoryGroupIds.includes(group.id)),
+  );
   const [imageTouched, setImageTouched] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -581,7 +589,9 @@ export default function ProductsPage() {
       const payload: Record<string, unknown> = {
         name: form.name,
         category_id: form.category_id || null,
-        price: roundCurrencyValue(Number(form.price), unitAdapter.maxDecimals),
+        price: kitchenPricedProduct
+          ? 0
+          : roundCurrencyValue(Number(form.price), unitAdapter.maxDecimals),
         cost_price:
           form.cost_price === ''
             ? null
@@ -1495,17 +1505,27 @@ export default function ProductsPage() {
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-1">
                           {t('priceLabel', { currency })}
-                          <span className="text-red-500 ms-1">*</span>
+                          {!kitchenPricedProduct && <span className="text-red-500 ms-1">*</span>}
                         </label>
-                        <CurrencyAmountInput
-                          value={form.price === '' ? '' : Number(form.price)}
-                          format={amountFormat}
-                          onValueChange={(v) =>
-                            setForm({ ...form, price: v === '' ? '' : String(v) })
-                          }
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-border rounded-lg focus:ring-2 focus:ring-brand outline-none"
-                          required
-                        />
+                        {kitchenPricedProduct ? (
+                          <input
+                            type="text"
+                            readOnly
+                            value={t('kitchenPriceForApproval')}
+                            data-testid="product-price-kitchen"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-border rounded-lg bg-muted text-muted-foreground outline-none"
+                          />
+                        ) : (
+                          <CurrencyAmountInput
+                            value={form.price === '' ? '' : Number(form.price)}
+                            format={amountFormat}
+                            onValueChange={(v) =>
+                              setForm({ ...form, price: v === '' ? '' : String(v) })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-border rounded-lg focus:ring-2 focus:ring-brand outline-none"
+                            required
+                          />
+                        )}
                         {form.has_variants && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {t('variantGovernedHint')}

@@ -1322,6 +1322,7 @@
     "addonRequired": "لازمی",
     "addonPricePending": "قیمت باقی",
     "addonKitchenPrice": "خصوصی مینو، قیمت کچن طے کرتا ہے",
+    "kitchenPriceForApproval": "منظوری کے لیے قیمت کچن طے کرتا ہے",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "ٹیکس زمرہ مقرر کریں",
     "barcodeLabel": "بارکوڈ: {barcode}",

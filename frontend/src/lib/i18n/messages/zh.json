@@ -1322,6 +1322,7 @@
     "addonRequired": "必选",
     "addonPricePending": "待定价",
     "addonKitchenPrice": "特别菜单，由厨房定价",
+    "kitchenPriceForApproval": "由厨房定价，待确认",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "指定税务分类",
     "barcodeLabel": "条码：{barcode}",

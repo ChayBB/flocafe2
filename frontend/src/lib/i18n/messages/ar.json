@@ -1322,6 +1322,7 @@
     "addonRequired": "مطلوب",
     "addonPricePending": "بانتظار السعر",
     "addonKitchenPrice": "قائمة خاصة، يحدد المطبخ السعر",
+    "kitchenPriceForApproval": "يحدد المطبخ السعر للموافقة",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "تحديد الفئة الضريبية",
     "barcodeLabel": "الرمز الشريطي: {barcode}",

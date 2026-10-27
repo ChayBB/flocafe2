@@ -1322,6 +1322,7 @@
     "addonRequired": "Обязательно",
     "addonPricePending": "Цена позже",
     "addonKitchenPrice": "Особое меню, цену назначает кухня",
+    "kitchenPriceForApproval": "Цену для согласования назначает кухня",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Назначить налоговую категорию",
     "barcodeLabel": "Штрих-код: {barcode}",

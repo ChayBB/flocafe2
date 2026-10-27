@@ -1322,6 +1322,7 @@
     "addonRequired": "Zorunlu",
     "addonPricePending": "Fiyat bekleniyor",
     "addonKitchenPrice": "Özel menü, fiyatı mutfak belirler",
+    "kitchenPriceForApproval": "Fiyatı onay için mutfak belirler",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Vergi kategorisi ata",
     "barcodeLabel": "Barkod: {barcode}",

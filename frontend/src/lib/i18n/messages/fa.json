@@ -1322,6 +1322,7 @@
     "addonRequired": "بایسته",
     "addonPricePending": "در انتظار قیمت",
     "addonKitchenPrice": "منوی ویژه، آشپزخانه قیمت را تعیین می‌کند",
+    "kitchenPriceForApproval": "آشپزخانه قیمت را برای تأیید تعیین می‌کند",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "تخصیص دسته‌بندی مالیاتی",
     "barcodeLabel": "بارکد: {barcode}",

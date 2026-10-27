@@ -1322,6 +1322,7 @@
     "addonRequired": "Vereist",
     "addonPricePending": "Prijs volgt",
     "addonKitchenPrice": "Speciaal menu, keuken bepaalt de prijs",
+    "kitchenPriceForApproval": "Keuken bepaalt de prijs ter goedkeuring",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Belastingcategorie toewijzen",
     "barcodeLabel": "Streepjescode: {barcode}",

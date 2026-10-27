@@ -1322,6 +1322,7 @@
     "addonRequired": "จำเป็น",
     "addonPricePending": "รอราคาตามน้ำหนัก",
     "addonKitchenPrice": "เมนูพิเศษครัวระบุราคา",
+    "kitchenPriceForApproval": "ครัวระบุราคาเพื่ออนุมัติ",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "กำหนดหมวดหมู่ภาษี",
     "barcodeLabel": "บาร์โค้ด: {barcode}",

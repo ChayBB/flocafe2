@@ -1322,6 +1322,7 @@
     "addonRequired": "必須",
     "addonPricePending": "価格未定",
     "addonKitchenPrice": "特別メニュー（価格は厨房が決定）",
+    "kitchenPriceForApproval": "厨房が価格を決め、承認を得ます",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "税カテゴリを割り当て",
     "barcodeLabel": "バーコード：{barcode}",

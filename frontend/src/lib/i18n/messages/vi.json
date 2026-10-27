@@ -1322,6 +1322,7 @@
     "addonRequired": "Bắt buộc",
     "addonPricePending": "Chờ nhập giá",
     "addonKitchenPrice": "Món đặc biệt, bếp định giá",
+    "kitchenPriceForApproval": "Bếp định giá để khách duyệt",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Gán danh mục thuế",
     "barcodeLabel": "Mã vạch: {barcode}",

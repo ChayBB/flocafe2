@@ -1322,6 +1322,7 @@
     "addonRequired": "Wajib",
     "addonPricePending": "Menunggu harga",
     "addonKitchenPrice": "Menu spesial, dapur menentukan harga",
+    "kitchenPriceForApproval": "Dapur menentukan harga untuk disetujui",
     "addonSelectionRange": "{min} – {max}",
     "assignTaxCategory": "Tetapkan kategori pajak",
     "barcodeLabel": "Barcode: {barcode}",
