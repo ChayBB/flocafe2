@@ -95,6 +95,8 @@ export default function AddonModal({
   const [quantity, setQuantity] = useState(startQuantity);
   const [qtyDraft, setQtyDraft] = useState(() => String(startQuantity));
   const [instructions, setInstructions] = useState(initialInstructions);
+  // What the guest wants from a kitchen-priced special menu; sent with the special instructions.
+  const [kitchenRequest, setKitchenRequest] = useState('');
 
   const variants = activeVariants(product.variants);
   const defaultVariant = selectDefaultVariant(variants, initialVariant?.id);
@@ -220,7 +222,8 @@ export default function AddonModal({
         setQtyDraft(String(effectiveQuantity));
       }
     }
-    onAdd(product, effectiveQuantity, allAddons, instructions, selectedVariant);
+    const combinedInstructions = [kitchenRequest.trim(), instructions.trim()].filter(Boolean).join(' | ');
+    onAdd(product, effectiveQuantity, allAddons, combinedInstructions, selectedVariant);
     onClose();
   };
 
@@ -300,7 +303,23 @@ export default function AddonModal({
                     })() : null}
                   </span>
                 </div>
-                {group.description && <p className="text-xs text-muted-foreground mb-2">{group.description}</p>}
+                {group.kitchen_price ? (
+                  <textarea
+                    value={kitchenRequest}
+                    onChange={(e) =>
+                      setKitchenRequest(
+                        e.target.value.slice(0, Math.max(0, 100 - (instructions ? instructions.length + 3 : 0))),
+                      )
+                    }
+                    placeholder={group.description || t('specialInstructionsPlaceholder')}
+                    aria-label={group.name}
+                    data-testid="kitchen-request-input"
+                    rows={2}
+                    className="mb-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-brand"
+                  />
+                ) : (
+                  group.description && <p className="text-xs text-muted-foreground mb-2">{group.description}</p>
+                )}
                 <div className="space-y-1">
                   {activeAddons.map((addon) => {
                     const addonQty = getAddonQuantity(group.id, addon.id);
@@ -429,7 +448,11 @@ export default function AddonModal({
             <input
               type="text"
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value.slice(0, 100))}
+              onChange={(e) =>
+                setInstructions(
+                  e.target.value.slice(0, Math.max(0, 100 - (kitchenRequest ? kitchenRequest.length + 3 : 0))),
+                )
+              }
               placeholder={t('specialInstructionsPlaceholder')}
               maxLength={100}
               className="w-full min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-brand"
