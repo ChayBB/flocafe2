@@ -41,6 +41,11 @@ test('a product in a kitchen-priced category saves without a price', async ({ pa
   await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
   await page.goto(`${BASE}/products`);
 
+  // The product list shows the kitchen-price note instead of 0.00.
+  const listRow = page.getByRole('row').filter({ hasText: productName });
+  await expect(listRow).toContainText('Kitchen sets the price for approval');
+  await expect(listRow).not.toContainText('0.00');
+
   await page.getByRole('row').filter({ hasText: productName }).getByRole('button').first().click();
   const kitchenPrice = page.getByTestId('product-price-kitchen');
   await expect(kitchenPrice).toBeVisible();
@@ -51,4 +56,12 @@ test('a product in a kitchen-priced category saves without a price', async ({ pa
 
   const stored = await (await page.request.get(`${BASE}/api/products/${productId}`, { headers })).json();
   expect(Number(stored.product.price)).toBe(0);
+
+  // The POS menu card shows the note instead of a 0.00 price.
+  await page.goto(`${BASE}/pos`);
+  const grid = page.getByTestId('pos-product-grid');
+  await grid.getByTestId('pos-product-search').fill(productName);
+  const card = grid.getByTestId('pos-product-card').filter({ hasText: productName });
+  await expect(card).toContainText('Kitchen sets the price for approval');
+  await expect(card).not.toContainText('0.00');
 });

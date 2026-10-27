@@ -81,6 +81,7 @@ export default function AddonModal({
   onlinePlatformSelected = false,
 }: Props) {
   const t = useTranslations('pos');
+  const tProducts = useTranslations('products');
   const tenantFmt = useFormatCurrency();
   const fmt = country ? (n: number) => formatCurrencyForTenant(n, country, currency) : tenantFmt;
   const [selected, setSelected] = useState<Record<string | number, Addon[]>>(() => groupInitialAddons(initialAddons));
@@ -229,7 +230,9 @@ export default function AddonModal({
         <div className="flex justify-between items-center p-5 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{product.name}</h2>
-            <p className="text-brand font-semibold">{fmt(basePrice)}</p>
+            <p className="text-brand font-semibold">
+              {awaitsKitchenPrice ? tProducts('kitchenPriceForApproval') : fmt(basePrice)}
+            </p>
           </div>
           <button onClick={onClose} className="touch-target rounded-full text-muted-foreground hover:text-foreground active:bg-muted" aria-label={t('close')}>
             <X size={20} />
@@ -512,8 +515,12 @@ export default function AddonModal({
             size="lg"
           >
             {mode === 'edit'
-              ? t('saveItemChanges', { total: fmt(itemTotal) })
-              : t('addToCart', { total: fmt(itemTotal) })}
+              ? t('saveItemChanges', {
+                  total: awaitsKitchenPrice ? tProducts('kitchenPriceForApproval') : fmt(itemTotal),
+                })
+              : t('addToCart', {
+                  total: awaitsKitchenPrice ? tProducts('kitchenPriceForApproval') : fmt(itemTotal),
+                })}
           </Button>
         </div>
       </div>
