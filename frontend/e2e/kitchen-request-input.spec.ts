@@ -24,13 +24,19 @@ test('the kitchen-priced group description becomes a box for what the guest want
   });
   expect(group.status()).toBe(201);
   const groupId = (await group.json()).addon_group.id;
-  const categories = await (await page.request.get(`${E2E_BASE_URL}/api/categories`, { headers })).json();
+  // A fresh category, so no other test's add-on groups ride along through the category.
+  const categoryRes = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+    headers,
+    data: { name: `Plain ${run}` },
+  });
+  expect(categoryRes.status()).toBe(201);
+  const categoryId = (await categoryRes.json()).category.id;
   const productName = `Anything ${run}`;
   const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
     headers,
     data: {
       name: productName,
-      category_id: categories.categories[0].id,
+      category_id: categoryId,
       price: 0,
       tax_category_id: null,
       tax_behavior: 'exempt',

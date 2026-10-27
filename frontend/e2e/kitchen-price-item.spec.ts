@@ -21,12 +21,18 @@ test('a special-menu item waits for the kitchen price and takes it as entered', 
   const groupBody = (await group.json()).addon_group;
   expect(groupBody.kitchen_price).toBe(true);
 
-  const categories = await (await page.request.get(`${BASE}/api/categories`, { headers })).json();
+  // A fresh category, so no other test's add-on groups ride along through the category.
+  const categoryRes = await page.request.post(`${BASE}/api/categories`, {
+    headers,
+    data: { name: `Plain ${run}` },
+  });
+  expect(categoryRes.status()).toBe(201);
+  const categoryId = (await categoryRes.json()).category.id;
   const product = await page.request.post(`${BASE}/api/products`, {
     headers,
     data: {
       name: `Chef special ${run}`,
-      category_id: categories.categories[0].id,
+      category_id: categoryId,
       price: 0,
       tax_category_id: null,
       tax_behavior: 'exempt',

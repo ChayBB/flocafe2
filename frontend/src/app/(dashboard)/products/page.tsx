@@ -49,7 +49,6 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { nameToColor } from '@/lib/image-utils';
 import { useTranslations, type AppConfig } from 'use-intl';
 import { tenantCan } from '@/lib/permissions';
-import { isKitchenPricedProduct } from '@/lib/kitchen-price';
 
 type PosKey = keyof AppConfig['Messages']['pos'];
 type ProductsKey = keyof AppConfig['Messages']['products'];
@@ -1193,13 +1192,7 @@ export default function ProductsPage() {
                         )}
                       </td>
                       <td className="p-4 text-end">
-                        {isKitchenPricedProduct(product) ? (
-                          <p className="text-sm font-medium text-muted-foreground">
-                            {t('kitchenPriceForApproval')}
-                          </p>
-                        ) : (
-                          <p className="font-medium">{fmt(Number(product.price))}</p>
-                        )}
+                        <p className="font-medium">{fmt(Number(product.price))}</p>
                         {product.cost != null && product.cost > 0 && (
                           <p className="text-xs text-gray-400">
                             {t('costLabel', { value: fmt(Number(product.cost)) })}

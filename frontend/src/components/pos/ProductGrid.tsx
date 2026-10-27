@@ -9,7 +9,6 @@ import { usePosSettingsStore } from '@/store/pos-settings';
 import { nameToColor } from '@/lib/image-utils';
 import TagBadge from './DietaryBadge';
 import { productNeedsCustomizer } from '@/lib/product-variants';
-import { isKitchenPricedProduct } from '@/lib/kitchen-price';
 import api from '@/lib/api';
 import { useTranslations } from 'use-intl';
 import { fractionalQuantityStep, parseDbTimestamp } from '@/lib/utils';
@@ -333,7 +332,6 @@ export default function ProductGrid({
   const { showProductImages: showProductImagesSetting } = usePosSettingsStore();
   const showProductImages = showImages ?? showProductImagesSetting;
   const t = useTranslations('pos');
-  const tProducts = useTranslations('products');
   const validateSelectionQuantity = (product: Product, quantity: number) => {
     if (isValidProductQuantity(product, quantity)) return true;
     toast.error(t('orderQuantityInvalid'));
@@ -531,13 +529,7 @@ export default function ProductGrid({
             {product.name}
           </h3>
           <div className="flex items-center justify-between mt-1">
-            {isKitchenPricedProduct(product) ? (
-              <p className="text-xs font-semibold text-brand leading-tight">
-                {tProducts('kitchenPriceForApproval')}
-              </p>
-            ) : (
-              <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
-            )}
+            <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
             <div className="flex items-center gap-1 shrink-0">
               {!showProductImages && product.tags && product.tags.length > 0 && (
                 <TagBadge tag={product.tags[0]} />
