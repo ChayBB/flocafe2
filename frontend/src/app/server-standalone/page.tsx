@@ -64,6 +64,7 @@ type OrderItem = {
   special_instructions?: string | null;
   variant_selection?: unknown;
   service_change?: string | null;
+  served_confirmed_at?: string | null;
 };
 type Order = {
   id: number;
@@ -560,8 +561,8 @@ export default function ServerStandalonePage() {
     setOrderNotes(value.slice(0, 200));
   }
 
-  /** Packs a sent item to go, or cancels one still waiting; the KDS flags the change. */
-  async function changeSentItem(itemId: number, change: 'takeaway' | 'cancel') {
+  /** Packs a sent item to go, cancels one still waiting, or confirms a served one reached the table. */
+  async function changeSentItem(itemId: number, change: 'takeaway' | 'cancel' | 'confirm-served') {
     if (!api || !currentOrder || sendInFlightRef.current) return;
     const tableId = selectedTableIdRef.current;
     try {
@@ -569,7 +570,13 @@ export default function ServerStandalonePage() {
         `/api/orders/${currentOrder.id}/items/${itemId}/${change}`,
         change === 'cancel' ? { reason: 'Cancelled from the Server App' } : {},
       );
-      toast.success(change === 'cancel' ? t('itemCancelled') : t('itemChangedToTakeaway'));
+      toast.success(
+        change === 'cancel'
+          ? t('itemCancelled')
+          : change === 'confirm-served'
+            ? t('itemServedConfirmed')
+            : t('itemChangedToTakeaway'),
+      );
     } catch (error: unknown) {
       toastApiError(error, t('itemChangeFailed'), apiErrorT);
     }
@@ -1570,6 +1577,7 @@ export default function ServerStandalonePage() {
           }}
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
+          onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
         />
       )}
 

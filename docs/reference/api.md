@@ -373,7 +373,14 @@ does not wrap the handler again.
 is `pending`, `preparing` or `ready` to go: it sets `service_change` to `takeaway` and records an
 `item_changed_to_takeaway` audit entry, and the KDS shows the item flagged. It returns
 `{ order: { ...order, items } }`; `409` for an item already served or cancelled, `400` for a
-completed or cancelled order. The Server App forwards both routes.
+completed or cancelled order.
+
+`PATCH /:orderId/items/:itemId/confirm-served` (`orders.create`, item cancel limiter) records that
+service staff took a `served` item to the table: it sets `served_confirmed_at` and
+`served_confirmed_by` once and records an `item_served_confirmed` audit entry; repeating it changes
+nothing. It returns `{ order: { ...order, items } }` and `409` for an item that is not `served`. A
+status change away from `served` clears the confirmation. The KDS shows confirmed items, and the
+Server App forwards all three routes.
 
 ### Order item status
 

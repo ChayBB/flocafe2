@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCheck } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { KdsOrderItem } from '@/hooks/useKdsConnection';
 
@@ -11,17 +11,32 @@ export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
     : null;
 }
 
-/** A service staff change, shown like a special instruction: changed to takeaway, or cancelled. */
+/**
+ * A service staff change, shown like a special instruction (changed to takeaway, or cancelled),
+ * and the staff confirmation that a served item reached the table.
+ */
 export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
   const t = useTranslations('kds');
-  if (!item.service_change) return null;
   return (
-    <p
-      data-testid="kds-service-notice"
-      className="ms-[26px] mt-0.5 flex items-center gap-1 text-sm font-bold text-orange-700 dark:text-orange-300"
-    >
-      <AlertTriangle size={14} aria-hidden="true" />
-      {item.service_change === 'cancelled' ? t('noticeCancelled') : t('noticeTakeaway')}
-    </p>
+    <>
+      {item.service_change && (
+        <p
+          data-testid="kds-service-notice"
+          className="ms-[26px] mt-0.5 flex items-center gap-1 text-sm font-bold text-orange-700 dark:text-orange-300"
+        >
+          <AlertTriangle size={14} aria-hidden="true" />
+          {item.service_change === 'cancelled' ? t('noticeCancelled') : t('noticeTakeaway')}
+        </p>
+      )}
+      {item.served_confirmed_at && (
+        <p
+          data-testid="kds-served-confirmed"
+          className="ms-[26px] mt-0.5 flex items-center gap-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+        >
+          <CheckCheck size={14} aria-hidden="true" />
+          {t('servedConfirmed')}
+        </p>
+      )}
+    </>
   );
 }

@@ -376,6 +376,40 @@ async function main() {
       const served = seedOrderWithItem(db, 'TAKEAWAY-SERVED', 'prod-cancel', 'served');
       const refused = await takeaway(served.orderId, served.itemId, waiterAuth);
       assertEqualOrThrow(refused.status, 409, 'a served item cannot change to takeaway');
+
+      // Service staff confirm a served item reached the table.
+      const confirmServed = (orderId: any, itemId: any) =>
+        api(baseUrl, `/api/orders/${orderId}/items/${itemId}/confirm-served`, {
+          method: 'PATCH',
+          body: {},
+          headers: waiterAuth,
+        });
+      const confirmed = await confirmServed(served.orderId, served.itemId);
+      assertEqualOrThrow(confirmed.status, 200, `a server confirms a served item (${JSON.stringify(confirmed.data)})`);
+      const confirmedRow = db
+        .prepare('SELECT served_confirmed_at, served_confirmed_by FROM order_items WHERE id = ?')
+        .get(served.itemId) as any;
+      assertOrThrow(Boolean(confirmedRow.served_confirmed_at), 'the confirmation time is recorded');
+      assertEqualOrThrow(confirmedRow.served_confirmed_by, 'waiter-cancel', 'the confirming staff member is recorded');
+      assertOrThrow(
+        Boolean(
+          db
+            .prepare("SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_served_confirmed'")
+            .get(String(served.itemId)),
+        ),
+        'the confirmation is in the order audit log',
+      );
+      const again = await confirmServed(served.orderId, served.itemId);
+      assertEqualOrThrow(again.status, 200, 'confirming twice is harmless');
+      const notServed = await confirmServed(order.orderId, order.itemId);
+      assertEqualOrThrow(notServed.status, 409, 'an item not yet served cannot be confirmed at the table');
+      db.prepare("UPDATE order_items SET status = 'ready' WHERE id = ?").run(served.itemId);
+      assertEqualOrThrow(
+        (db.prepare('SELECT served_confirmed_at FROM order_items WHERE id = ?').get(served.itemId) as any)
+          .served_confirmed_at,
+        null,
+        'moving the item back out of served clears the confirmation',
+      );
     }
 
     console.log('\n─── Paid and terminal guards ───');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ClipboardList, LogOut, MoreVertical, Plus, ShoppingBag, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCheck, ClipboardList, LogOut, MoreVertical, Plus, ShoppingBag, XCircle } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -27,13 +27,19 @@ export interface OrderedItem {
   created_at?: string;
   /** A change service staff made after sending: 'takeaway' or 'cancelled'. */
   service_change?: string | null;
+  /** When service staff confirmed the served item reached the table. */
+  served_confirmed_at?: string | null;
 }
 
-/** Any item not yet served can be packed to go; only a waiting item can be cancelled. */
-export function itemChangeOptions(item: OrderedItem): { takeaway: boolean; cancel: boolean } {
+/**
+ * Any item not yet served can be packed to go; only a waiting item can be cancelled; a served
+ * item can be confirmed at the table once.
+ */
+export function itemChangeOptions(item: OrderedItem): { takeaway: boolean; cancel: boolean; confirmServed: boolean } {
   return {
     takeaway: ['pending', 'preparing', 'ready'].includes(item.status) && item.service_change !== 'takeaway',
     cancel: item.status === 'pending',
+    confirmServed: item.status === 'served' && !item.served_confirmed_at,
   };
 }
 
@@ -85,6 +91,7 @@ export function OrderedItemsScreen({
   onAddItems,
   onTakeaway,
   onCancel,
+  onConfirmServed,
 }: {
   tableName: string;
   orderNumber?: string;
@@ -94,6 +101,7 @@ export function OrderedItemsScreen({
   onAddItems: () => void;
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
+  onConfirmServed: (item: OrderedItem) => Promise<void>;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
@@ -102,7 +110,7 @@ export function OrderedItemsScreen({
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [changing, setChanging] = useState<number | null>(null);
 
-  const run = async (item: OrderedItem, change: 'takeaway' | 'cancel') => {
+  const run = async (item: OrderedItem, change: 'takeaway' | 'cancel' | 'confirmServed') => {
     setMenuFor(null);
     if (change === 'cancel') {
       const ok = await confirm(t('cancelItemConfirm', { name: item.product_name }), {
@@ -114,7 +122,7 @@ export function OrderedItemsScreen({
     }
     setChanging(item.id);
     try {
-      await (change === 'cancel' ? onCancel(item) : onTakeaway(item));
+      await (change === 'cancel' ? onCancel(item) : change === 'confirmServed' ? onConfirmServed(item) : onTakeaway(item));
     } finally {
       setChanging(null);
     }
@@ -190,7 +198,7 @@ export function OrderedItemsScreen({
         )}
         {shown.map((item, index) => {
           const options = itemChangeOptions(item);
-          const hasOptions = options.takeaway || options.cancel;
+          const hasOptions = options.takeaway || options.cancel || options.confirmServed;
           return (
             <li
               key={item.id}
@@ -204,6 +212,14 @@ export function OrderedItemsScreen({
                 </p>
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Ltr className="tabular-nums">{timeOf(item.created_at)}</Ltr>
+                  {item.served_confirmed_at && (
+                    <span
+                      data-testid="server-app-served-confirmed-tag"
+                      className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                    >
+                      {t('servedConfirmedTag')}
+                    </span>
+                  )}
                   {item.service_change === 'takeaway' && (
                     <span
                       data-testid="server-app-takeaway-tag"
@@ -241,6 +257,17 @@ export function OrderedItemsScreen({
                     >
                       <ShoppingBag size={16} className="text-orange-600" />
                       {t('changeToTakeaway')}
+                    </button>
+                  )}
+                  {options.confirmServed && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void run(item, 'confirmServed')}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm text-emerald-700 hover:bg-muted dark:text-emerald-300"
+                    >
+                      <CheckCheck size={16} />
+                      {t('confirmServed')}
                     </button>
                   )}
                   {options.cancel && (

@@ -78,7 +78,12 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await page.getByRole('menuitem', { name: 'Change to takeaway' }).click();
   await expect(page.getByText('Changed to takeaway').first()).toBeVisible();
   await expect(rows.nth(1).getByTestId('server-app-takeaway-tag')).toHaveText('Takeaway');
-  // Served: no changes.
+  // Served: only confirming it reached the table.
+  await menuOf(2).click();
+  await expect(page.getByRole('menuitem')).toHaveText(['Confirm served']);
+  await page.getByRole('menuitem', { name: 'Confirm served' }).click();
+  await expect(page.getByText('Serving confirmed').first()).toBeVisible();
+  await expect(rows.nth(2).getByTestId('server-app-served-confirmed-tag')).toHaveText('At the table');
   await expect(menuOf(2)).toBeDisabled();
   // Cancel the waiting one, after confirming.
   await menuOf(0).click();
@@ -131,6 +136,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await expect(card(1)).toHaveClass(/bg-orange-100/);
   await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
   await expect(card(2)).toContainText('Changed to takeaway');
+  await expect(card(3).getByTestId('kds-served-confirmed')).toHaveText('At the table');
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);
 
   // A fresh page has not been tapped: the display offers to turn sound on, and flashes instead.

@@ -5661,6 +5661,60 @@ router.patch(
   },
 );
 
+// PATCH /api/orders/:orderId/items/:itemId/confirm-served — service staff confirm a served item reached the table.
+router.patch(
+  '/:orderId/items/:itemId/confirm-served',
+  orderItemCancelRateLimit,
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.orderId);
+      const itemId = String(req.params.itemId);
+      const actorId = String((req as any).user?.userId || '');
+      const db = getDatabase();
+      const order = withTxn(() => {
+        const currentOrder = db.prepare('SELECT id FROM orders WHERE id = ?').get(orderId);
+        if (!currentOrder) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+        const item = db
+          .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
+          .get(itemId, orderId) as any;
+        if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+        if (item.status !== 'served') {
+          throw Object.assign(new Error('Only served items can be confirmed at the table'), {
+            statusCode: 409,
+          });
+        }
+        if (!item.served_confirmed_at) {
+          db.prepare(
+            'UPDATE order_items SET served_confirmed_at = ?, served_confirmed_by = ?, updated_at = ? WHERE id = ?',
+          ).run(now(), actorId, now(), itemId);
+          recordOrderAudit(db, {
+            orderId,
+            orderItemId: itemId,
+            actorUserId: actorId,
+            action: 'item_served_confirmed',
+            details: { product_name: item.product_name },
+          });
+        }
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<string, unknown>;
+        const items = attachEffectiveAddons(
+          db,
+          db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as { id: number }[],
+        );
+        return { ...updatedOrder, items };
+      });
+      notifyKdsUpdate();
+      res.json({ order });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string };
+      if (!error.statusCode) console.error('[Orders] Confirm served error:', error);
+      res
+        .status(error.statusCode || 500)
+        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+    }
+  },
+);
+
 // Restore cancelled order item (frontend calls this)
 router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) => {
   try {

@@ -7796,6 +7796,28 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 127,
+    name: 'add_order_item_served_confirmation',
+    up: () => {
+      // Service staff confirm a served item reached the table; leaving 'served' clears it.
+      const columns = getColumns(db, 'order_items');
+      if (!columns.includes('served_confirmed_at')) {
+        db.exec('ALTER TABLE order_items ADD COLUMN served_confirmed_at TEXT DEFAULT NULL');
+      }
+      if (!columns.includes('served_confirmed_by')) {
+        db.exec('ALTER TABLE order_items ADD COLUMN served_confirmed_by TEXT DEFAULT NULL');
+      }
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS clear_served_confirmation_on_status_change
+        AFTER UPDATE OF status ON order_items
+        WHEN NEW.status != 'served' AND NEW.served_confirmed_at IS NOT NULL
+        BEGIN
+          UPDATE order_items SET served_confirmed_at = NULL, served_confirmed_by = NULL WHERE id = NEW.id;
+        END
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
@@ -8970,6 +8992,7 @@ export function projectKdsItem(item: any, restricted: boolean): any {
     'special_instructions',
     'service_change',
     'service_change_at',
+    'served_confirmed_at',
     'created_at',
     'updated_at',
     'order_number',

@@ -628,7 +628,7 @@ export function startServerApp(): Promise<void> {
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
     );
-    for (const action of ['cancel', 'takeaway'] as const) {
+    for (const action of ['cancel', 'takeaway', 'confirm-served'] as const) {
       app.patch(`/api/orders/:id/items/:itemId/${action}`, serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
         forwardToMainApi(
           req,
