@@ -563,7 +563,6 @@
     "stationFilter": "Станция",
     "allStations": "Все станции",
     "noStations": "Нет станций",
-    "noStationsHint": "Добавьте кухонные станции в настройках, чтобы фильтровать по станции",
     "wsConnected": "WebSocket подключен"
   },
   "nav": {

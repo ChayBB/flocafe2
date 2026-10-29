@@ -65,7 +65,7 @@ export function KdsHeader({
           <select
             data-testid="kds-station-select"
             aria-label={t('stationFilter')}
-            title={stations.length === 0 ? t('noStationsHint') : t('stationFilter')}
+            title={t('stationFilter')}
             value={stationId}
             disabled={stations.length === 0}
             onChange={(e) => onChangeStation(e.target.value)}

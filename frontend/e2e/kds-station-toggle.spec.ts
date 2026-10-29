@@ -2,15 +2,16 @@ import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-test('KDS station dropdown shows one station and the item toggle advances its stage', async ({ page }) => {
+test('KDS station picker shows one menu category and the item toggle advances its stage', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
   const run = Math.random().toString(36).slice(2, 7);
 
   const makeProduct = async (label: string) => {
+    const categoryName = `${label} ${run}`;
     const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
       headers,
-      data: { name: `${label} ${run}` },
+      data: { name: categoryName },
     });
     expect(category.status()).toBe(201);
     const categoryId = (await category.json()).category.id;
@@ -25,22 +26,10 @@ test('KDS station dropdown shows one station and the item toggle advances its st
       },
     });
     expect(product.status()).toBe(201);
-    return { categoryId, productId: (await product.json()).product.id, name: `${label} dish ${run}` };
+    return { categoryName, productId: (await product.json()).product.id, name: `${label} dish ${run}` };
   };
   const grill = await makeProduct('Grill');
   const bar = await makeProduct('Bar');
-
-  const stationName = `Grill station ${run}`;
-  const station = await page.request.post(`${E2E_BASE_URL}/api/kitchen-stations`, {
-    headers,
-    data: { name: stationName, category_ids: [grill.categoryId] },
-  });
-  expect(station.status()).toBe(201);
-  const barStation = await page.request.post(`${E2E_BASE_URL}/api/kitchen-stations`, {
-    headers,
-    data: { name: `Bar station ${run}`, category_ids: [bar.categoryId] },
-  });
-  expect(barStation.status()).toBe(201);
 
   const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
     headers,
@@ -65,16 +54,20 @@ test('KDS station dropdown shows one station and the item toggle advances its st
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await page.getByRole('button', { name: 'Kanban' }).click();
 
-  // The dropdown sits between the connection status and the view switch.
+  // The picker sits between the connection status and the view switch, opens on all stations,
+  // and keeps "All stations" as its first option.
   const select = page.getByTestId('kds-station-select');
   await expect(select).toBeVisible();
   const selectBox = (await select.boundingBox())!;
   expect(selectBox.x).toBeGreaterThan((await page.getByText('Live', { exact: true }).boundingBox())!.x);
   expect(selectBox.x).toBeLessThan((await page.getByRole('button', { name: 'Tabs', exact: true }).boundingBox())!.x);
+  await expect(select).toHaveValue('');
+  await expect(select.locator('option').first()).toHaveText('All stations');
+  await expect(select.locator('option', { hasText: grill.categoryName })).toHaveCount(1);
 
   await expect(page.getByText(grill.name)).toBeVisible();
   await expect(page.getByText(bar.name)).toBeVisible();
-  await select.selectOption({ label: stationName });
+  await select.selectOption({ label: grill.categoryName });
   await expect(page.getByText(grill.name)).toBeVisible();
   await expect(page.getByText(bar.name)).toHaveCount(0);
 
@@ -94,9 +87,8 @@ test('KDS station dropdown shows one station and the item toggle advances its st
       ]),
     );
 
-  // The station choice survives a reload.
+  // A reload opens on all stations again.
   await page.reload();
-  await expect(page.getByTestId('kds-station-select')).toHaveValue((await station.json()).kitchenStation.id);
-  await page.getByTestId('kds-station-select').selectOption({ label: 'All stations' });
+  await expect(page.getByTestId('kds-station-select')).toHaveValue('');
   await expect(page.getByText(bar.name)).toBeVisible();
 });

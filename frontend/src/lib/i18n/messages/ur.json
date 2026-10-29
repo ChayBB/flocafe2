@@ -563,7 +563,6 @@
     "stationFilter": "اسٹیشن",
     "allStations": "تمام اسٹیشن",
     "noStations": "کوئی اسٹیشن نہیں",
-    "noStationsHint": "اسٹیشن کے مطابق دیکھنے کے لیے ترتیبات میں کچن اسٹیشن شامل کریں",
     "wsConnected": "WebSocket منسلک ہے"
   },
   "nav": {

@@ -28,7 +28,7 @@ import {
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
-  listKdsStationsForUser,
+  listKdsStationCategories,
   annotateKdsItems,
 } from './db';
 import { setupKdsWebSocket, notifyKdsUpdate } from './services/kds';
@@ -361,10 +361,7 @@ export function startKdsServer(): Promise<void> {
         return res.status(403).json({ error: 'KDS is disabled for this business' });
       }
       try {
-        const kdsUser = (req as any).user as KdsRequestUser;
-        const result = listKdsStationsForUser(getDatabase(), kdsUser.userId);
-        if (!result) return res.status(403).json({ error: 'Could not load station permissions' });
-        res.json(result);
+        res.json({ stations: listKdsStationCategories(getDatabase()) });
       } catch (error: any) {
         console.error('[API] Internal error:', error);
         res.status(500).json({ error: 'Internal server error' });

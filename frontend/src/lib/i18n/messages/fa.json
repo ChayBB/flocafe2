@@ -563,7 +563,6 @@
     "stationFilter": "ایستگاه",
     "allStations": "همه ایستگاه‌ها",
     "noStations": "ایستگاهی وجود ندارد",
-    "noStationsHint": "برای فیلتر بر اساس ایستگاه، ایستگاه‌های آشپزخانه را در تنظیمات اضافه کنید",
     "wsConnected": "WebSocket پیوند داده شد"
   },
   "nav": {

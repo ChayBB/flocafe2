@@ -563,7 +563,6 @@
     "stationFilter": "工作站",
     "allStations": "所有工作站",
     "noStations": "暂无工作站",
-    "noStationsHint": "在设置中添加厨房工作站即可按工作站筛选",
     "wsConnected": "WebSocket 已连接"
   },
   "nav": {

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, listKdsStationsForUser, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
+import { getDatabase, listKdsStationCategories, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
 import { requireKdsEnabled } from '../middleware/security';
 import { requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
@@ -19,13 +19,10 @@ const ACTIVE_KITCHEN_ORDER_IDS_SQL = `
   WHERE o.status NOT IN ('pending','preparing','ready','served','cancelled')
 `;
 
-// GET /api/kitchen/stations — stations this user can show on the KDS
-router.get('/stations', (req: Request, res: Response) => {
+// GET /api/kitchen/stations — the menu categories the KDS can show one at a time
+router.get('/stations', (_req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.userId;
-    const result = userId ? listKdsStationsForUser(getDatabase(), userId) : null;
-    if (!result) return res.status(403).json({ error: 'Could not load station permissions' });
-    res.json(result);
+    res.json({ stations: listKdsStationCategories(getDatabase()) });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -563,7 +563,6 @@
     "stationFilter": "İstasyon",
     "allStations": "Tüm istasyonlar",
     "noStations": "İstasyon yok",
-    "noStationsHint": "İstasyona göre filtrelemek için Ayarlar’dan mutfak istasyonu ekleyin",
     "wsConnected": "WebSocket Bağlı"
   },
   "nav": {

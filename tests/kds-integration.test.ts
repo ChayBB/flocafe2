@@ -180,13 +180,13 @@ async function run() {
       .set('Authorization', `Bearer ${token}`);
     assert(chefStations.status === 200, 'Standalone stations request succeeds');
     assert(
-      JSON.stringify(chefStations.body.stations.map((station: any) => station.id)) === '["kds-integration-station"]',
-      'A station-assigned chef can pick only their own station',
+      chefStations.body.stations.some((station: any) => station.id === 'kds-category' && station.name === 'Kitchen'),
+      'The KDS station picker lists the menu categories',
     );
-    assert(
-      JSON.stringify(chefStations.body.assigned_station_ids) === '["kds-integration-station"]',
-      'The assigned station is reported as the chef default',
-    );
+    const taggedItem = (await request(`http://127.0.0.1:${port}`)
+      .get('/api/kds/orders')
+      .set('Authorization', `Bearer ${token}`)).body.orders[0]?.items?.[0];
+    assert(taggedItem?.station_category_id === 'kds-category', 'KDS items carry their menu category for the picker');
 
     const unrestrictedLogin = await request(`http://127.0.0.1:${port}`)
       .post('/api/auth/login')

@@ -7,37 +7,18 @@ import { KdsTabsView } from '@/components/kds/KdsTabsView';
 import { useKdsView } from '@/hooks/useKdsView';
 import type { UseKdsConnectionResult } from '@/hooks/useKdsConnection';
 
-const STATION_KEY = 'flocafe:kds-station';
-
-/** The station this display last showed; null until one is picked, '' for all stations. */
-function readStoredStation(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem(STATION_KEY);
-  } catch {
-    return null;
-  }
-}
-
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const { viewMode, setViewMode } = useKdsView(serverDefault);
-  const [storedStation, setStoredStation] = useState(readStoredStation);
-  const preferred = storedStation ?? conn.assignedStationIds[0] ?? '';
-  const stationId = conn.stations.some((station) => station.id === preferred) ? preferred : '';
-
-  const changeStation = (next: string) => {
-    setStoredStation(next);
-    try {
-      window.localStorage.setItem(STATION_KEY, next);
-    } catch {}
-  };
+  // Every display opens on all stations; picking one narrows the board to that category.
+  const [selectedStation, setSelectedStation] = useState('');
+  const stationId = conn.stations.some((station) => station.id === selectedStation) ? selectedStation : '';
 
   const orders = useMemo(() => {
     if (!stationId) return conn.orders;
     return conn.orders
       .map((order) => ({
         ...order,
-        items: (order.items || []).filter((item) => item.station_ids?.includes(stationId)),
+        items: (order.items || []).filter((item) => item.station_category_id === stationId),
       }))
       .filter((order) => order.items.length > 0);
   }, [conn.orders, stationId]);
@@ -53,7 +34,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         onChangeView={setViewMode}
         stations={conn.stations}
         stationId={stationId}
-        onChangeStation={changeStation}
+        onChangeStation={setSelectedStation}
         onLogout={conn.handleLogout}
       />
       <div className="flex-1 min-h-0 flex flex-col">

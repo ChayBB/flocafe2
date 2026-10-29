@@ -3396,48 +3396,20 @@ export function getKdsStationCategoryIds(
   }
 }
 
-type KdsStationRow = { id: string; name: string; category_ids: string[] };
-
-function loadActiveKdsStations(dbInstance: Database.Database): KdsStationRow[] {
-  const rows = dbInstance
+/** The KDS station picker lists the menu categories, so each display can show one category. */
+export function listKdsStationCategories(dbInstance: Database.Database): { id: string; name: string }[] {
+  return dbInstance
     .prepare(
-      'SELECT id, name, category_ids FROM kitchen_stations WHERE is_active = 1 ORDER BY sort_order, name',
+      `SELECT id, name FROM categories
+       WHERE is_active = 1 AND deleted_at IS NULL
+       ORDER BY sort_order, name`,
     )
-    .all() as { id: string; name: string; category_ids: string | null }[];
-  return rows.map((row) => {
-    let categoryIds: string[] = [];
-    try {
-      const parsed = row.category_ids ? JSON.parse(row.category_ids) : [];
-      if (Array.isArray(parsed)) categoryIds = parsed.filter((id) => id != null).map(String);
-    } catch {}
-    return { id: String(row.id), name: row.name, category_ids: categoryIds };
-  });
+    .all() as { id: string; name: string }[];
 }
 
 /**
- * Active stations a KDS user can pick from: their assigned stations, or every active
- * station when they have no assignment. The assigned ones are the user's default view.
- */
-export function listKdsStationsForUser(
-  dbInstance: Database.Database,
-  userId: string,
-): { stations: { id: string; name: string }[]; assigned_station_ids: string[] } | null {
-  const assigned = getUserKdsStationIds(dbInstance, userId);
-  if (!assigned) return null;
-  const stations = loadActiveKdsStations(dbInstance)
-    .filter((station) => assigned.length === 0 || assigned.includes(station.id))
-    .map(({ id, name }) => ({ id, name }));
-  return {
-    stations,
-    assigned_station_ids: assigned.filter((id) => stations.some((station) => station.id === id)),
-  };
-}
-
-/**
- * Tags every KDS item with the stations that prepare it, so a display can show one station,
+ * Tags every KDS item with its menu category, so a display can show one category,
  * and with the price the kitchen set for a weighed or kitchen-priced line.
- * A table assigned to a station routes its items there; otherwise a station takes the items
- * of its categories, and a station without categories takes everything.
  */
 export function annotateKdsItems<T extends { items?: any[] }>(
   dbInstance: Database.Database,
@@ -3445,34 +3417,22 @@ export function annotateKdsItems<T extends { items?: any[] }>(
 ): T[] {
   const itemIds = orders.flatMap((order) => (order.items || []).map((item) => item.id));
   if (itemIds.length === 0) return orders;
-  const stations = loadActiveKdsStations(dbInstance);
-  const routing = new Map<
-    string,
-    { tableStation: string | null; categoryId: string | null; setPrice: number | null }
-  >();
+  const details = new Map<string, { categoryId: string | null; setPrice: number | null }>();
   for (let start = 0; start < itemIds.length; start += 500) {
     const chunk = itemIds.slice(start, start + 500);
     const rows = dbInstance
       .prepare(
-        `SELECT oi.id, t.kitchen_station_id AS table_station, p.category_id,
+        `SELECT oi.id, p.category_id,
                 CASE WHEN oi.weight_pending = 0
                        AND (oi.weight IS NOT NULL OR oi.pending_price_mode = 'kitchen_price')
                      THEN oi.unit_price END AS set_price
          FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id
-         LEFT JOIN tables t ON t.id = o.table_id
          LEFT JOIN products p ON p.id = oi.product_id
          WHERE oi.id IN (${chunk.map(() => '?').join(',')})`,
       )
-      .all(...chunk) as {
-      id: number;
-      table_station: string | null;
-      category_id: string | null;
-      set_price: number | null;
-    }[];
+      .all(...chunk) as { id: number; category_id: string | null; set_price: number | null }[];
     for (const row of rows) {
-      routing.set(String(row.id), {
-        tableStation: row.table_station ? String(row.table_station) : null,
+      details.set(String(row.id), {
         categoryId: row.category_id ? String(row.category_id) : null,
         setPrice: row.set_price == null ? null : Number(row.set_price),
       });
@@ -3487,25 +3447,14 @@ export function annotateKdsItems<T extends { items?: any[] }>(
   } catch {
     // Regional settings not configured yet; the KDS shows a plain number.
   }
-  const takes = (station: KdsStationRow, categoryId: string | null) =>
-    station.category_ids.length === 0 || (!!categoryId && station.category_ids.includes(categoryId));
   return orders.map((order) => ({
     ...order,
     items: (order.items || []).map((item) => {
-      const route = routing.get(String(item.id));
-      let stationIds: string[] = [];
-      if (route?.tableStation) {
-        const station = stations.find((candidate) => candidate.id === route.tableStation);
-        stationIds = station && takes(station, route.categoryId) ? [station.id] : [];
-      } else if (route) {
-        stationIds = stations
-          .filter((station) => takes(station, route.categoryId))
-          .map((station) => station.id);
-      }
+      const detail = details.get(String(item.id));
       return {
         ...item,
-        station_ids: stationIds,
-        kitchen_set_price: route?.setPrice ?? null,
+        station_category_id: detail?.categoryId ?? null,
+        kitchen_set_price: detail?.setPrice ?? null,
         currency,
       };
     }),

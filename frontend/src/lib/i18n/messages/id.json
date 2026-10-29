@@ -563,7 +563,6 @@
     "stationFilter": "Stasiun",
     "allStations": "Semua stasiun",
     "noStations": "Belum ada stasiun",
-    "noStationsHint": "Tambahkan stasiun dapur di Pengaturan untuk memfilter per stasiun",
     "wsConnected": "WebSocket terhubung"
   },
   "nav": {

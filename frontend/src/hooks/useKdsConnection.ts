@@ -123,8 +123,8 @@ export interface KdsOrderItem {
     | null;
   created_at?: string;
   updated_at?: string;
-  /** Stations that prepare this item. */
-  station_ids?: string[];
+  /** Menu category the KDS station picker filters on. */
+  station_category_id?: string | null;
   /** Price the kitchen set for a weighed or kitchen-priced line. */
   kitchen_set_price?: number | null;
   currency?: string;
@@ -190,8 +190,6 @@ export interface UseKdsConnectionResult {
   user: KdsUser | null;
   orders: KdsOrder[];
   stations: KdsStation[];
-  /** Stations the user is assigned to; their default view. */
-  assignedStationIds: string[];
   counts: Record<string, number>;
   loading: boolean;
   connected: boolean;
@@ -851,26 +849,20 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   }, [connectionMode, user, startRestPolling, stopRestPolling, enabled]);
 
   const [stations, setStations] = useState<KdsStation[]>([]);
-  const [assignedStationIds, setAssignedStationIds] = useState<string[]>([]);
   const userId = user?.id;
   useEffect(() => {
     if (!enabled || !userId) {
       setStations([]);
-      setAssignedStationIds([]);
       return;
     }
     let cancelled = false;
     api
       .get(stationsPath)
       .then(({ data }) => {
-        if (cancelled) return;
-        setStations(Array.isArray(data?.stations) ? data.stations : []);
-        setAssignedStationIds(Array.isArray(data?.assigned_station_ids) ? data.assigned_station_ids : []);
+        if (!cancelled) setStations(Array.isArray(data?.stations) ? data.stations : []);
       })
       .catch(() => {
-        if (cancelled) return;
-        setStations([]);
-        setAssignedStationIds([]);
+        if (!cancelled) setStations([]);
       });
     return () => {
       cancelled = true;
@@ -881,7 +873,6 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     user,
     orders,
     stations,
-    assignedStationIds,
     counts,
     loading,
     connected,
