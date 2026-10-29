@@ -33,6 +33,7 @@ import {
   tenantTimezone,
   cashOperationFailurePayload,
 } from './cash-closures';
+import { clockNow } from '../lib/clock';
 
 const router = Router();
 
@@ -160,7 +161,7 @@ function closeSessionTxn(
     throw httpError(`Could not allocate Z number: ${errorMessage(err, 'sequence failure')}`, 500);
   }
   const businessDate = localDateInTimezone(
-    new Date(),
+    clockNow(),
     tenantTimezone(),
     tenantBusinessDayStartTime(db),
   );
@@ -282,7 +283,7 @@ router.post('/open', requirePermission('cash.shifts.open'), (req: Request, res: 
       if (getOpenSession(db))
         throw httpError('A shift is already open', 409, 'session_already_open');
       const openBusinessDate = localDateInTimezone(
-        new Date(),
+        clockNow(),
         tenantTimezone(),
         tenantBusinessDayStartTime(db),
       );

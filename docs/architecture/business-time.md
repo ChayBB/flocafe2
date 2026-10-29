@@ -12,6 +12,20 @@ refunds, printing, and the frontend.
 `now()` writes the SQLite `CURRENT_TIMESTAMP` format: `YYYY-MM-DD HH:MM:SS`, in UTC, with no zone
 suffix and no fractional seconds.
 
+### Reference clock
+
+`now()` reads `clockNow()` from [`main/lib/clock.ts`](../../main/lib/clock.ts), not the machine
+clock. At startup and then hourly, the app asks `time.navy.mi.th`, then `th.pool.ntp.org`, over
+SNTP and applies the measured offset. A reply must echo the request's timestamp and come from a
+synchronised server (stratum 1–15); anything else is ignored. Offline, the last correction stays,
+or the machine clock is used when no sync has succeeded, so a POS without internet keeps working.
+The sync is skipped when `FLO_E2E_SKIP_OPTIONAL_NETWORK=1`.
+
+Business-day resolution for shifts, cash closures, reports, and expenses; order and invoice date
+stamps; tax transaction dates; and printed-at times use the same clock. Column defaults written
+by SQLite itself (`DEFAULT CURRENT_TIMESTAMP`) and authentication token lifetimes still follow the
+machine clock.
+
 That form is **not** what `new Date(string)` expects. In V8, a space-delimited timestamp parses as
 machine-local time, so a naive parse shifts every reading by the developer's own UTC offset.
 

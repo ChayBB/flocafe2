@@ -75,6 +75,7 @@ import {
 } from '../countries';
 import { asyncHandler } from '../middleware/async-handler';
 import { getHttpRequestSignal } from '../shutdown';
+import { clockNow } from '../lib/clock';
 
 const router = Router();
 
@@ -796,7 +797,7 @@ router.post(
         includeModifiers: body.includeModifiers,
         businessName: settings.business_name || 'Store',
         printedAt: formatDateForTenant(
-          new Date(),
+          clockNow(),
           regional.country,
           regional.timezone,
           regional.preferences,

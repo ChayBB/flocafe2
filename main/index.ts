@@ -113,6 +113,7 @@ import {
   type ShutdownEntrypointApp,
   type ShutdownEntrypointProcess,
 } from './shutdown';
+import { startClockSync } from './lib/clock';
 
 // Disable GPU sandbox on Windows to avoid DLL crash fallback
 if (process.platform === 'win32') {
@@ -1482,6 +1483,7 @@ async function initialize(): Promise<void> {
     if (process.env.FLO_E2E_SKIP_OPTIONAL_NETWORK !== '1') {
       console.log('[Flo] Starting mDNS advertisement...');
       startMdns();
+      startClockSync();
     }
 
     console.log('[Flo] Initializing printer...');

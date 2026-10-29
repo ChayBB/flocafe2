@@ -124,6 +124,7 @@ import {
   buildEscPos,
   parseAddons,
 } from './formatting-helpers';
+import { clockNow } from '../lib/clock';
 
 export {
   type PrintWarning,
@@ -3129,7 +3130,7 @@ export function buildTestPage(
     ruler,
     edgeProbe,
     bar,
-    `${label('print.time')}: ${new Date().toLocaleString('en-US-u-nu-latn', { hourCycle: 'h23', ...(timezone ? { timeZone: timezone } : {}) })}`,
+    `${label('print.time')}: ${clockNow().toLocaleString('en-US-u-nu-latn', { hourCycle: 'h23', ...(timezone ? { timeZone: timezone } : {}) })}`,
     '',
     bar,
     '{CENTER}' + label('print.test.success') + '{/CENTER}',

@@ -19,6 +19,7 @@ import {
   utcDayBounds,
 } from '../shared/business-date';
 import { getCurrencyFractionDigits, resolveRegionalSnapshot, resolveTenantCurrency } from './countries';
+import { clockNow } from './lib/clock';
 
 const USER_ROLE_SQL_CHECK = `CHECK (role IN (${ROLE_KEYS.map((role) => `'${role}'`).join(', ')}))`;
 
@@ -8667,11 +8668,11 @@ export function dateStampInTimezone(timezone: string): string {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).formatToParts(new Date());
+    }).formatToParts(clockNow());
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
     return `${get('year')}${get('month')}${get('day')}`;
   } catch {
-    return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return clockNow().toISOString().slice(0, 10).replace(/-/g, '');
   }
 }
 
@@ -8684,7 +8685,7 @@ function datePartsInTimezone(timezone: string): { year: number; month: number; d
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).formatToParts(new Date());
+    }).formatToParts(clockNow());
     const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
     const year = get('year');
     const month = get('month');
@@ -8694,7 +8695,7 @@ function datePartsInTimezone(timezone: string): { year: number; month: number; d
     }
   } catch {}
 
-  const [year, month, day] = new Date().toISOString().slice(0, 10).split('-').map(Number);
+  const [year, month, day] = clockNow().toISOString().slice(0, 10).split('-').map(Number);
   return { year, month, day };
 }
 
@@ -8792,8 +8793,8 @@ export function generateBillNumber(): string {
 }
 
 export function now(): string {
-  // Returns SQLite CURRENT_TIMESTAMP format (`YYYY-MM-DD HH:MM:SS`, UTC).
-  return new Date().toISOString().replace('T', ' ').replace(/\..*$/, '');
+  // Returns SQLite CURRENT_TIMESTAMP format (`YYYY-MM-DD HH:MM:SS`, UTC) on the NTP-corrected clock.
+  return clockNow().toISOString().replace('T', ' ').replace(/\..*$/, '');
 }
 
 /** Records who performed an order/item mutation (docs/reference/product-invariants.md). */
@@ -8829,7 +8830,7 @@ export function parseDbTimestamp(ts: string | null | undefined): Date {
 
 /** "Today" as a `YYYY-MM-DD` string in UTC for non-tenant uses. */
 export function utcTodayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return clockNow().toISOString().slice(0, 10);
 }
 
 // The business-day rule lives in shared/business-date.ts so the renderer cannot

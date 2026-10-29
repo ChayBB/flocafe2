@@ -20,6 +20,7 @@ import {
 import { resolveRegionalSnapshot } from '../countries';
 import { getOpenSession, type CashSessionRow } from './shift-session-gate';
 import { MAX_MOVEMENT_REASON_LENGTH, insertCashDrawerMovement } from './cash-drawer-movements';
+import { clockNow } from '../lib/clock';
 
 type ExpenseDb = ReturnType<typeof getDatabase>;
 
@@ -272,7 +273,7 @@ function tenantRegionalSnapshot(): { currency: string; timezone: string } {
 /** Store-local business date, so an expense can be dated to a closed trading day. */
 export function currentBusinessDate(): string {
   const regional = tenantRegionalSnapshot();
-  return localDateInTimezone(new Date(), regional.timezone, tenantBusinessDayStartTime());
+  return localDateInTimezone(clockNow(), regional.timezone, tenantBusinessDayStartTime());
 }
 
 const MAX_SAFE_TOTAL = BigInt(Number.MAX_SAFE_INTEGER);

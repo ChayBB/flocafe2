@@ -18,6 +18,7 @@ import { TRUSTED_TAX_PACK_SIGNING_PUBLIC_KEY } from '../tax-packs/trusted-signin
 import { asyncHandler } from '../middleware/async-handler';
 import { getHttpRequestSignal } from '../shutdown';
 import { getCurrencyFractionDigits } from '../countries';
+import { clockNow } from '../lib/clock';
 
 const router = Router();
 const BUNDLED_PACKS_BY_ID = new Map(BUNDLED_COUNTRY_PACKS.map((pack) => [pack.id, pack]));
@@ -1042,7 +1043,7 @@ function buildManualPack(body: any, country: string, currency: string): CountryP
   const unclassifiedId = slugifyTaxId('unclassified', usedCategoryIds, 'unclassified');
   categories.push({ id: unclassifiedId, label: 'Unclassified', ruleIds: [] });
 
-  const effectiveFrom = new Date().toISOString().slice(0, 10);
+  const effectiveFrom = clockNow().toISOString().slice(0, 10);
   return {
     schemaVersion: 1,
     id: `manual-${country.toLowerCase()}`,
@@ -1241,7 +1242,7 @@ router.post('/test-calculation', requirePermission('tax-packs.view-test'), (req:
       jurisdiction: active.definition.jurisdiction,
       businessType: getSettingValue('business_type') || 'restaurant',
       storeStateCode: getSettingValue('state_code') || '',
-      transactionDate: new Date().toISOString(),
+      transactionDate: clockNow().toISOString(),
       lines: [{
         lineId: 'settings-test-calculation',
         kind: 'product',

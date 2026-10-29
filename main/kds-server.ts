@@ -26,6 +26,7 @@ import {
   isKdsEnabled,
   isVoidedItemKdsVisible,
   KDS_VOIDED_ITEM_VISIBILITY_MS,
+  now,
   projectKdsItem,
   projectKdsOrder,
   listKdsStationCategories,
@@ -669,17 +670,17 @@ export function startKdsServer(): Promise<void> {
                 ? db
                     .prepare(`
                 UPDATE order_items
-                SET status = ?, updated_at = datetime('now')
+                SET status = ?, updated_at = ?
                 WHERE id = ? AND status NOT IN ('voided', 'void_adjustment', 'completed', 'cancelled', 'refunded')
               `)
-                    .run(status, req.params.id)
+                    .run(status, now(), req.params.id)
                 : db
                     .prepare(`
                 UPDATE order_items
-                SET status = ?, updated_at = datetime('now')
+                SET status = ?, updated_at = ?
                 WHERE id = ? AND status = ?
               `)
-                    .run(status, req.params.id, expectedStatus);
+                    .run(status, now(), req.params.id, expectedStatus);
             return updated.changes === 1
               ? { statusCode: 200, error: null }
               : { statusCode: 409, error: 'The order item changed before it could be updated' };

@@ -86,6 +86,7 @@ export interface TaxRollup {
 
 import { TaxEngine, applyPayableRounding, type TaxEngineLine } from './tax-engine';
 import type { CountryPack, TaxRule } from '../tax-packs/types';
+import { clockNow } from '../lib/clock';
 
 function round(value: number, decimals: number = 2): number {
   if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 0;
@@ -434,7 +435,7 @@ export function calculateDocumentTaxes(
       country: tenant.country,
       businessType: tenant.business_type,
       storeStateCode: tenant.state_code,
-      transactionDate: new Date().toISOString(),
+      transactionDate: clockNow().toISOString(),
       customer: customer
         ? {
             registrationNumber: customer.taxRegistrationNumber,

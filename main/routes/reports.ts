@@ -38,6 +38,7 @@ import {
   type XReportExport,
   type ZReportExport,
 } from '../services/cash-close-export';
+import { clockNow } from '../lib/clock';
 
 const router = Router();
 
@@ -101,7 +102,7 @@ function tenantStartTime(): string {
 }
 
 function reportToday(): string {
-  return localDateInTimezone(new Date(), tenantTimezone(), tenantStartTime());
+  return localDateInTimezone(clockNow(), tenantTimezone(), tenantStartTime());
 }
 
 function reportDayBounds(date: string): [string, string] {

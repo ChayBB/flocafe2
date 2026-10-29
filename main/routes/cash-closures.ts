@@ -69,6 +69,7 @@ import {
 import { resolveReceiptLanguages, type ReceiptLanguagePolicy } from '../../shared/print';
 import { isOperationReference, serializeOperationFailure } from '../lib/operation-failure';
 import { cloudSync } from '../services/cloud-sync';
+import { clockNow } from '../lib/clock';
 
 const router = Router();
 const MAX_NOTES_LENGTH = 500;
@@ -171,7 +172,7 @@ function validateBusinessDate(raw: unknown): string {
   // "today" in the store's configured timezone and cutoff must never be
   // rejected as future even when the host's UTC clock is still on yesterday.
   // ISO date arithmetic on the YYYY-MM-DD string is timezone-safe.
-  const todayLocal = localDateInTimezone(new Date(), tenantTimezone(), tenantStartTime());
+  const todayLocal = localDateInTimezone(clockNow(), tenantTimezone(), tenantStartTime());
   if (raw > todayLocal) {
     throw httpError('business_date cannot be in the future', 400, 'future_business_date');
   }
