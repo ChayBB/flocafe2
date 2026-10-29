@@ -547,6 +547,8 @@
     "stageSwitch": "{status} مرحلہ آن یا آف",
     "stageActive": "آن",
     "stageSkipped": "چھوڑا جا رہا ہے",
+    "settingsTitle": "KDS ترتیبات",
+    "settingsColumnsHint": "{station} پر استعمال ہونے والے کالم۔ بند کالم بورڈ سے ہٹ جاتا ہے اور آئٹمز اسے چھوڑ دیتے ہیں۔",
     "modalOrderNumber": "آرڈر #{orderNumber}",
     "ordersActive": "{count} فعال",
     "restPolling": "REST پوڈنگ (بیک اپ)",

@@ -547,6 +547,8 @@
     "stageSwitch": "{status} चरण खोल्ने वा बन्द गर्ने",
     "stageActive": "खुला",
     "stageSkipped": "छोडिएको",
+    "settingsTitle": "KDS सेटिङ",
+    "settingsColumnsHint": "{station} मा प्रयोग हुने स्तम्भ। बन्द स्तम्भ बोर्डबाट हट्छ र वस्तुहरूले त्यसलाई छोड्छन्।",
     "modalOrderNumber": "अर्डर #{orderNumber}",
     "ordersActive": "{count} सक्रिय",
     "restPolling": "REST मतदान (फलब्याक)",

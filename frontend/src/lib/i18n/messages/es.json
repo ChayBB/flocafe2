@@ -547,6 +547,8 @@
     "stageSwitch": "Activar o desactivar la etapa {status}",
     "stageActive": "Activa",
     "stageSkipped": "Omitida",
+    "settingsTitle": "Ajustes del KDS",
+    "settingsColumnsHint": "Columnas usadas en {station}. Una columna apagada sale del tablero y los artículos la saltan.",
     "modalOrderNumber": "Pedido #{orderNumber}",
     "ordersActive": "{count} activos",
     "restPolling": "Sondeo REST (respaldo)",

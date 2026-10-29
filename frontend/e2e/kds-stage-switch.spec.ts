@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-test('switching off the in-progress and ready columns sends an item straight to served', async ({ page }) => {
+test('KDS settings switch columns off so the remaining ones sit together and items skip ahead', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
   const run = Math.random().toString(36).slice(2, 7);
@@ -43,20 +43,28 @@ test('switching off the in-progress and ready columns sends an item straight to 
   await page.getByRole('button', { name: 'Kanban' }).click();
   await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
 
-  // Only the in-progress and ready columns carry a switch, under the column.
-  await expect(page.getByTestId('kds-stage-switch-pending')).toHaveCount(0);
-  await expect(page.getByTestId('kds-stage-switch-served')).toHaveCount(0);
-  const preparing = page.getByTestId('kds-stage-switch-preparing');
-  const ready = page.getByTestId('kds-stage-switch-ready');
-  const columnBox = (await page.getByTestId('kds-column-preparing').boundingBox())!;
-  const switchBox = (await preparing.boundingBox())!;
-  expect(switchBox.y).toBeGreaterThan(columnBox.y + columnBox.height - switchBox.height - 20);
-  await expect(preparing).toHaveAttribute('aria-checked', 'true');
+  // The gear sits just before logout and opens the column switches for every stage.
+  const gear = page.getByTestId('kds-settings-button');
+  const gearBox = (await gear.boundingBox())!;
+  expect(gearBox.x).toBeGreaterThan((await page.getByRole('button', { name: 'Kanban' }).boundingBox())!.x);
+  expect(gearBox.x).toBeLessThan((await page.getByTitle('Logout', { exact: true }).boundingBox())!.x);
+  await gear.click();
+  const dialog = page.getByTestId('kds-settings-dialog');
+  await expect(dialog).toContainText(categoryName);
+  for (const stage of ['pending', 'preparing', 'ready', 'served']) {
+    await expect(dialog.getByTestId(`kds-stage-switch-${stage}`)).toHaveAttribute('aria-checked', 'true');
+  }
+  await dialog.getByTestId('kds-stage-switch-preparing').click();
+  await dialog.getByTestId('kds-stage-switch-ready').click();
+  await expect(dialog.getByTestId('kds-stage-switch-preparing')).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Escape');
 
-  await preparing.click();
-  await ready.click();
-  await expect(preparing).toHaveAttribute('aria-checked', 'false');
-  await expect(ready).toHaveAttribute('aria-checked', 'false');
+  // Switched-off columns leave the board, so waiting and served sit side by side.
+  await expect(page.getByTestId('kds-column-preparing')).toHaveCount(0);
+  await expect(page.getByTestId('kds-column-ready')).toHaveCount(0);
+  const waiting = (await page.getByTestId('kds-column-pending').boundingBox())!;
+  const served = (await page.getByTestId('kds-column-served').boundingBox())!;
+  expect(served.x - (waiting.x + waiting.width)).toBeLessThan(40);
 
   const row = page.getByText(productName).locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
   await row.getByRole('button', { name: 'Move to Delivered' }).click();
@@ -67,10 +75,17 @@ test('switching off the in-progress and ready columns sends an item straight to 
     })
     .toBe('served');
 
-  // The switches stay off for this station after a reload; other stations keep every stage.
+  // The last column in use cannot be switched off.
+  await gear.click();
+  await dialog.getByTestId('kds-stage-switch-pending').click();
+  await expect(dialog.getByTestId('kds-stage-switch-served')).toBeDisabled();
+  await dialog.getByTestId('kds-stage-switch-pending').click();
+  await page.keyboard.press('Escape');
+
+  // The choice stays for this station after a reload; other stations keep every column.
   await page.reload();
   await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
-  await expect(page.getByTestId('kds-stage-switch-preparing')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByTestId('kds-column-preparing')).toHaveCount(0);
   await page.getByTestId('kds-station-select').selectOption({ label: 'All stations' });
-  await expect(page.getByTestId('kds-stage-switch-preparing')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('kds-column-preparing')).toHaveCount(1);
 });

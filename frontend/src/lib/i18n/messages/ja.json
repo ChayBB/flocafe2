@@ -547,6 +547,8 @@
     "stageSwitch": "{status}の段階をオン／オフ",
     "stageActive": "オン",
     "stageSkipped": "スキップ",
+    "settingsTitle": "KDS設定",
+    "settingsColumnsHint": "{station}で使う列。オフの列はボードから消え、品目はその段階を飛ばします。",
     "modalOrderNumber": "注文 #{orderNumber}",
     "ordersActive": "進行中 {count}件",
     "restPolling": "RESTポーリング（フォールバック）",

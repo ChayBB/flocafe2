@@ -547,6 +547,8 @@
     "stageSwitch": "Attiva o disattiva la fase {status}",
     "stageActive": "Attiva",
     "stageSkipped": "Saltata",
+    "settingsTitle": "Impostazioni KDS",
+    "settingsColumnsHint": "Colonne usate in {station}. Una colonna spenta lascia la bacheca e gli articoli la saltano.",
     "modalOrderNumber": "Ordine n. {orderNumber}",
     "ordersActive": "{count} attivi",
     "restPolling": "Polling REST (fallback)",

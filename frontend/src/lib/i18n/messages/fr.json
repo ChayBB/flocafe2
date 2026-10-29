@@ -547,6 +547,8 @@
     "stageSwitch": "Activer ou désactiver l’étape {status}",
     "stageActive": "Activée",
     "stageSkipped": "Ignorée",
+    "settingsTitle": "Paramètres KDS",
+    "settingsColumnsHint": "Colonnes utilisées à {station}. Une colonne désactivée quitte le tableau et les articles la sautent.",
     "modalOrderNumber": "Commande n° {orderNumber}",
     "ordersActive": "{count} active(s)",
     "restPolling": "Interrogation REST (secours)",

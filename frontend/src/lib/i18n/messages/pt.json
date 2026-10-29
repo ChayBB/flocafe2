@@ -547,6 +547,8 @@
     "stageSwitch": "Ligar ou desligar a etapa {status}",
     "stageActive": "Ativa",
     "stageSkipped": "Ignorada",
+    "settingsTitle": "Configurações do KDS",
+    "settingsColumnsHint": "Colunas usadas em {station}. Uma coluna desligada sai do quadro e os itens a pulam.",
     "modalOrderNumber": "Pedido #{orderNumber}",
     "ordersActive": "{count} ativos",
     "restPolling": "Busca REST (alternativa)",

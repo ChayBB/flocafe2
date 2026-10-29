@@ -547,6 +547,8 @@
     "stageSwitch": "I-on o i-off ang yugtong {status}",
     "stageActive": "Naka-on",
     "stageSkipped": "Nilaktawan",
+    "settingsTitle": "Mga setting ng KDS",
+    "settingsColumnsHint": "Mga column na gamit sa {station}. Nawawala sa board ang naka-off na column at nilalaktawan ito ng mga item.",
     "modalOrderNumber": "Order #{orderNumber}",
     "ordersActive": "{count} aktibong mga order",
     "restPolling": "Naka-enable ang REST Polling",

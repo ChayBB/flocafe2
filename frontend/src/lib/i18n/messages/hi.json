@@ -547,6 +547,8 @@
     "stageSwitch": "{status} चरण चालू या बंद",
     "stageActive": "चालू",
     "stageSkipped": "छोड़ा गया",
+    "settingsTitle": "KDS सेटिंग्स",
+    "settingsColumnsHint": "{station} पर उपयोग होने वाले कॉलम। बंद कॉलम बोर्ड से हट जाता है और आइटम उसे छोड़ देते हैं।",
     "modalOrderNumber": "ऑर्डर #{orderNumber}",
     "ordersActive": "{count} सक्रिय",
     "restPolling": "REST पोलिंग (फ़ॉलबैक)",

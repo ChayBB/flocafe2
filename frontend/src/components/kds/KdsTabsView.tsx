@@ -6,6 +6,7 @@ import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
+import { activeStages, boardColumnFor } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
 import {
   STATUS_CONFIG,
@@ -23,8 +24,8 @@ import { formatItemHeading } from '@/lib/printer/item-heading';
 export interface KdsTabsViewProps {
   orders: KdsOrder[];
   updating: number | null;
-  /** Stages this display has switched off; the item toggle skips them. */
-  skippedStatuses: readonly KitchenStatus[];
+  /** Stages this display has switched off; their tabs leave the view. */
+  inactiveStatuses: readonly KitchenStatus[];
   updateItemStatus: (itemId: number, status: KitchenStatus, opts?: { expectedStatus?: KitchenStatus }) => Promise<boolean>;
 }
 
@@ -33,10 +34,16 @@ interface ModalItem {
   orderNumber: string;
 }
 
-export function KdsTabsView({ orders, updating, skippedStatuses, updateItemStatus }: KdsTabsViewProps) {
+export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStatus }: KdsTabsViewProps) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
-  const [activeTab, setActiveTab] = useState<KitchenStatus>('pending');
+  const [selectedTab, setSelectedTab] = useState<KitchenStatus>('pending');
+  const tabs: KitchenStatus[] = [...activeStages(inactiveStatuses), 'voided'];
+  const activeTab = tabs.includes(selectedTab) ? selectedTab : tabs[0];
+  const tabOf = (item: KdsOrderItem): KitchenStatus | null => {
+    const status = normalizeKitchenStatus(item.status);
+    return status === 'voided' ? 'voided' : boardColumnFor(status, inactiveStatuses);
+  };
   const [modalItem, setModalItem] = useState<ModalItem | null>(null);
   const resolvedModalItem = modalItem
     ? { ...modalItem, item: orders.flatMap((order) => order.items || []).find((item) => item.id === modalItem.item.id) || modalItem.item }
@@ -47,27 +54,27 @@ export function KdsTabsView({ orders, updating, skippedStatuses, updateItemStatu
   const filteredOrders = orders
     .map((order) => ({
       ...order,
-      items: (order.items || []).filter((item) => normalizeKitchenStatus(item.status) === activeTab),
+      items: (order.items || []).filter((item) => tabOf(item) === activeTab),
     }))
     .filter((order) => order.items.length > 0);
 
   const orderCounts = (status: KitchenStatus): number =>
     orders.reduce(
-      (sum, order) => sum + (order.items || []).filter((item) => normalizeKitchenStatus(item.status) === status).length,
+      (sum, order) => sum + (order.items || []).filter((item) => tabOf(item) === status).length,
       0,
     );
 
   return (
     <>
       <div className="shrink-0 flex flex-wrap items-center gap-2 mb-4">
-        {(Object.keys(STATUS_CONFIG) as KitchenStatus[]).map((status) => {
+        {tabs.map((status) => {
           const config = STATUS_CONFIG[status];
           const count = orderCounts(status);
           const isActive = activeTab === status;
           return (
             <button
               key={status}
-              onClick={() => setActiveTab(status)}
+              onClick={() => setSelectedTab(status)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
                 isActive
                   ? `${config.bg} ${config.text} ring-2 ring-current`
@@ -160,8 +167,8 @@ export function KdsTabsView({ orders, updating, skippedStatuses, updateItemStatu
                       )}
                     </button>
                     <KdsStatusToggle
-                      status={itemStatus}
-                      skipped={skippedStatuses}
+                      status={activeTab}
+                      skipped={inactiveStatuses}
                       disabled={updating === item.id}
                       onAdvance={(nextStatus) => {
                         void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });

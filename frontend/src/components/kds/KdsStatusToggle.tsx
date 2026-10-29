@@ -2,19 +2,8 @@
 
 import { ChevronRight } from 'lucide-react';
 import { useTranslations } from 'use-intl';
-import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
-
-/** Stages a display can switch off so items jump straight past them. */
-export const SKIPPABLE_STATUSES: readonly KitchenStatus[] = ['preparing', 'ready'];
-
-export function nextKitchenStatus(
-  status: KitchenStatus,
-  skipped: readonly KitchenStatus[] = [],
-): KitchenStatus | null {
-  const index = STATUS_ORDER.indexOf(status as (typeof STATUS_ORDER)[number]);
-  if (index < 0) return null;
-  return STATUS_ORDER.slice(index + 1).find((next) => !skipped.includes(next)) ?? null;
-}
+import { STATUS_CONFIG, type KitchenStatus } from '@/hooks/useKdsConnection';
+import { nextKitchenStatus } from '@/lib/kds-stages';
 
 /** One-tap advance of an item to its next kitchen stage. */
 export function KdsStatusToggle({

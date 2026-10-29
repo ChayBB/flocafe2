@@ -547,6 +547,8 @@
     "stageSwitch": "Nyalakan atau matikan tahap {status}",
     "stageActive": "Aktif",
     "stageSkipped": "Dilewati",
+    "settingsTitle": "Pengaturan KDS",
+    "settingsColumnsHint": "Kolom yang dipakai di {station}. Kolom yang mati hilang dari papan dan item langsung melewatinya.",
     "modalOrderNumber": "Pesanan #{orderNumber}",
     "ordersActive": "{count} aktif",
     "restPolling": "REST polling (cadangan)",

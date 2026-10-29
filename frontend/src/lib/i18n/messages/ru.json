@@ -547,6 +547,8 @@
     "stageSwitch": "Включить или отключить этап {status}",
     "stageActive": "Вкл.",
     "stageSkipped": "Пропускается",
+    "settingsTitle": "Настройки KDS",
+    "settingsColumnsHint": "Колонки для {station}. Выключенная колонка исчезает с доски, позиции проходят её сразу.",
     "modalOrderNumber": "Заказ №{orderNumber}",
     "ordersActive": "Активных заказов: {count}",
     "restPolling": "Опрос REST (резервный вариант)",

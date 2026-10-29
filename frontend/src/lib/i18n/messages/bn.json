@@ -547,6 +547,8 @@
     "stageSwitch": "{status} ধাপ চালু বা বন্ধ",
     "stageActive": "চালু",
     "stageSkipped": "বাদ দেওয়া হচ্ছে",
+    "settingsTitle": "KDS সেটিংস",
+    "settingsColumnsHint": "{station}-এ ব্যবহৃত কলাম। বন্ধ কলাম বোর্ড থেকে সরে যায়, আইটেম সরাসরি সেটি পার হয়।",
     "modalOrderNumber": "অর্ডার #{orderNumber}",
     "ordersActive": "{count}টি সক্রিয়",
     "restPolling": "REST পোলিং (ফলব্যাক)",

@@ -547,6 +547,8 @@
     "stageSwitch": "Ndiz ose fik fazën {status}",
     "stageActive": "Aktive",
     "stageSkipped": "Kapërcehet",
+    "settingsTitle": "Cilësimet e KDS",
+    "settingsColumnsHint": "Kolonat që përdoren te {station}. Kolona e fikur largohet dhe artikujt e kapërcejnë.",
     "modalOrderNumber": "porosia nr {orderNumber}",
     "ordersActive": "{count} aktive",
     "restPolling": "Kërkim REST (përdorim alternativ)",

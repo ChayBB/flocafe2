@@ -547,6 +547,8 @@
     "stageSwitch": "Stufe {status} ein oder aus",
     "stageActive": "Ein",
     "stageSkipped": "Übersprungen",
+    "settingsTitle": "KDS-Einstellungen",
+    "settingsColumnsHint": "Spalten für {station}. Eine ausgeschaltete Spalte verschwindet, Artikel überspringen sie.",
     "modalOrderNumber": "Bestellung #{orderNumber}",
     "ordersActive": "{count} Aktiv",
     "restPolling": "REST-Abfrage (Fallback)",

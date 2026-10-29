@@ -547,6 +547,8 @@
     "stageSwitch": "تشغيل أو إيقاف مرحلة {status}",
     "stageActive": "مفعّلة",
     "stageSkipped": "يتم تخطيها",
+    "settingsTitle": "إعدادات KDS",
+    "settingsColumnsHint": "الأعمدة المستخدمة في {station}. العمود المتوقف يختفي من اللوحة وتتخطاه الأصناف مباشرة.",
     "modalOrderNumber": "الطلب رقم #{orderNumber}",
     "ordersActive": "{count} نشط",
     "restPolling": "الاستقصاء عبر REST (الخيار البديل)",

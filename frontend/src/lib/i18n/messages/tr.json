@@ -547,6 +547,8 @@
     "stageSwitch": "{status} aşamasını aç veya kapat",
     "stageActive": "Açık",
     "stageSkipped": "Atlanıyor",
+    "settingsTitle": "KDS ayarları",
+    "settingsColumnsHint": "{station} için kullanılan sütunlar. Kapalı sütun panodan kalkar, ürünler onu atlar.",
     "modalOrderNumber": "Sipariş #{orderNumber}",
     "ordersActive": "{count} aktif sipariş",
     "restPolling": "Yedek Yoklama Aktif",

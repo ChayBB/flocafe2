@@ -1,6 +1,6 @@
 'use client';
 
-import { ChefHat, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { ChefHat, LogOut, Settings, Wifi, WifiOff } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { ConnectionMode, KdsStation } from '@/hooks/useKdsConnection';
 import type { KdsViewMode } from '@/hooks/useKdsView';
@@ -15,6 +15,7 @@ export interface KdsHeaderProps {
   stations: KdsStation[];
   stationId: string;
   onChangeStation: (stationId: string) => void;
+  onOpenSettings: () => void;
   onLogout: () => void;
 }
 
@@ -28,6 +29,7 @@ export function KdsHeader({
   stations,
   stationId,
   onChangeStation,
+  onOpenSettings,
   onLogout,
 }: KdsHeaderProps) {
   const t = useTranslations('kds');
@@ -103,6 +105,17 @@ export function KdsHeader({
               {t('viewKanban')}
             </button>
           </div>
+
+          <button
+            type="button"
+            data-testid="kds-settings-button"
+            onClick={onOpenSettings}
+            className="min-w-11 min-h-11 p-2 hover:bg-muted rounded-lg text-muted-foreground ms-2"
+            title={t('settingsTitle')}
+            aria-label={t('settingsTitle')}
+          >
+            <Settings size={20} />
+          </button>
 
           <button
             onClick={onLogout}

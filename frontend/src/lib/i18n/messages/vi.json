@@ -547,6 +547,8 @@
     "stageSwitch": "Bật hoặc tắt bước {status}",
     "stageActive": "Bật",
     "stageSkipped": "Bỏ qua",
+    "settingsTitle": "Cài đặt KDS",
+    "settingsColumnsHint": "Các cột dùng tại {station}. Cột bị tắt sẽ rời bảng và món sẽ bỏ qua bước đó.",
     "modalOrderNumber": "Đơn hàng #{orderNumber}",
     "ordersActive": "{count} đang hoạt động",
     "restPolling": "Thăm dò REST (dự phòng)",

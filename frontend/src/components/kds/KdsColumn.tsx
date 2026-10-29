@@ -9,12 +9,9 @@ export interface KdsColumnProps {
   status: KitchenStatus;
   count: number;
   children: ReactNode;
-  /** Switched-off stages are dimmed; items skip past them. */
-  inactive?: boolean;
-  footer?: ReactNode;
 }
 
-export function KdsColumn({ status, count, children, inactive = false, footer }: KdsColumnProps) {
+export function KdsColumn({ status, count, children }: KdsColumnProps) {
   const t = useTranslations('kds');
   const config = STATUS_CONFIG[status];
   const statusLabel = t(config.labelKey);
@@ -37,7 +34,7 @@ export function KdsColumn({ status, count, children, inactive = false, footer }:
         ref={ref}
         className={`flex-1 border-2 ${config.border} border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40 transition-colors ${
           isDropTarget ? 'bg-blue-50 ring-2 ring-blue-300 ring-inset' : ''
-        } ${inactive ? 'opacity-50' : ''}`}
+        }`}
         style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 220px)' }}
       >
         {children}
@@ -47,7 +44,6 @@ export function KdsColumn({ status, count, children, inactive = false, footer }:
           </div>
         )}
       </div>
-      {footer}
     </div>
   );
 }

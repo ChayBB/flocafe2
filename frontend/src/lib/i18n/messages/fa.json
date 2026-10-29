@@ -547,6 +547,8 @@
     "stageSwitch": "روشن یا خاموش کردن مرحله {status}",
     "stageActive": "فعال",
     "stageSkipped": "رد می‌شود",
+    "settingsTitle": "تنظیمات KDS",
+    "settingsColumnsHint": "ستون‌های مورد استفاده در {station}. ستون خاموش از صفحه حذف می‌شود و اقلام از آن رد می‌شوند.",
     "modalOrderNumber": "سفارش شماره {orderNumber}",
     "ordersActive": "{count} فعال",
     "restPolling": "بررسی REST (پشتیبان)",

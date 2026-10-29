@@ -9,7 +9,8 @@ import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsStatusToggle, SKIPPABLE_STATUSES } from '@/components/kds/KdsStatusToggle';
+import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
+import { activeStages, boardColumnFor, skipsActiveStage, type BoardStatus } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
 import {
   STATUS_CONFIG,
@@ -29,9 +30,8 @@ import { formatItemHeading } from '@/lib/printer/item-heading';
 export interface KdsKanbanBoardProps {
   orders: KdsOrder[];
   updating: number | null;
-  /** Stages this display has switched off. */
-  skippedStatuses: readonly KitchenStatus[];
-  onToggleStatus: (status: KitchenStatus) => void;
+  /** Stages this display has switched off; their columns leave the board. */
+  inactiveStatuses: readonly KitchenStatus[];
   updateItemStatus: (
     itemId: number,
     status: KitchenStatus,
@@ -44,7 +44,7 @@ interface DropData {
 }
 
 interface DragData {
-  itemIds: number[];
+  items: { id: number; status: KitchenStatus }[];
   fromStatus: KitchenStatus;
 }
 
@@ -52,15 +52,10 @@ function statusOf(item: KdsOrderItem): KitchenStatus {
   return normalizeKitchenStatus(item.status);
 }
 
-// The 4 draggable stages; 'voided' is read-only and non-draggable
-// to preserve manager-PIN void requirements.
-type BoardStatus = Exclude<KitchenStatus, 'voided'>;
-
 export function KdsKanbanBoard({
   orders,
   updating,
-  skippedStatuses,
-  onToggleStatus,
+  inactiveStatuses,
   updateItemStatus,
 }: KdsKanbanBoardProps) {
   const [modalItem, setModalItem] = useState<{ item: KdsOrderItem; orderNumber: string } | null>(
@@ -95,15 +90,15 @@ export function KdsKanbanBoard({
         served: [],
       };
       for (const item of order.items || []) {
-        const status = statusOf(item);
-        if (status in buckets) buckets[status as BoardStatus].push(item);
+        const column = boardColumnFor(statusOf(item), inactiveStatuses);
+        if (column) buckets[column].push(item);
       }
       for (const status of STATUS_ORDER) {
         if (buckets[status].length > 0) map[status].push({ order, items: buckets[status] });
       }
     }
     return map;
-  }, [orders]);
+  }, [orders, inactiveStatuses]);
 
   // Voided items, grouped per order — read-only, struck through, and never a
   // drag source or drop target (see BoardStatus above).
@@ -123,10 +118,8 @@ export function KdsKanbanBoard({
     if (!event.operation.target || !sourceData || !targetData) return;
     if (sourceData.fromStatus === targetData.status) return;
 
-    const sourceIdx = STATUS_ORDER.indexOf(sourceData.fromStatus as BoardStatus);
-    const targetIdx = STATUS_ORDER.indexOf(targetData.status as BoardStatus);
-    // Require confirmation when skipping stages forward to prevent accidental status jumps.
-    const skipsStage = sourceIdx >= 0 && targetIdx > sourceIdx + 1;
+    // Require confirmation when a move passes over a column still in use.
+    const skipsStage = skipsActiveStage(sourceData.fromStatus, targetData.status, inactiveStatuses);
     if (skipsStage) {
       const targetLabel = t(STATUS_CONFIG[targetData.status].labelKey);
       const proceed = await confirm(t('skipStageMessage', { status: targetLabel }), {
@@ -137,12 +130,14 @@ export function KdsKanbanBoard({
     }
 
     const results = await Promise.all(
-      sourceData.itemIds.map((id) =>
-        updateItemStatus(id, targetData.status, {
-          silent: !skipsStage,
-          expectedStatus: sourceData.fromStatus,
-        }),
-      ),
+      sourceData.items
+        .filter((item) => item.status !== targetData.status)
+        .map((item) =>
+          updateItemStatus(item.id, targetData.status, {
+            silent: !skipsStage,
+            expectedStatus: item.status,
+          }),
+        ),
     );
     const failed = results.filter((result) => !result).length;
     if (failed > 0) {
@@ -163,24 +158,10 @@ export function KdsKanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-3 px-1 overflow-x-auto flex-1 min-h-0">
-          {STATUS_ORDER.map((status) => {
+          {activeStages(inactiveStatuses).map((status) => {
             const groups = groupsByStatus[status];
             return (
-              <KdsColumn
-                key={status}
-                status={status}
-                count={groups.length}
-                inactive={skippedStatuses.includes(status)}
-                footer={
-                  SKIPPABLE_STATUSES.includes(status) ? (
-                    <StageSwitch
-                      status={status}
-                      active={!skippedStatuses.includes(status)}
-                      onToggle={() => onToggleStatus(status)}
-                    />
-                  ) : undefined
-                }
-              >
+              <KdsColumn key={status} status={status} count={groups.length}>
                 {groups.map(({ order, items }) => (
                   <KanbanOrderCard
                     key={`${order.id}-${status}`}
@@ -188,7 +169,7 @@ export function KdsKanbanBoard({
                     status={status}
                     items={items}
                     updating={updating}
-                    skipped={skippedStatuses}
+                    inactive={inactiveStatuses}
                     updateItemStatus={updateItemStatus}
                     onItemOpen={(item) => setModalItem({ item, orderNumber: order.order_number })}
                   />
@@ -231,7 +212,7 @@ type KanbanOrderCardProps = {
   status: KitchenStatus;
   items: KdsOrderItem[];
   updating: number | null;
-  skipped: readonly KitchenStatus[];
+  inactive: readonly KitchenStatus[];
   updateItemStatus: KdsKanbanBoardProps['updateItemStatus'];
 };
 
@@ -240,7 +221,7 @@ function kanbanOrderCardPropsEqual(prev: KanbanOrderCardProps, next: KanbanOrder
   return (
     prev.order === next.order &&
     prev.updateItemStatus === next.updateItemStatus &&
-    prev.skipped === next.skipped &&
+    prev.inactive === next.inactive &&
     prev.status === next.status &&
     prev.updating === next.updating &&
     prev.items.length === next.items.length &&
@@ -253,18 +234,18 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   status,
   items,
   updating,
-  skipped,
+  inactive,
   updateItemStatus,
   onItemOpen,
 }: KanbanOrderCardProps & { onItemOpen: (item: KdsOrderItem) => void }) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const config = STATUS_CONFIG[status];
-  const itemIds = items.map((i) => i.id);
+  const dragItems = items.map((i) => ({ id: i.id, status: statusOf(i) }));
   const busy = items.some((i) => updating === i.id);
   const { ref, isDragging } = useDraggable({
     id: `order-${order.id}-${status}`,
-    data: { itemIds, fromStatus: status },
+    data: { items: dragItems, fromStatus: status },
   });
 
   return (
@@ -343,10 +324,10 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
             </button>
             <KdsStatusToggle
               status={status}
-              skipped={skipped}
+              skipped={inactive}
               disabled={updating === item.id}
               onAdvance={(nextStatus) => {
-                void updateItemStatus(item.id, nextStatus, { expectedStatus: status });
+                void updateItemStatus(item.id, nextStatus, { expectedStatus: statusOf(item) });
               }}
             />
             </div>
@@ -356,44 +337,6 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
     </div>
   );
 }, kanbanOrderCardPropsEqual);
-
-/** On/off switch under a stage column; off sends items straight past that stage. */
-function StageSwitch({
-  status,
-  active,
-  onToggle,
-}: {
-  status: KitchenStatus;
-  active: boolean;
-  onToggle: () => void;
-}) {
-  const t = useTranslations('kds');
-  const stage = t(STATUS_CONFIG[status].labelKey);
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={active}
-      aria-label={t('stageSwitch', { status: stage })}
-      data-testid={`kds-stage-switch-${status}`}
-      onClick={onToggle}
-      className="mt-2 self-end flex items-center gap-2 min-h-11 px-2 text-xs font-medium text-muted-foreground"
-    >
-      <span>{active ? t('stageActive') : t('stageSkipped')}</span>
-      <span
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          active ? 'bg-brand' : 'bg-gray-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            active ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
 
 // Read-only display column for voided items; drag-and-drop transitions are disabled.
 function VoidedColumn({

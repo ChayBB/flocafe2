@@ -547,6 +547,8 @@
     "stageSwitch": "开启或关闭{status}阶段",
     "stageActive": "开启",
     "stageSkipped": "已跳过",
+    "settingsTitle": "KDS 设置",
+    "settingsColumnsHint": "{station} 使用的列。关闭的列会从看板移除，菜品直接跳过该阶段。",
     "modalOrderNumber": "订单 #{orderNumber}",
     "ordersActive": "{count} 个进行中",
     "restPolling": "REST 轮询（备用）",

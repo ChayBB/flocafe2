@@ -547,6 +547,8 @@
     "stageSwitch": "{status} 단계 켜기/끄기",
     "stageActive": "사용",
     "stageSkipped": "건너뜀",
+    "settingsTitle": "KDS 설정",
+    "settingsColumnsHint": "{station}에서 사용하는 열입니다. 꺼진 열은 보드에서 사라지고 항목이 건너뜁니다.",
     "modalOrderNumber": "주문 #{orderNumber}",
     "ordersActive": "{count}건 진행 중",
     "restPolling": "REST 폴링 (대체)",

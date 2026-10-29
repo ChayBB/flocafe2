@@ -547,6 +547,8 @@
     "stageSwitch": "開啟或關閉{status}階段",
     "stageActive": "開啟",
     "stageSkipped": "已略過",
+    "settingsTitle": "KDS 設定",
+    "settingsColumnsHint": "{station} 使用的欄位。關閉的欄位會從看板移除，品項直接略過該階段。",
     "modalOrderNumber": "訂單 #{orderNumber}",
     "ordersActive": "{count} 個進行中",
     "restPolling": "REST 輪詢（備用）",
