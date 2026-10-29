@@ -3,7 +3,6 @@
 import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
-import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor } from '@/lib/kds-stages';
@@ -29,11 +28,6 @@ export interface KdsTabsViewProps {
   updateItemStatus: (itemId: number, status: KitchenStatus, opts?: { expectedStatus?: KitchenStatus }) => Promise<boolean>;
 }
 
-interface ModalItem {
-  item: KdsOrderItem;
-  orderNumber: string;
-}
-
 export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStatus }: KdsTabsViewProps) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
@@ -44,10 +38,6 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
     const status = normalizeKitchenStatus(item.status);
     return status === 'voided' ? 'voided' : boardColumnFor(status, inactiveStatuses);
   };
-  const [modalItem, setModalItem] = useState<ModalItem | null>(null);
-  const resolvedModalItem = modalItem
-    ? { ...modalItem, item: orders.flatMap((order) => order.items || []).find((item) => item.id === modalItem.item.id) || modalItem.item }
-    : null;
 
   const statusLabel = (s: KitchenStatus) => t(STATUS_CONFIG[s].labelKey);
 
@@ -136,10 +126,8 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                       key={item.id}
                       className={`flex items-center gap-1 rounded-xl border-2 ${config.border} ${config.bg} pe-1.5`}
                     >
-                    <button
-                      onClick={() => setModalItem({ item, orderNumber: order.order_number })}
-                      className="flex-1 min-w-0 text-start rounded-xl px-3 py-2.5 transition-all active:scale-95 hover:brightness-95"
-                    >
+                    {/* Only the toggle changes status; tapping the row does nothing. */}
+                    <div className="flex-1 min-w-0 px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
                         <span className={`font-bold text-base w-6 shrink-0 ${config.text}`}>{item.quantity}×</span>
@@ -165,7 +153,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                           {`"${item.special_instructions}"`}
                         </p>
                       )}
-                    </button>
+                    </div>
                     <KdsStatusToggle
                       status={activeTab}
                       skipped={inactiveStatuses}
@@ -189,19 +177,6 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
           </div>
         )}
       </div>
-
-      {resolvedModalItem && (
-        <KdsItemModal
-          item={resolvedModalItem.item}
-          orderNumber={resolvedModalItem.orderNumber}
-          updating={updating === resolvedModalItem.item.id}
-          onClose={() => setModalItem(null)}
-          onUpdateStatus={async (itemId, status) => {
-            const updated = await updateItemStatus(itemId, status, { expectedStatus: normalizeKitchenStatus(resolvedModalItem.item.status) });
-            if (updated) setModalItem(null);
-          }}
-        />
-      )}
     </>
   );
 }

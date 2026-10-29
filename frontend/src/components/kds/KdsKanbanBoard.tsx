@@ -3,11 +3,10 @@
 import { PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
 import { DragDropProvider, useDraggable, type DragEndEvent } from '@dnd-kit/react';
 import { Clock } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
-import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor, skipsActiveStage, type BoardStatus } from '@/lib/kds-stages';
@@ -58,18 +57,6 @@ export function KdsKanbanBoard({
   inactiveStatuses,
   updateItemStatus,
 }: KdsKanbanBoardProps) {
-  const [modalItem, setModalItem] = useState<{ item: KdsOrderItem; orderNumber: string } | null>(
-    null,
-  );
-  const resolvedModalItem = modalItem
-    ? {
-        ...modalItem,
-        item:
-          orders
-            .flatMap((order) => order.items || [])
-            .find((item) => item.id === modalItem.item.id) || modalItem.item,
-      }
-    : null;
   const t = useTranslations('kds');
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -171,7 +158,6 @@ export function KdsKanbanBoard({
                     updating={updating}
                     inactive={inactiveStatuses}
                     updateItemStatus={updateItemStatus}
-                    onItemOpen={(item) => setModalItem({ item, orderNumber: order.order_number })}
                   />
                 ))}
               </KdsColumn>
@@ -179,30 +165,12 @@ export function KdsKanbanBoard({
           })}
 
           {voidedGroups.length > 0 && (
-            <VoidedColumn
-              groups={voidedGroups}
-              onItemOpen={(item, orderNumber) => setModalItem({ item, orderNumber })}
-            />
+            <VoidedColumn groups={voidedGroups} />
           )}
         </div>
       </DragDropProvider>
 
       {ConfirmDialog}
-
-      {resolvedModalItem && (
-        <KdsItemModal
-          item={resolvedModalItem.item}
-          orderNumber={resolvedModalItem.orderNumber}
-          updating={updating === resolvedModalItem.item.id}
-          onClose={() => setModalItem(null)}
-          onUpdateStatus={async (itemId, status) => {
-            const updated = await updateItemStatus(itemId, status, {
-              expectedStatus: statusOf(resolvedModalItem.item),
-            });
-            if (updated) setModalItem(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -216,7 +184,6 @@ type KanbanOrderCardProps = {
   updateItemStatus: KdsKanbanBoardProps['updateItemStatus'];
 };
 
-// onItemOpen is intentionally ignored: it only opens the item modal and is recreated every render.
 function kanbanOrderCardPropsEqual(prev: KanbanOrderCardProps, next: KanbanOrderCardProps): boolean {
   return (
     prev.order === next.order &&
@@ -236,8 +203,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   updating,
   inactive,
   updateItemStatus,
-  onItemOpen,
-}: KanbanOrderCardProps & { onItemOpen: (item: KdsOrderItem) => void }) {
+}: KanbanOrderCardProps) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const config = STATUS_CONFIG[status];
@@ -295,15 +261,8 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
               key={item.id}
               className={`flex items-center gap-1 rounded-lg border ${config.border} ${config.bg} pe-1`}
             >
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onItemOpen(item);
-              }}
-              className="flex-1 min-w-0 text-start rounded-lg px-2 py-1.5 hover:brightness-95 active:scale-[0.98] transition"
-            >
+            {/* Only the toggle changes status; tapping the row does nothing. */}
+            <div className="flex-1 min-w-0 px-2 py-1.5">
               <div className="flex items-center gap-2">
                 <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
                   {item.quantity}×
@@ -311,17 +270,26 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                 <span className="text-lg text-foreground font-medium flex-1 truncate">
                   {formatItemHeading(item.product_name, item.variant_selection)}
                 </span>
-                {item.addons && item.addons.length > 0 && (
-                  <span className="text-[10px] text-blue-600">+{item.addons.length}</span>
-                )}
               </div>
+              {item.addons && item.addons.length > 0 && (
+                <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
+                  {item.addons.map((addon, i) => (
+                    <span
+                      key={`${addon.id ?? addon.name}-${i}`}
+                      className="text-[10px] bg-card/70 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200"
+                    >
+                      + {addon.name}{(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
               <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
               {item.special_instructions && (
                 <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
                   {`"${item.special_instructions}"`}
                 </p>
               )}
-            </button>
+            </div>
             <KdsStatusToggle
               status={status}
               skipped={inactive}
@@ -339,13 +307,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
 }, kanbanOrderCardPropsEqual);
 
 // Read-only display column for voided items; drag-and-drop transitions are disabled.
-function VoidedColumn({
-  groups,
-  onItemOpen,
-}: {
-  groups: Array<{ order: KdsOrder; items: KdsOrderItem[] }>;
-  onItemOpen: (item: KdsOrderItem, orderNumber: string) => void;
-}) {
+function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsOrderItem[] }> }) {
   const t = useTranslations('kds');
   const config = STATUS_CONFIG.voided;
   const count = groups.reduce((sum, g) => sum + g.items.length, 0);
@@ -380,11 +342,9 @@ function VoidedColumn({
             </div>
             <div className="space-y-1">
               {items.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  onClick={() => onItemOpen(item, order.order_number)}
-                  className={`w-full text-start rounded-lg border ${config.border} ${config.bg} px-2 py-1.5 hover:brightness-95 active:scale-[0.98] transition`}
+                  className={`w-full text-start rounded-lg border ${config.border} ${config.bg} px-2 py-1.5`}
                 >
                   <div className="flex items-center gap-2">
                     <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
@@ -394,7 +354,7 @@ function VoidedColumn({
                       {formatItemHeading(item.product_name, item.variant_selection)}
                     </span>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
