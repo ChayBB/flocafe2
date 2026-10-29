@@ -543,6 +543,7 @@
     "loginHint": "只有厨师、经理或店主角色可以访问厨房显示。",
     "loginSubtitle": "使用您的厨房员工账户登录",
     "markAs": "标记为{status}",
+    "advanceTo": "转到{status}",
     "modalOrderNumber": "订单 #{orderNumber}",
     "ordersActive": "{count} 个进行中",
     "restPolling": "REST 轮询（备用）",
@@ -559,6 +560,8 @@
     "updating": "更新中…",
     "viewKanban": "看板",
     "viewTabs": "标签页",
+    "stationFilter": "工作站",
+    "allStations": "所有工作站",
     "wsConnected": "WebSocket 已连接"
   },
   "nav": {

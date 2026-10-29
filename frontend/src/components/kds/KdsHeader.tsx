@@ -2,7 +2,7 @@
 
 import { ChefHat, LogOut, Wifi, WifiOff } from 'lucide-react';
 import { useTranslations } from 'use-intl';
-import type { ConnectionMode } from '@/hooks/useKdsConnection';
+import type { ConnectionMode, KdsStation } from '@/hooks/useKdsConnection';
 import type { KdsViewMode } from '@/hooks/useKdsView';
 
 export interface KdsHeaderProps {
@@ -12,6 +12,9 @@ export interface KdsHeaderProps {
   connectionMode: ConnectionMode;
   viewMode: KdsViewMode;
   onChangeView: (mode: KdsViewMode) => void;
+  stations: KdsStation[];
+  stationId: string;
+  onChangeStation: (stationId: string) => void;
   onLogout: () => void;
 }
 
@@ -22,6 +25,9 @@ export function KdsHeader({
   connectionMode,
   viewMode,
   onChangeView,
+  stations,
+  stationId,
+  onChangeStation,
   onLogout,
 }: KdsHeaderProps) {
   const t = useTranslations('kds');
@@ -55,6 +61,23 @@ export function KdsHeader({
                 : t('connectionPolling')
               : t('connectionConnecting')}
           </span>
+
+          {stations.length > 0 && (
+            <select
+              data-testid="kds-station-select"
+              aria-label={t('stationFilter')}
+              value={stationId}
+              onChange={(e) => onChangeStation(e.target.value)}
+              className="min-h-11 ms-2 px-2.5 text-xs font-medium rounded-lg border border-border bg-card text-foreground"
+            >
+              <option value="">{t('allStations')}</option>
+              {stations.map((station) => (
+                <option key={station.id} value={station.id}>
+                  {station.name}
+                </option>
+              ))}
+            </select>
+          )}
 
           <div className="flex items-center bg-muted rounded-lg p-0.5 ms-2" role="tablist">
             <button

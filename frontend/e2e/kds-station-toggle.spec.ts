@@ -1,0 +1,102 @@
+import { test, expect } from '@playwright/test';
+import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
+import { getE2eToken } from './helpers/test-auth';
+
+test('KDS station dropdown shows one station and the item toggle advances its stage', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const run = Math.random().toString(36).slice(2, 7);
+
+  const makeProduct = async (label: string) => {
+    const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+      headers,
+      data: { name: `${label} ${run}` },
+    });
+    expect(category.status()).toBe(201);
+    const categoryId = (await category.json()).category.id;
+    const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
+      headers,
+      data: {
+        name: `${label} dish ${run}`,
+        category_id: categoryId,
+        price: 50,
+        tax_category_id: null,
+        tax_behavior: 'exempt',
+      },
+    });
+    expect(product.status()).toBe(201);
+    return { categoryId, productId: (await product.json()).product.id, name: `${label} dish ${run}` };
+  };
+  const grill = await makeProduct('Grill');
+  const bar = await makeProduct('Bar');
+
+  const stationName = `Grill station ${run}`;
+  const station = await page.request.post(`${E2E_BASE_URL}/api/kitchen-stations`, {
+    headers,
+    data: { name: stationName, category_ids: [grill.categoryId] },
+  });
+  expect(station.status()).toBe(201);
+  const barStation = await page.request.post(`${E2E_BASE_URL}/api/kitchen-stations`, {
+    headers,
+    data: { name: `Bar station ${run}`, category_ids: [bar.categoryId] },
+  });
+  expect(barStation.status()).toBe(201);
+
+  const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+    headers,
+    data: {
+      type: 'takeaway',
+      items: [
+        { product_id: grill.productId, quantity: 1 },
+        { product_id: bar.productId, quantity: 1 },
+      ],
+    },
+  });
+  expect(order.status()).toBe(201);
+  const created = (await order.json()).order;
+
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Kanban' }).click();
+
+  // The dropdown sits between the connection status and the view switch.
+  const select = page.getByTestId('kds-station-select');
+  await expect(select).toBeVisible();
+  const selectBox = (await select.boundingBox())!;
+  expect(selectBox.x).toBeGreaterThan((await page.getByText('Live', { exact: true }).boundingBox())!.x);
+  expect(selectBox.x).toBeLessThan((await page.getByRole('button', { name: 'Tabs', exact: true }).boundingBox())!.x);
+
+  await expect(page.getByText(grill.name)).toBeVisible();
+  await expect(page.getByText(bar.name)).toBeVisible();
+  await select.selectOption({ label: stationName });
+  await expect(page.getByText(grill.name)).toBeVisible();
+  await expect(page.getByText(bar.name)).toHaveCount(0);
+
+  const grillRow = page.getByText(grill.name).locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
+  await grillRow.getByRole('button', { name: 'Move to Preparing' }).click();
+  await expect(page.getByRole('heading', { name: 'Skip a stage?' })).toHaveCount(0);
+
+  await expect
+    .poll(async () => {
+      const body = await (await page.request.get(`${E2E_BASE_URL}/api/orders/${created.id}`, { headers })).json();
+      return body.order.items.map((item: { product_id: string; status: string }) => [item.product_id, item.status]);
+    })
+    .toEqual(
+      expect.arrayContaining([
+        [grill.productId, 'preparing'],
+        [bar.productId, 'pending'],
+      ]),
+    );
+
+  // The station choice survives a reload.
+  await page.reload();
+  await expect(page.getByTestId('kds-station-select')).toHaveValue((await station.json()).kitchenStation.id);
+  await page.getByTestId('kds-station-select').selectOption({ label: 'All stations' });
+  await expect(page.getByText(bar.name)).toBeVisible();
+});

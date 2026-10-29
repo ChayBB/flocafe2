@@ -543,6 +543,7 @@
     "loginHint": "Solo i ruoli cuoco, gestore o proprietario possono accedere al display di cucina.",
     "loginSubtitle": "Accedi con il tuo account del personale di cucina",
     "markAs": "Segna come {status}",
+    "advanceTo": "Passa a {status}",
     "modalOrderNumber": "Ordine n. {orderNumber}",
     "ordersActive": "{count} attivi",
     "restPolling": "Polling REST (fallback)",
@@ -559,6 +560,8 @@
     "updating": "Aggiornamento…",
     "viewKanban": "Kanban",
     "viewTabs": "Schede",
+    "stationFilter": "Postazione",
+    "allStations": "Tutte le postazioni",
     "wsConnected": "WebSocket connesso"
   },
   "nav": {

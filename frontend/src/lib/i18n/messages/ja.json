@@ -543,6 +543,7 @@
     "loginHint": "キッチンディスプレイにはシェフ、マネージャー、オーナーのロールのみアクセスできます。",
     "loginSubtitle": "キッチンスタッフのアカウントでログイン",
     "markAs": "{status}にする",
+    "advanceTo": "{status}へ進める",
     "modalOrderNumber": "注文 #{orderNumber}",
     "ordersActive": "進行中 {count}件",
     "restPolling": "RESTポーリング（フォールバック）",
@@ -559,6 +560,8 @@
     "updating": "更新中…",
     "viewKanban": "カンバン",
     "viewTabs": "タブ",
+    "stationFilter": "ステーション",
+    "allStations": "すべてのステーション",
     "wsConnected": "WebSocket接続済み"
   },
   "nav": {

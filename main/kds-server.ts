@@ -28,6 +28,8 @@ import {
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
+  listKdsStationsForUser,
+  withKdsItemStationIds,
 } from './db';
 import { setupKdsWebSocket, notifyKdsUpdate } from './services/kds';
 import { getJWTSecret } from './security/jwt-secret';
@@ -354,6 +356,21 @@ export function startKdsServer(): Promise<void> {
     });
 
     // Get orders for KDS (pending, preparing, ready)
+    app.get('/api/kds/stations', requireAuth, (req: Request, res: Response) => {
+      if (!isKdsEnabled()) {
+        return res.status(403).json({ error: 'KDS is disabled for this business' });
+      }
+      try {
+        const kdsUser = (req as any).user as KdsRequestUser;
+        const stations = listKdsStationsForUser(getDatabase(), kdsUser.userId);
+        if (!stations) return res.status(403).json({ error: 'Could not load station permissions' });
+        res.json({ stations });
+      } catch (error: any) {
+        console.error('[API] Internal error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     app.get('/api/kds/orders', requireAuth, (req: Request, res: Response) => {
       if (!isKdsEnabled()) {
         return res.status(403).json({ error: 'KDS is disabled for this business' });
@@ -498,7 +515,7 @@ export function startKdsServer(): Promise<void> {
         for (const order of ordersWithItems) {
           for (const item of order.items) counts[item.status] = (counts[item.status] || 0) + 1;
         }
-        res.json({ orders: ordersWithItems, counts });
+        res.json({ orders: withKdsItemStationIds(db, ordersWithItems), counts });
       } catch (error: any) {
         console.error('[API] Internal error:', error);
         res.status(500).json({ error: 'Internal server error' });

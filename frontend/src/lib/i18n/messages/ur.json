@@ -543,6 +543,7 @@
     "loginHint": "کچن ڈسپلے تک صرف شیف، منیجر یا مالک کے کردار رسائی حاصل کر سکتے ہیں۔",
     "loginSubtitle": "اپنے کچن اسٹاف اکاؤنٹ سے سائن ان کریں",
     "markAs": "{status} کے طور پر نشان زد کریں",
+    "advanceTo": "{status} پر منتقل کریں",
     "modalOrderNumber": "آرڈر #{orderNumber}",
     "ordersActive": "{count} فعال",
     "restPolling": "REST پوڈنگ (بیک اپ)",
@@ -559,6 +560,8 @@
     "updating": "اپ ڈیٹ ہو رہا ہے…",
     "viewKanban": "کانبن",
     "viewTabs": "ٹیبز",
+    "stationFilter": "اسٹیشن",
+    "allStations": "تمام اسٹیشن",
     "wsConnected": "WebSocket منسلک ہے"
   },
   "nav": {

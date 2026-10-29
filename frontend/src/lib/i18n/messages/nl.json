@@ -543,6 +543,7 @@
     "loginHint": "Alleen de rollen kok, manager of eigenaar hebben toegang tot de keukenmonitor.",
     "loginSubtitle": "Log in met uw keukenpersoneelsaccount",
     "markAs": "Markeren als {status}",
+    "advanceTo": "Naar {status}",
     "modalOrderNumber": "Bestelling #{orderNumber}",
     "ordersActive": "{count} actief",
     "restPolling": "REST-polling (alternatief)",
@@ -559,6 +560,8 @@
     "updating": "Updaten…",
     "viewKanban": "Kanban",
     "viewTabs": "Tabbladen",
+    "stationFilter": "Keukenstation",
+    "allStations": "Alle stations",
     "wsConnected": "WebSocket verbonden"
   },
   "nav": {

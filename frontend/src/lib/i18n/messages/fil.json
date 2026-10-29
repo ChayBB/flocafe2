@@ -543,6 +543,7 @@
     "loginHint": "Ilagay ang iyong staff PIN upang ma-access ang KDS",
     "loginSubtitle": "Mag-sign in gamit ang iyong kitchen staff account",
     "markAs": "Markahan bilang {status}",
+    "advanceTo": "Ilipat sa {status}",
     "modalOrderNumber": "Order #{orderNumber}",
     "ordersActive": "{count} aktibong mga order",
     "restPolling": "Naka-enable ang REST Polling",
@@ -559,6 +560,8 @@
     "updating": "Nag-uupdate...",
     "viewKanban": "Kanban",
     "viewTabs": "Tabs",
+    "stationFilter": "Istasyon",
+    "allStations": "Lahat ng istasyon",
     "wsConnected": "Konektado ang WebSocket"
   },
   "nav": {

@@ -543,6 +543,7 @@
     "loginHint": "Hanya peran koki, manajer, atau pemilik yang dapat mengakses tampilan dapur.",
     "loginSubtitle": "Masuk dengan akun staf dapur Anda",
     "markAs": "Tandai sebagai {status}",
+    "advanceTo": "Pindah ke {status}",
     "modalOrderNumber": "Pesanan #{orderNumber}",
     "ordersActive": "{count} aktif",
     "restPolling": "REST polling (cadangan)",
@@ -559,6 +560,8 @@
     "updating": "Memperbarui…",
     "viewKanban": "Kanban",
     "viewTabs": "Tab",
+    "stationFilter": "Stasiun",
+    "allStations": "Semua stasiun",
     "wsConnected": "WebSocket terhubung"
   },
   "nav": {

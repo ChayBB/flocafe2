@@ -543,6 +543,7 @@
     "loginHint": "셰프, 관리자, 사장님만 주방 디스플레이에 접근할 수 있습니다.",
     "loginSubtitle": "주방 직원 계정으로 로그인",
     "markAs": "{status}(으)로 표시",
+    "advanceTo": "{status}(으)로 이동",
     "modalOrderNumber": "주문 #{orderNumber}",
     "ordersActive": "{count}건 진행 중",
     "restPolling": "REST 폴링 (대체)",
@@ -559,6 +560,8 @@
     "updating": "업데이트 중…",
     "viewKanban": "칸반",
     "viewTabs": "탭",
+    "stationFilter": "스테이션",
+    "allStations": "모든 스테이션",
     "wsConnected": "WebSocket 연결됨"
   },
   "nav": {

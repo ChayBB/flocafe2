@@ -543,6 +543,7 @@
     "loginHint": "केवल शेफ, प्रबन्धक, वा मालिक भूमिकाहरूले भान्साको प्रदर्शन पहुँच गर्न सक्छन्।",
     "loginSubtitle": "आफ्नो भान्सा कर्मचारी खाता संग साइन इन गर्नुहोस्",
     "markAs": "को रूपमा चिन्ह लगाउनुहोस् {status}",
+    "advanceTo": "{status} मा सार्नुहोस्",
     "modalOrderNumber": "अर्डर #{orderNumber}",
     "ordersActive": "{count} सक्रिय",
     "restPolling": "REST मतदान (फलब्याक)",
@@ -559,6 +560,8 @@
     "updating": "अद्यावधिक गर्दै...",
     "viewKanban": "कानबन",
     "viewTabs": "ट्याबहरू",
+    "stationFilter": "स्टेसन",
+    "allStations": "सबै स्टेसन",
     "wsConnected": "WebSocket जडान भयो"
   },
   "nav": {

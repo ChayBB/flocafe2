@@ -1,13 +1,45 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
 import { KdsTabsView } from '@/components/kds/KdsTabsView';
 import { useKdsView } from '@/hooks/useKdsView';
 import type { UseKdsConnectionResult } from '@/hooks/useKdsConnection';
 
+const STATION_KEY = 'flocafe:kds-station';
+
+function readStoredStation(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(STATION_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const { viewMode, setViewMode } = useKdsView(serverDefault);
+  const [storedStation, setStoredStation] = useState(readStoredStation);
+  const stationId = conn.stations.some((station) => station.id === storedStation) ? storedStation : '';
+
+  const changeStation = (next: string) => {
+    setStoredStation(next);
+    try {
+      if (next) window.localStorage.setItem(STATION_KEY, next);
+      else window.localStorage.removeItem(STATION_KEY);
+    } catch {}
+  };
+
+  const orders = useMemo(() => {
+    if (!stationId) return conn.orders;
+    return conn.orders
+      .map((order) => ({
+        ...order,
+        items: (order.items || []).filter((item) => item.station_ids?.includes(stationId)),
+      }))
+      .filter((order) => order.items.length > 0);
+  }, [conn.orders, stationId]);
 
   return (
     <div data-testid="kds-workspace" className="h-full flex flex-col">
@@ -18,14 +50,17 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         connectionMode={conn.connectionMode}
         viewMode={viewMode}
         onChangeView={setViewMode}
+        stations={conn.stations}
+        stationId={stationId}
+        onChangeStation={changeStation}
         onLogout={conn.handleLogout}
       />
       <div className="flex-1 min-h-0 flex flex-col">
         {viewMode === 'kanban' ? (
-          <KdsKanbanBoard orders={conn.orders} updating={conn.updating} updateItemStatus={conn.updateItemStatus} />
+          <KdsKanbanBoard orders={orders} updating={conn.updating} updateItemStatus={conn.updateItemStatus} />
         ) : (
           <KdsTabsView
-            orders={conn.orders}
+            orders={orders}
             updating={conn.updating}
             updateItemStatus={conn.updateItemStatus}
           />

@@ -543,6 +543,7 @@
     "loginHint": "Chỉ đầu bếp, quản lý hoặc chủ cửa hàng có thể truy cập màn hình bếp.",
     "loginSubtitle": "Đăng nhập bằng tài khoản nhân viên bếp",
     "markAs": "Đánh dấu là {status}",
+    "advanceTo": "Chuyển sang {status}",
     "modalOrderNumber": "Đơn hàng #{orderNumber}",
     "ordersActive": "{count} đang hoạt động",
     "restPolling": "Thăm dò REST (dự phòng)",
@@ -559,6 +560,8 @@
     "updating": "Đang cập nhật…",
     "viewKanban": "Kanban",
     "viewTabs": "Danh sách thẻ",
+    "stationFilter": "Trạm",
+    "allStations": "Tất cả trạm",
     "wsConnected": "Đã kết nối WebSocket"
   },
   "nav": {

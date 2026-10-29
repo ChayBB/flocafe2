@@ -543,6 +543,7 @@
     "loginHint": "केवल शेफ, प्रबंधक या स्वामी की भूमिका वाले कर्मचारी रसोई डिस्प्ले का उपयोग कर सकते हैं।",
     "loginSubtitle": "अपने रसोई स्टाफ खाते से साइन इन करें",
     "markAs": "{status} के रूप में चिह्नित करें",
+    "advanceTo": "{status} पर ले जाएँ",
     "modalOrderNumber": "ऑर्डर #{orderNumber}",
     "ordersActive": "{count} सक्रिय",
     "restPolling": "REST पोलिंग (फ़ॉलबैक)",
@@ -559,6 +560,8 @@
     "updating": "अपडेट हो रहा है...",
     "viewKanban": "कैनबन",
     "viewTabs": "टैब",
+    "stationFilter": "स्टेशन",
+    "allStations": "सभी स्टेशन",
     "wsConnected": "वेबसॉकेट कनेक्ट हुआ"
   },
   "nav": {

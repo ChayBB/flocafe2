@@ -543,6 +543,7 @@
     "loginHint": "Solo roles cocinero, encargado o propietario pueden acceder a la pantalla de cocina.",
     "loginSubtitle": "Ingresá con tu cuenta de cocina",
     "markAs": "Marcar como {status}",
+    "advanceTo": "Pasar a {status}",
     "modalOrderNumber": "Pedido #{orderNumber}",
     "ordersActive": "{count} activos",
     "restPolling": "Sondeo REST (respaldo)",
@@ -559,6 +560,8 @@
     "updating": "Actualizando…",
     "viewKanban": "Kanban",
     "viewTabs": "Pestañas",
+    "stationFilter": "Estación",
+    "allStations": "Todas las estaciones",
     "wsConnected": "WebSocket conectado"
   },
   "nav": {

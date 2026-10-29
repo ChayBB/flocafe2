@@ -543,6 +543,7 @@
     "loginHint": "Доступ к кухонному дисплею имеют только роли шеф-повара, менеджера или владельца.",
     "loginSubtitle": "Войдите в свою учетную запись кухонного персонала.",
     "markAs": "Отметить как {status}",
+    "advanceTo": "Перевести в {status}",
     "modalOrderNumber": "Заказ №{orderNumber}",
     "ordersActive": "Активных заказов: {count}",
     "restPolling": "Опрос REST (резервный вариант)",
@@ -559,6 +560,8 @@
     "updating": "Обновление…",
     "viewKanban": "Канбан",
     "viewTabs": "Вкладки",
+    "stationFilter": "Станция",
+    "allStations": "Все станции",
     "wsConnected": "WebSocket подключен"
   },
   "nav": {

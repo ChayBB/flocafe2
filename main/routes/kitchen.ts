@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
+import { getDatabase, listKdsStationsForUser, withKdsItemStationIds, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
 import { requireKdsEnabled } from '../middleware/security';
 import { requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
@@ -18,6 +18,19 @@ const ACTIVE_KITCHEN_ORDER_IDS_SQL = `
   JOIN order_items oi ON oi.order_id = o.id AND oi.status NOT IN ('served','cancelled')
   WHERE o.status NOT IN ('pending','preparing','ready','served','cancelled')
 `;
+
+// GET /api/kitchen/stations — stations this user can show on the KDS
+router.get('/stations', (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.userId;
+    const stations = userId ? listKdsStationsForUser(getDatabase(), userId) : null;
+    if (!stations) return res.status(403).json({ error: 'Could not load station permissions' });
+    res.json({ stations });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /api/kitchen/orders — returns active orders with items for KDS display
 router.get('/orders', (req: Request, res: Response) => {
@@ -129,7 +142,7 @@ router.get('/orders', (req: Request, res: Response) => {
       countMap[item.status] = (countMap[item.status] || 0) + 1;
     }
 
-    res.json({ orders: ordersWithItems, counts: countMap });
+    res.json({ orders: withKdsItemStationIds(db, ordersWithItems), counts: countMap });
   } catch (error: any) {
     console.error('[Kitchen] Orders fetch error:', error);
     res.status(500).json({ error: "Could not fetch kitchen orders" });

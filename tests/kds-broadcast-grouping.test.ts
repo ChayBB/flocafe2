@@ -258,6 +258,9 @@ async function testRestPollingAndConflictResolution() {
         if (url.includes('/auth/me')) {
           return Promise.resolve({ data: { user: states[0] } });
         }
+        if (url.includes('/stations')) {
+          return Promise.resolve({ data: { stations: [] } });
+        }
         return new Promise((resolve) => {
           apiGetInFlight.push({ url, resolve });
         });

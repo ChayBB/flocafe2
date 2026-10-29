@@ -3396,6 +3396,91 @@ export function getKdsStationCategoryIds(
   }
 }
 
+type KdsStationRow = { id: string; name: string; category_ids: string[] };
+
+function loadActiveKdsStations(dbInstance: Database.Database): KdsStationRow[] {
+  const rows = dbInstance
+    .prepare(
+      'SELECT id, name, category_ids FROM kitchen_stations WHERE is_active = 1 ORDER BY sort_order, name',
+    )
+    .all() as { id: string; name: string; category_ids: string | null }[];
+  return rows.map((row) => {
+    let categoryIds: string[] = [];
+    try {
+      const parsed = row.category_ids ? JSON.parse(row.category_ids) : [];
+      if (Array.isArray(parsed)) categoryIds = parsed.filter((id) => id != null).map(String);
+    } catch {}
+    return { id: String(row.id), name: row.name, category_ids: categoryIds };
+  });
+}
+
+/**
+ * Active stations a KDS user can pick from: their assigned stations, or every active
+ * station when they have no assignment.
+ */
+export function listKdsStationsForUser(
+  dbInstance: Database.Database,
+  userId: string,
+): { id: string; name: string }[] | null {
+  const assigned = getUserKdsStationIds(dbInstance, userId);
+  if (!assigned) return null;
+  return loadActiveKdsStations(dbInstance)
+    .filter((station) => assigned.length === 0 || assigned.includes(station.id))
+    .map(({ id, name }) => ({ id, name }));
+}
+
+/**
+ * Tags every KDS item with the stations that prepare it, so a display can show one station.
+ * A table assigned to a station routes its items there; otherwise a station takes the items
+ * of its categories, and a station without categories takes everything.
+ */
+export function withKdsItemStationIds<T extends { items?: any[] }>(
+  dbInstance: Database.Database,
+  orders: T[],
+): T[] {
+  const itemIds = orders.flatMap((order) => (order.items || []).map((item) => item.id));
+  if (itemIds.length === 0) return orders;
+  const stations = loadActiveKdsStations(dbInstance);
+  const routing = new Map<string, { tableStation: string | null; categoryId: string | null }>();
+  for (let start = 0; start < itemIds.length; start += 500) {
+    const chunk = itemIds.slice(start, start + 500);
+    const rows = dbInstance
+      .prepare(
+        `SELECT oi.id, t.kitchen_station_id AS table_station, p.category_id
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         LEFT JOIN tables t ON t.id = o.table_id
+         LEFT JOIN products p ON p.id = oi.product_id
+         WHERE oi.id IN (${chunk.map(() => '?').join(',')})`,
+      )
+      .all(...chunk) as { id: number; table_station: string | null; category_id: string | null }[];
+    for (const row of rows) {
+      routing.set(String(row.id), {
+        tableStation: row.table_station ? String(row.table_station) : null,
+        categoryId: row.category_id ? String(row.category_id) : null,
+      });
+    }
+  }
+  const takes = (station: KdsStationRow, categoryId: string | null) =>
+    station.category_ids.length === 0 || (!!categoryId && station.category_ids.includes(categoryId));
+  return orders.map((order) => ({
+    ...order,
+    items: (order.items || []).map((item) => {
+      const route = routing.get(String(item.id));
+      let stationIds: string[] = [];
+      if (route?.tableStation) {
+        const station = stations.find((candidate) => candidate.id === route.tableStation);
+        stationIds = station && takes(station, route.categoryId) ? [station.id] : [];
+      } else if (route) {
+        stationIds = stations
+          .filter((station) => takes(station, route.categoryId))
+          .map((station) => station.id);
+      }
+      return { ...item, station_ids: stationIds };
+    }),
+  }));
+}
+
 export type KdsStationRoutingScope = {
   tablelessCategoryIds: string[];
   categoryIdsByStation: Record<string, string[] | null>;

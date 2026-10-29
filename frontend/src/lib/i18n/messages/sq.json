@@ -543,6 +543,7 @@
     "loginHint": "Vetëm rolet e shefit, menaxherit ose pronarit mund të hapin shfaqjen e kuzhinës.",
     "loginSubtitle": "Hyni me llogarinë tuaj të stafit të kuzhinës",
     "markAs": "Shëno si {status}",
+    "advanceTo": "Kalo te {status}",
     "modalOrderNumber": "porosia nr {orderNumber}",
     "ordersActive": "{count} aktive",
     "restPolling": "Kërkim REST (përdorim alternativ)",
@@ -559,6 +560,8 @@
     "updating": "Duke u përditësuar...",
     "viewKanban": "Kanban",
     "viewTabs": "Kartela",
+    "stationFilter": "Stacioni",
+    "allStations": "Të gjitha stacionet",
     "wsConnected": "WebSocket i lidhur"
   },
   "nav": {

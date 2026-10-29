@@ -123,6 +123,13 @@ export interface KdsOrderItem {
     | null;
   created_at?: string;
   updated_at?: string;
+  /** Stations that prepare this item. */
+  station_ids?: string[];
+}
+
+export interface KdsStation {
+  id: string;
+  name: string;
 }
 
 export interface KdsOrder {
@@ -165,6 +172,7 @@ export interface UseKdsConnectionEndpoints {
   orders?: string;
   /** Path template containing a literal `:itemId` placeholder, e.g. '/kds/items/:itemId/status'. */
   itemStatus?: string;
+  stations?: string;
 }
 
 export interface UseKdsConnectionOptions {
@@ -178,6 +186,7 @@ export interface UseKdsConnectionOptions {
 export interface UseKdsConnectionResult {
   user: KdsUser | null;
   orders: KdsOrder[];
+  stations: KdsStation[];
   counts: Record<string, number>;
   loading: boolean;
   connected: boolean;
@@ -205,6 +214,7 @@ const LOGIN_ENDPOINT = '/auth/login';
 const ME_ENDPOINT = '/auth/me';
 const ORDERS_ENDPOINT = '/kitchen/orders';
 const ITEM_STATUS_ENDPOINT = '/order-items/:itemId/status';
+const STATIONS_ENDPOINT = '/kitchen/stations';
 const KDS_AUTH_BLOCKED_KEY = 'flocafe:kds-auth-blocked';
 
 function isKdsAuthBlocked(): boolean {
@@ -234,6 +244,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   const logoutPath = endpoints?.logout ?? '/auth/logout';
   const ordersPath = endpoints?.orders ?? ORDERS_ENDPOINT;
   const itemStatusPath = endpoints?.itemStatus ?? ITEM_STATUS_ENDPOINT;
+  const stationsPath = endpoints?.stations ?? STATIONS_ENDPOINT;
   const t = useTranslations('kds');
   const tNav = useTranslations('nav');
   const { confirm, ConfirmDialog } = useConfirm();
@@ -834,9 +845,31 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     return () => stopRestPolling();
   }, [connectionMode, user, startRestPolling, stopRestPolling, enabled]);
 
+  const [stations, setStations] = useState<KdsStation[]>([]);
+  const userId = user?.id;
+  useEffect(() => {
+    if (!enabled || !userId) {
+      setStations([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(stationsPath)
+      .then(({ data }) => {
+        if (!cancelled) setStations(Array.isArray(data?.stations) ? data.stations : []);
+      })
+      .catch(() => {
+        if (!cancelled) setStations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, stationsPath, enabled, userId]);
+
   return {
     user,
     orders,
+    stations,
     counts,
     loading,
     connected,

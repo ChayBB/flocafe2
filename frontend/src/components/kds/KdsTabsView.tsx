@@ -1,9 +1,10 @@
 'use client';
 
-import { ChevronRight, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
+import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { Badge } from '@/components/ui/badge';
 import {
   STATUS_CONFIG,
@@ -121,10 +122,13 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
                   const isVoided = itemStatus === 'voided';
 
                   return (
-                    <button
+                    <div
                       key={item.id}
+                      className={`flex items-center gap-1 rounded-xl border-2 ${config.border} ${config.bg} pe-1.5`}
+                    >
+                    <button
                       onClick={() => setModalItem({ item, orderNumber: order.order_number })}
-                      className={`w-full text-start rounded-xl border-2 ${config.border} ${config.bg} px-3 py-2.5 transition-all active:scale-95 hover:brightness-95`}
+                      className="flex-1 min-w-0 text-start rounded-xl px-3 py-2.5 transition-all active:scale-95 hover:brightness-95"
                     >
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
@@ -132,7 +136,6 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
                         <span className={`text-lg font-semibold flex-1 truncate ${isVoided ? 'text-gray-400 line-through' : 'text-foreground'}`}>
                           {formatItemHeading(item.product_name, item.variant_selection)}
                         </span>
-                        <ChevronRight size={14} className="text-gray-400 shrink-0 rtl-flip" />
                       </div>
                       {item.addons && item.addons.length > 0 && (
                         <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
@@ -152,6 +155,14 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
                         </p>
                       )}
                     </button>
+                    <KdsStatusToggle
+                      status={itemStatus}
+                      disabled={updating === item.id}
+                      onAdvance={(nextStatus) => {
+                        void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });
+                      }}
+                    />
+                    </div>
                   );
                 })}
               </div>

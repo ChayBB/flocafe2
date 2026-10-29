@@ -543,6 +543,7 @@
     "loginHint": "শুধুমাত্র শেফ, ম্যানেজার বা মালিকের ভূমিকা রান্নাঘরের ডিসপ্লে অ্যাক্সেস করতে পারে।",
     "loginSubtitle": "আপনার রান্নাঘর কর্মীদের অ্যাকাউন্ট দিয়ে সাইন ইন করুন",
     "markAs": "{status} হিসাবে চিহ্নিত করুন",
+    "advanceTo": "{status}-এ সরান",
     "modalOrderNumber": "অর্ডার #{orderNumber}",
     "ordersActive": "{count}টি সক্রিয়",
     "restPolling": "REST পোলিং (ফলব্যাক)",
@@ -559,6 +560,8 @@
     "updating": "আপডেট হচ্ছে...",
     "viewKanban": "কানবন",
     "viewTabs": "ট্যাব",
+    "stationFilter": "স্টেশন",
+    "allStations": "সব স্টেশন",
     "wsConnected": "WebSocket সংযুক্ত"
   },
   "nav": {

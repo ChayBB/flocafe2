@@ -63,6 +63,7 @@ export default function KdsStandalonePage() {
     logout: '/api/auth/logout',
     orders: '/api/kds/orders',
     itemStatus: '/api/kds/items/:itemId/status',
+    stations: '/api/kds/stations',
   };
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const { kdsDefaultView } = useServerKdsInfo(origin);

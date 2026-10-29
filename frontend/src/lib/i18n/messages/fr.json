@@ -543,6 +543,7 @@
     "loginHint": "Seuls les chefs, responsables et propriétaires peuvent accéder à l’affichage en cuisine.",
     "loginSubtitle": "Connectez-vous avec votre compte d’employé de cuisine",
     "markAs": "Marquer comme {status}",
+    "advanceTo": "Passer à {status}",
     "modalOrderNumber": "Commande n° {orderNumber}",
     "ordersActive": "{count} active(s)",
     "restPolling": "Interrogation REST (secours)",
@@ -559,6 +560,8 @@
     "updating": "Mise à jour…",
     "viewKanban": "Kanban",
     "viewTabs": "Onglets",
+    "stationFilter": "Poste",
+    "allStations": "Tous les postes",
     "wsConnected": "WebSocket connecté"
   },
   "nav": {

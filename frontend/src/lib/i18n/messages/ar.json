@@ -543,6 +543,7 @@
     "loginHint": "لا يمكن الوصول إلى شاشة المطبخ إلا لأصحاب الأدوار التالية: الطاهي، أو المدير، أو المالك.",
     "loginSubtitle": "تسجيل الدخول باستخدام حساب طاقم المطبخ الخاص بك",
     "markAs": "وضع علامة {status}",
+    "advanceTo": "نقل إلى {status}",
     "modalOrderNumber": "الطلب رقم #{orderNumber}",
     "ordersActive": "{count} نشط",
     "restPolling": "الاستقصاء عبر REST (الخيار البديل)",
@@ -559,6 +560,8 @@
     "updating": "جاري التحديث…",
     "viewKanban": "كانبان",
     "viewTabs": "علامات التبويب",
+    "stationFilter": "المحطة",
+    "allStations": "كل المحطات",
     "wsConnected": "تم الاتصال عبر WebSocket"
   },
   "nav": {

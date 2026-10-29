@@ -543,6 +543,7 @@
     "loginHint": "Apenas os papéis de chef, gerente ou proprietário podem acessar o display de cozinha.",
     "loginSubtitle": "Entre com sua conta de equipe de cozinha",
     "markAs": "Marcar como {status}",
+    "advanceTo": "Mover para {status}",
     "modalOrderNumber": "Pedido #{orderNumber}",
     "ordersActive": "{count} ativos",
     "restPolling": "Busca REST (alternativa)",
@@ -559,6 +560,8 @@
     "updating": "Atualizando…",
     "viewKanban": "Kanban",
     "viewTabs": "Abas",
+    "stationFilter": "Estação",
+    "allStations": "Todas as estações",
     "wsConnected": "WebSocket conectado"
   },
   "nav": {

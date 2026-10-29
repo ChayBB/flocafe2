@@ -543,6 +543,7 @@
     "loginHint": "只有廚師、經理或店主角色可以存取廚房顯示。",
     "loginSubtitle": "使用您的廚房員工帳戶登入",
     "markAs": "標記為{status}",
+    "advanceTo": "轉到{status}",
     "modalOrderNumber": "訂單 #{orderNumber}",
     "ordersActive": "{count} 個進行中",
     "restPolling": "REST 輪詢（備用）",
@@ -559,6 +560,8 @@
     "updating": "更新中…",
     "viewKanban": "看板",
     "viewTabs": "標籤頁",
+    "stationFilter": "工作站",
+    "allStations": "所有工作站",
     "wsConnected": "WebSocket 已連線"
   },
   "nav": {

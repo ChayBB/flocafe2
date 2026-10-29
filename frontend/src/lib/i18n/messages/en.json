@@ -543,6 +543,7 @@
     "loginHint": "Only chef, manager, or owner roles can access the kitchen display.",
     "loginSubtitle": "Sign in with your kitchen staff account",
     "markAs": "Mark as {status}",
+    "advanceTo": "Move to {status}",
     "modalOrderNumber": "Order #{orderNumber}",
     "ordersActive": "{count} active",
     "restPolling": "REST polling (fallback)",
@@ -559,6 +560,8 @@
     "updating": "Updating…",
     "viewKanban": "Kanban",
     "viewTabs": "Tabs",
+    "stationFilter": "Station",
+    "allStations": "All stations",
     "wsConnected": "WebSocket connected"
   },
   "nav": {

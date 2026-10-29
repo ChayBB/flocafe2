@@ -543,6 +543,7 @@
     "loginHint": "Nur Köche, Manager oder Inhaber können auf die Küchenanzeige zugreifen.",
     "loginSubtitle": "Mit dem Küchenpersonal-Konto anmelden",
     "markAs": "Als {status} markieren",
+    "advanceTo": "Weiter zu {status}",
     "modalOrderNumber": "Bestellung #{orderNumber}",
     "ordersActive": "{count} Aktiv",
     "restPolling": "REST-Abfrage (Fallback)",
@@ -559,6 +560,8 @@
     "updating": "Wird aktualisiert…",
     "viewKanban": "Kanban",
     "viewTabs": "Reiter",
+    "stationFilter": "Küchenstation",
+    "allStations": "Alle Stationen",
     "wsConnected": "WebSocket verbunden"
   },
   "nav": {

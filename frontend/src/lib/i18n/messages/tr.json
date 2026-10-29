@@ -543,6 +543,7 @@
     "loginHint": "Mutfak personeli PIN kodunu girin",
     "loginSubtitle": "Mutfak ekranına erişmek için PIN girin",
     "markAs": "{status} Olarak İşaretle",
+    "advanceTo": "{status} aşamasına geç",
     "modalOrderNumber": "Sipariş #{orderNumber}",
     "ordersActive": "{count} aktif sipariş",
     "restPolling": "Yedek Yoklama Aktif",
@@ -559,6 +560,8 @@
     "updating": "Güncelleniyor...",
     "viewKanban": "Kanban Görünümü",
     "viewTabs": "Sekme Görünümü",
+    "stationFilter": "İstasyon",
+    "allStations": "Tüm istasyonlar",
     "wsConnected": "WebSocket Bağlı"
   },
   "nav": {

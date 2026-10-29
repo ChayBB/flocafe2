@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
+import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { Badge } from '@/components/ui/badge';
 import {
   STATUS_CONFIG,
@@ -163,6 +164,7 @@ export function KdsKanbanBoard({ orders, updating, updateItemStatus }: KdsKanban
                     status={status}
                     items={items}
                     updating={updating}
+                    updateItemStatus={updateItemStatus}
                     onItemOpen={(item) => setModalItem({ item, orderNumber: order.order_number })}
                   />
                 ))}
@@ -199,13 +201,19 @@ export function KdsKanbanBoard({ orders, updating, updateItemStatus }: KdsKanban
   );
 }
 
+type KanbanOrderCardProps = {
+  order: KdsOrder;
+  status: KitchenStatus;
+  items: KdsOrderItem[];
+  updating: number | null;
+  updateItemStatus: KdsKanbanBoardProps['updateItemStatus'];
+};
+
 // onItemOpen is intentionally ignored: it only opens the item modal and is recreated every render.
-function kanbanOrderCardPropsEqual(
-  prev: { order: KdsOrder; status: KitchenStatus; items: KdsOrderItem[]; updating: number | null },
-  next: { order: KdsOrder; status: KitchenStatus; items: KdsOrderItem[]; updating: number | null },
-): boolean {
+function kanbanOrderCardPropsEqual(prev: KanbanOrderCardProps, next: KanbanOrderCardProps): boolean {
   return (
     prev.order === next.order &&
+    prev.updateItemStatus === next.updateItemStatus &&
     prev.status === next.status &&
     prev.updating === next.updating &&
     prev.items.length === next.items.length &&
@@ -218,14 +226,9 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   status,
   items,
   updating,
+  updateItemStatus,
   onItemOpen,
-}: {
-  order: KdsOrder;
-  status: KitchenStatus;
-  items: KdsOrderItem[];
-  updating: number | null;
-  onItemOpen: (item: KdsOrderItem) => void;
-}) {
+}: KanbanOrderCardProps & { onItemOpen: (item: KdsOrderItem) => void }) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const config = STATUS_CONFIG[status];
@@ -279,15 +282,18 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
 
         <div className="space-y-1">
           {items.map((item) => (
-            <button
+            <div
               key={item.id}
+              className={`flex items-center gap-1 rounded-lg border ${config.border} ${config.bg} pe-1`}
+            >
+            <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onItemOpen(item);
               }}
-              className={`w-full text-start rounded-lg border ${config.border} ${config.bg} px-2 py-1.5 hover:brightness-95 active:scale-[0.98] transition`}
+              className="flex-1 min-w-0 text-start rounded-lg px-2 py-1.5 hover:brightness-95 active:scale-[0.98] transition"
             >
               <div className="flex items-center gap-2">
                 <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
@@ -306,6 +312,14 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                 </p>
               )}
             </button>
+            <KdsStatusToggle
+              status={status}
+              disabled={updating === item.id}
+              onAdvance={(nextStatus) => {
+                void updateItemStatus(item.id, nextStatus, { expectedStatus: status });
+              }}
+            />
+            </div>
           ))}
         </div>
       </div>
