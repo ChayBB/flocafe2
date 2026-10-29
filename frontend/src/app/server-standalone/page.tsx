@@ -22,6 +22,10 @@ import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '
 import { useTranslations, type AppConfig } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
+import { ItemStatusBadge } from '@/components/server-app/ItemStatus';
+import { OrderedItemsScreen, TableKitchenSummary, type OrderedItem } from '@/components/server-app/OrderedItems';
+import posApi from '@/lib/api';
+import { parseDbTimestamp } from '@/lib/utils';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -54,6 +58,8 @@ type Table = {
 };
 type OrderItem = {
   id: number;
+  product_id?: string | number;
+  created_at?: string;
   product_name: string;
   quantity: number;
   status: string;
@@ -87,6 +93,14 @@ const TOKEN_KEY = 'flocafe:server-app-token';
 
 const subscribeToNothing = () => () => {};
 
+// Phones and tablets: below the three-column desktop layout.
+const COMPACT_QUERY = '(max-width: 1023px)';
+function subscribeToCompact(onChange: () => void) {
+  const media = window.matchMedia(COMPACT_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
 function createApi(): AxiosInstance {
   const api = axios.create({ baseURL: window.location.origin, timeout: 10000 });
   api.interceptors.request.use((config) => {
@@ -106,29 +120,6 @@ function createApi(): AxiosInstance {
     },
   );
   return api;
-}
-
-const ITEM_STATUS_BADGES: Record<string, { key: ServerAppKey; className: string }> = {
-  pending: { key: 'statusWaiting', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
-  preparing: { key: 'statusPreparing', className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' },
-  ready: { key: 'statusReady', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
-  served: { key: 'statusServed', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
-};
-const CANCELLED_ITEM_BADGE = { key: 'statusCancelled' as ServerAppKey, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-
-/** The kitchen status of a sent item, spelled out. */
-function itemStatusBadge(status: string, t: (key: ServerAppKey) => string) {
-  const badge = ['cancelled', 'voided', 'void_adjustment', 'refunded'].includes(status)
-    ? CANCELLED_ITEM_BADGE
-    : (ITEM_STATUS_BADGES[status] ?? ITEM_STATUS_BADGES.pending);
-  return (
-    <span
-      data-testid="server-app-item-status"
-      className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
-    >
-      {t(badge.key)}
-    </span>
-  );
 }
 
 function money(value: number | string, regional: ServerAppInfo | null) {
@@ -205,6 +196,12 @@ export default function ServerStandalonePage() {
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [orderedItemsOpen, setOrderedItemsOpen] = useState(false);
+  const isCompact = useSyncExternalStore(
+    subscribeToCompact,
+    () => window.matchMedia(COMPACT_QUERY).matches,
+    () => false,
+  );
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
     return () => document.documentElement.classList.remove('theme-server-app');
@@ -586,6 +583,7 @@ export default function ServerStandalonePage() {
     setCustomerPhone(pendingAttempt?.customerPhone ?? '');
     setCustomerMatch(null);
     setCustomerSearched(false);
+    setOrderedItemsOpen(false);
     setSelectedTableId(tableId);
   }
 
@@ -1209,7 +1207,7 @@ export default function ServerStandalonePage() {
           <div className="space-y-2">
             {currentOrder.items.map((item) => (
               <div key={item.id} className="flex items-center gap-2 text-sm">
-                {itemStatusBadge(item.status, t)}
+                <ItemStatusBadge status={item.status} />
                 <span className="min-w-0 flex-1 truncate">
                   <Ltr>{item.quantity}</Ltr> x{' '}
                   {formatItemHeading(item.product_name, item.variant_selection)}
@@ -1427,7 +1425,8 @@ export default function ServerStandalonePage() {
                     disabled={sending}
                     onClick={() => {
                       selectTable(table.id);
-                      setTablePickerOpen(false);
+                      // On a phone or tablet the picker stays open so the table is chosen on purpose.
+                      if (!isCompact) setTablePickerOpen(false);
                     }}
                     className={`min-h-14 rounded-lg border px-2 py-2 text-start disabled:opacity-50 ${selected ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}
                   >
@@ -1455,6 +1454,23 @@ export default function ServerStandalonePage() {
           )}
 
           <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
+            {user && tablePickerOpen && isCompact && activeTable && (
+              <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
+                <button
+                  type="button"
+                  data-testid="server-app-add-food"
+                  onClick={() => setTablePickerOpen(false)}
+                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand"
+                >
+                  <Plus size={17} />
+                  {t('addFoodItems')}
+                </button>
+                <TableKitchenSummary
+                  items={(currentOrder?.items ?? []) as OrderedItem[]}
+                  onOpenDetails={() => setOrderedItemsOpen(true)}
+                />
+              </div>
+            )}
             <ProductGrid
               categories={categories}
               products={products}
@@ -1493,6 +1509,31 @@ export default function ServerStandalonePage() {
             {ticketPanelBody}
           </section>
         </main>
+      )}
+
+      {orderedItemsOpen && activeTable && (
+        <OrderedItemsScreen
+          tableName={activeTable.name ?? String(activeTable.number)}
+          orderNumber={currentOrder?.order_number}
+          items={(currentOrder?.items ?? []) as OrderedItem[]}
+          timezone={regional?.timezone}
+          imageFor={(item) => {
+            const product = products.find((candidate) => String(candidate.id) === String(item.product_id));
+            if (!product?.has_image) return null;
+            const version = product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0;
+            return `${posApi.defaults.baseURL}/products/${product.id}/image?t=${version}`;
+          }}
+          canSend={
+            Boolean(selectedTableId) && orderLoadedTableId === selectedTableId && draft.length > 0 && !sending
+          }
+          sending={sending}
+          onBack={() => setOrderedItemsOpen(false)}
+          onAddItems={() => {
+            setOrderedItemsOpen(false);
+            setTablePickerOpen(false);
+          }}
+          onSend={() => void sendDraft()}
+        />
       )}
 
       <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>

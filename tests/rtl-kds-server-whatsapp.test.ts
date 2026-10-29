@@ -81,6 +81,8 @@ const SCREEN_FILES = [
   // Server App / tableside ordering
   'frontend/src/app/server-standalone/page.tsx',
   'frontend/src/app/server-standalone/layout.tsx',
+  'frontend/src/components/server-app/ItemStatus.tsx',
+  'frontend/src/components/server-app/OrderedItems.tsx',
   // WhatsApp
   'frontend/src/app/(dashboard)/whatsapp/page.tsx',
 ];
