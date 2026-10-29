@@ -104,7 +104,9 @@ test('on a phone, tapping a table keeps the picker and offers add items, kitchen
   await expect(screen.getByTestId('server-app-ordered-item')).toHaveCount(1);
   await expect(screen.getByTestId('server-app-ordered-item')).toContainText('Ready');
   await expect(screen.getByTestId('server-app-ordered-item')).toContainText(/\d{2}:\d{2}/);
-  await expect(screen.getByTestId('server-app-ordered-send')).toBeDisabled();
+  // The list ends with "Exit" rather than a send button, and the cart button stays out of the way.
+  await expect(screen.getByTestId('server-app-ordered-exit')).toHaveText('Exit');
+  await expect(page.getByTestId('server-app-cart-button')).toBeHidden();
 
   // "Add food items" leads to the normal ordering screen for that table.
   await screen.getByTestId('server-app-ordered-add').click();
@@ -113,29 +115,28 @@ test('on a phone, tapping a table keeps the picker and offers add items, kitchen
   await expect(page.getByTestId('pos-product-search')).toBeVisible();
   await expect(page.locator('header')).toContainText(`Phone ${run}`);
 
-  // Add a dish, then send it from the ordered-items screen.
+  // Add a dish and send it from the cart; the table clears afterwards.
   const grid = page.getByTestId('pos-product-grid');
   await grid.getByTestId('pos-product-search').fill(extraName);
   await grid.getByTestId('pos-product-card').filter({ hasText: extraName }).click();
-  await page.getByTestId('server-app-table-button').click();
-  await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
-  await page.getByTestId('server-app-ordered-items-button').click();
-  const send = page.getByTestId('server-app-ordered-send');
-  await expect(send).toBeEnabled();
-  await send.click();
+  await page.getByTestId('server-app-cart-button').click();
+  await page.getByRole('button', { name: 'Add to order' }).last().click();
   await expect
     .poll(async () => {
       const body = await (await page.request.get(`${E2E_BASE_URL}/api/orders/${created.id}`, { headers })).json();
       return body.order.items.length;
     })
     .toBe(5);
-
-  // Sending clears the table; choosing it again shows all five items.
-  await expect(page.getByTestId('server-app-ordered-items')).toHaveCount(0);
   await expect(page.locator('header')).toContainText('Select a table');
+
+  // Choosing the table again shows all five; "Exit" leaves the list and clears the table.
   const picker = page.getByTestId('server-app-table-button');
   if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
   await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
   await page.getByTestId('server-app-ordered-items-button').click();
   await expect(page.getByTestId('server-app-ordered-item')).toHaveCount(5);
+  await page.getByTestId('server-app-ordered-exit').click();
+  await expect(page.getByTestId('server-app-ordered-items')).toHaveCount(0);
+  await expect(page.locator('header')).toContainText('Select a table');
+  await expect(page.getByTestId('server-app-cart-button')).toBeVisible();
 });

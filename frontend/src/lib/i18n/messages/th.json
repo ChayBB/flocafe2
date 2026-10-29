@@ -1636,7 +1636,7 @@
     "addFoodItems": "เพิ่มรายการอาหาร",
     "orderedItemsTitle": "รายการอาหารที่สั่งแล้ว",
     "filterAll": "ทั้งหมด",
-    "sendMoreItems": "ส่งรายการเพิ่ม",
+    "exitOrderedItems": "ออก",
     "noOrderedItems": "ยังไม่มีรายการที่ส่งครัว",
     "kitchenCountsTitle": "รอ {waiting} · พร้อมเสิร์ฟ {ready} · เสิร์ฟแล้ว {served}",
     "sentToKitchen": "ส่งครัวแล้ว",

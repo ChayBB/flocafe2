@@ -1563,16 +1563,12 @@ export default function ServerStandalonePage() {
           orderNumber={currentOrder?.order_number}
           items={(currentOrder?.items ?? []) as OrderedItem[]}
           timezone={regional?.timezone}
-          canSend={
-            Boolean(selectedTableId) && orderLoadedTableId === selectedTableId && draft.length > 0 && !sending
-          }
-          sending={sending}
           onBack={() => setOrderedItemsOpen(false)}
           onAddItems={() => {
             setOrderedItemsOpen(false);
             setTablePickerOpen(false);
           }}
-          onSend={() => void sendDraft()}
+          onExit={clearSelectedTable}
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
         />
@@ -1581,7 +1577,8 @@ export default function ServerStandalonePage() {
       <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
         <DrawerTrigger asChild>
           <button
-            className="fixed bottom-5 end-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg hover:bg-brand-hover active:bg-brand-hover md:hidden"
+            data-testid="server-app-cart-button"
+            className={`${orderedItemsOpen ? 'hidden' : 'flex'} fixed bottom-5 end-5 z-40 h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg hover:bg-brand-hover active:bg-brand-hover md:hidden`}
             aria-label={t('currentTicket')}
           >
             <ShoppingCart size={22} />

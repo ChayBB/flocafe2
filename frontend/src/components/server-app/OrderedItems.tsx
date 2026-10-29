@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ClipboardList, MoreVertical, Plus, Send, ShoppingBag, XCircle } from 'lucide-react';
+import { ArrowLeft, ClipboardList, LogOut, MoreVertical, Plus, ShoppingBag, XCircle } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -81,11 +81,9 @@ export function OrderedItemsScreen({
   orderNumber,
   items,
   timezone,
-  canSend,
-  sending,
   onBack,
   onAddItems,
-  onSend,
+  onExit,
   onTakeaway,
   onCancel,
 }: {
@@ -93,11 +91,10 @@ export function OrderedItemsScreen({
   orderNumber?: string;
   items: OrderedItem[];
   timezone?: string;
-  canSend: boolean;
-  sending: boolean;
   onBack: () => void;
   onAddItems: () => void;
-  onSend: () => void;
+  /** Done with this table: leave the list and clear the table for the next order. */
+  onExit: () => void;
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
 }) {
@@ -279,13 +276,12 @@ export function OrderedItemsScreen({
         </button>
         <button
           type="button"
-          data-testid="server-app-ordered-send"
-          onClick={onSend}
-          disabled={!canSend || sending}
-          className="flex h-12 items-center justify-center gap-1.5 rounded-lg bg-brand text-sm font-semibold text-white disabled:opacity-50"
+          data-testid="server-app-ordered-exit"
+          onClick={onExit}
+          className="flex h-12 items-center justify-center gap-1.5 rounded-lg bg-brand text-sm font-semibold text-white"
         >
-          <Send size={17} />
-          {sending ? t('sending') : t('sendMoreItems')}
+          <LogOut size={17} className="rtl-flip" />
+          {t('exitOrderedItems')}
         </button>
       </footer>
       {ConfirmDialog}
