@@ -667,7 +667,7 @@ const PRINT_LABELS: Record<PrintLabelLanguage, PrintLabelTable> = {
     'pos.methodCash': "เงินสด",
     'pos.methodCard': "บัตร",
     'pos.methodWallet': "กระเป๋าเงิน",
-    'pos.changeReturned': "คืนเงินทอนแล้ว",
+    'pos.changeReturned': "เงินทอน",
     'dashboard.zReport': "รายงาน Z",
     'dashboard.businessDateLabel': "วันที่ดำเนินธุรกิจ",
     'dashboard.periodStart': "วันที่เริ่มต้น",
