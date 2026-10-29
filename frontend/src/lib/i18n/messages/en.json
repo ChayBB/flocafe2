@@ -1621,6 +1621,7 @@
     "guestLabel": "Guest",
     "itemNotePlaceholder": "Item note",
     "kitchen": "Kitchen",
+    "kitchenCountsTitle": "Waiting {waiting} · Ready {ready} · Served {served}",
     "sentToKitchen": "Sent to kitchen",
     "kotPrintFailed": "Order sent, but the kitchen ticket didn't print",
     "loginHint": "Tableside ordering for server, manager, and owner accounts",

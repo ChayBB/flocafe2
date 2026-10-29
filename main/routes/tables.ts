@@ -8,6 +8,7 @@ import { hasPermission, requirePermission } from '../services/authorization';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { GUEST_USER_ID } from '../lib/guest-order';
+import { TERMINAL_ITEM_STATUSES } from '../../shared/order-item-status';
 
 const router = Router();
 
@@ -33,6 +34,21 @@ function activeOrderForTable(
 
   const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id);
   return { ...order, customer: customer || null };
+}
+
+/** Kitchen progress of an open order's menu lines: still waiting or cooking, ready, and served. */
+function kitchenCounts(db: ReturnType<typeof getDatabase>, orderId: number) {
+  const row = db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END), 0) AS ready,
+         COALESCE(SUM(CASE WHEN status IN ('served', 'completed') THEN 1 ELSE 0 END), 0) AS served,
+         COUNT(*) AS total
+       FROM order_items
+       WHERE order_id = ? AND status NOT IN (${TERMINAL_ITEM_STATUSES.map(() => '?').join(',')})`,
+    )
+    .get(orderId, ...TERMINAL_ITEM_STATUSES) as { ready: number; served: number; total: number };
+  return { waiting: row.total - row.ready - row.served, ready: row.ready, served: row.served };
 }
 
 function reservationCustomerShape(
@@ -65,10 +81,13 @@ function tableShape(
         | { name: string }
         | undefined)
     : undefined;
-  const visibleCurrentOrder =
+  const shownOrder =
     currentOrder && !includeReservationCustomer
       ? { ...currentOrder, customer_id: null, customer: null }
       : currentOrder;
+  const visibleCurrentOrder = shownOrder
+    ? { ...shownOrder, kitchen_counts: kitchenCounts(db, shownOrder.id) }
+    : shownOrder;
   return {
     ...table,
     name: table.number,

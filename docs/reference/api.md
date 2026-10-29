@@ -267,6 +267,10 @@ Router: `main/routes/tables.ts`. Full path: `/api/tables`.
 | `POST`   | `/:id/move-order` | `ROLE_ACCESS.sales`        | path: `id`; body: `target_table_id`, `order_id`                                                                      | `{ order, sourceTable, targetTable }`. `400` when `target_table_id` is missing, matches `id`, or names an inactive table; `404` when either table or the active order is not found; `409` when the destination table has an active or held order or is `reserved`. |
 | `PATCH`  | `/:id/status`     | `ROLE_ACCESS.ownerManager` | path: `id`; body: `status`, `reservation_customer_id`                                                                | Body `status`, plus `reservation_customer_id` for reservation state.                                                                                                                                                                                               |
 
+Each table carries its open order as `activeOrder` (also `current_order`), or `null`. That order
+includes `kitchen_counts: { waiting, ready, served }`, the number of its menu lines still waiting or
+cooking, ready to serve, and served; cancelled, voided and refunded lines are not counted.
+
 ### Kitchen stations
 
 Router: `main/routes/kitchen-stations.ts`. Full path: `/api/kitchen-stations`.

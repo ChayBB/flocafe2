@@ -71,6 +71,8 @@ type Order = {
   status: string;
   items?: OrderItem[];
   customer?: { id: string; name: string; phone?: string } | null;
+  /** Menu lines still waiting or cooking, ready to serve, and served. */
+  kitchen_counts?: { waiting: number; ready: number; served: number };
 };
 type DraftLine = CartItem;
 type ServerAppInfo = {
@@ -1449,6 +1451,16 @@ export default function ServerStandalonePage() {
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {order ? t('openOrder') : tTables('statusAvailable')}
+                      {order?.kitchen_counts && (
+                        <Ltr
+                          as="span"
+                          data-testid="table-kitchen-counts"
+                          title={t('kitchenCountsTitle', order.kitchen_counts)}
+                          className="ms-1 tabular-nums text-gray-400"
+                        >
+                          {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-{order.kitchen_counts.served}
+                        </Ltr>
+                      )}
                     </span>
                   </button>
                 );
