@@ -95,6 +95,7 @@ type ServerAppInfo = {
 
 
 const TOKEN_KEY = 'flocafe:server-app-token';
+const LIVE_REFRESH_MS = 5000;
 
 const subscribeToNothing = () => () => {};
 
@@ -293,6 +294,35 @@ export default function ServerStandalonePage() {
     phoneAbortRef.current?.abort();
   }
 
+  function fetchTableOrder(tableId: string) {
+    return api!.get('/api/orders', {
+      params: {
+        table_id: tableId,
+        type: 'dine_in',
+        status: 'pending,preparing,ready',
+        per_page: 1,
+      },
+    });
+  }
+
+  /** Picks up changes made elsewhere (payments at the POS, other staff) without disturbing the cart. */
+  async function refreshLive() {
+    if (!api || sendInFlightRef.current) return;
+    const tableId = selectedTableIdRef.current;
+    const loadSeq = orderLoadSeqRef.current;
+    const orderLoaded = Boolean(tableId) && orderLoadedTableIdRef.current === tableId;
+    const [tablesRes, orderRes] = await Promise.all([
+      api.get('/api/tables', { params: { active: 'true' } }),
+      orderLoaded ? fetchTableOrder(tableId) : Promise.resolve(null),
+    ]);
+    if (sendInFlightRef.current) return;
+    const keepIfSame = <T,>(next: T) => (prev: T) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+    setTables(keepIfSame<Table[]>(tablesRes.data.tables || []));
+    if (orderRes && loadSeq === orderLoadSeqRef.current && selectedTableIdRef.current === tableId) {
+      setCurrentOrder(keepIfSame<Order | null>(orderRes.data.orders?.[0] || null));
+    }
+  }
+
   async function loadOrder(tableId: string, options?: { allowWhileSending?: boolean }) {
     if (!api || !tableId) return;
     if (sendInFlightRef.current && !options?.allowWhileSending) return;
@@ -304,14 +334,7 @@ export default function ServerStandalonePage() {
     }
     cancelPendingCustomerLookup();
     try {
-      const res = await api.get('/api/orders', {
-        params: {
-          table_id: tableId,
-          type: 'dine_in',
-          status: 'pending,preparing,ready',
-          per_page: 1,
-        },
-      });
+      const res = await fetchTableOrder(tableId);
       if (
         (sendInFlightRef.current && !options?.allowWhileSending) ||
         loadSeq !== orderLoadSeqRef.current ||
@@ -408,6 +431,26 @@ export default function ServerStandalonePage() {
       cancelled = true;
     };
   }, [api, selectedTableId, user, t]);
+
+  const refreshLiveRef = useRef(refreshLive);
+  useEffect(() => {
+    refreshLiveRef.current = refreshLive;
+  });
+  useEffect(() => {
+    if (!user || !api) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshLiveRef.current().catch(() => {});
+    };
+    const timer = setInterval(refresh, LIVE_REFRESH_MS);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [api, user]);
 
   // A table QR opens the app as a guest bound to that one table until someone signs in.
   useEffect(() => {
