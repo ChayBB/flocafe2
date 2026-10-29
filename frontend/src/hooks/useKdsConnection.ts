@@ -131,8 +131,10 @@ export interface KdsOrderItem {
   /** A change service staff made after sending: 'takeaway' or 'cancelled'. */
   service_change?: string | null;
   service_change_at?: string | null;
-  /** When service staff confirmed the served item reached the table. */
+  /** When service staff confirmed the served item reached the table, and who. */
   served_confirmed_at?: string | null;
+  served_confirmed_by_name?: string | null;
+  store_timezone?: string;
 }
 
 export interface KdsStation {

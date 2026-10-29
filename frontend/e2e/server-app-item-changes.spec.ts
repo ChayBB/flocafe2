@@ -94,7 +94,8 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
 
   // --- KDS: both changes are flagged in orange; a new change sounds the alert.
   const kds = await context.newPage();
-  await kds.setViewportSize({ width: 1440, height: 900 });
+  // Wide enough that a menu line holds its name and the staff note side by side.
+  await kds.setViewportSize({ width: 1920, height: 1000 });
   await kds.addInitScript(() => {
     const w = window as unknown as { __beeps: number; AudioContext: unknown };
     w.__beeps = 0;
@@ -136,13 +137,23 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await expect(card(1)).toHaveClass(/bg-orange-100/);
   await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
   await expect(card(2)).toContainText('Changed to takeaway');
-  await expect(card(3).getByTestId('kds-served-confirmed')).toHaveText('At the table');
+  // The confirmation sits on the menu line and names who confirmed it, and when.
+  const confirmedPill = card(3).getByTestId('kds-served-confirmed');
+  await expect(confirmedPill).toHaveText(/^At the table · .+ \d{2}:\d{2}$/);
+  const pillBox = (await confirmedPill.boundingBox())!;
+  const nameBox = (await card(3).getByText('E2E Coffee').first().boundingBox())!;
+  expect(Math.abs(pillBox.y + pillBox.height / 2 - (nameBox.y + nameBox.height / 2))).toBeLessThan(12);
+  const takeawayPill = card(2).getByTestId('kds-service-notice');
+  await expect(takeawayPill).toHaveText('Changed to takeaway');
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);
 
   // A fresh page has not been tapped: the display offers to turn sound on, and flashes instead.
   await kds.reload();
   const banner = kds.getByTestId('kds-sound-banner');
   await expect(banner).toHaveText('Tap to turn on alert sounds');
+  // The board has the item before it changes; an item first seen already changed does not alert.
+  await expect(card(4)).toBeVisible();
+  await expect(card(4).getByTestId('kds-service-notice')).toHaveCount(0);
   const asServer = { Authorization: `Bearer ${serverToken}` };
   const takeaway = await kds.request.patch(
     `${E2E_SERVER_APP_BASE_URL}/api/orders/${order.id}/items/${order.items[3].id}/takeaway`,

@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCheck } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { KdsOrderItem } from '@/hooks/useKdsConnection';
+import { parseDbTimestamp } from '@/lib/utils';
 
 /** Orange strip for an item service staff changed after sending; null when it has no change. */
 export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
@@ -11,31 +12,48 @@ export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
     : null;
 }
 
+function confirmedTime(item: KdsOrderItem): string {
+  if (!item.served_confirmed_at) return '';
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      ...(item.store_timezone ? { timeZone: item.store_timezone } : {}),
+    }).format(parseDbTimestamp(item.served_confirmed_at));
+  } catch {
+    return '';
+  }
+}
+
 /**
- * A service staff change, shown like a special instruction (changed to takeaway, or cancelled),
- * and the staff confirmation that a served item reached the table.
+ * Service staff notes that sit on the menu line itself: a change made after sending (takeaway or
+ * cancelled), and who confirmed a served item reached the table, and when.
  */
 export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
   const t = useTranslations('kds');
   return (
     <>
       {item.service_change && (
-        <p
+        <span
           data-testid="kds-service-notice"
-          className="ms-[26px] mt-0.5 flex items-center gap-1 text-sm font-bold text-orange-700 dark:text-orange-300"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-orange-200 px-2 py-0.5 text-xs font-bold text-orange-800 dark:bg-orange-900 dark:text-orange-200"
         >
-          <AlertTriangle size={14} aria-hidden="true" />
+          <AlertTriangle size={12} aria-hidden="true" />
           {item.service_change === 'cancelled' ? t('noticeCancelled') : t('noticeTakeaway')}
-        </p>
+        </span>
       )}
       {item.served_confirmed_at && (
-        <p
+        <span
           data-testid="kds-served-confirmed"
-          className="ms-[26px] mt-0.5 flex items-center gap-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
         >
-          <CheckCheck size={14} aria-hidden="true" />
-          {t('servedConfirmed')}
-        </p>
+          <CheckCheck size={12} aria-hidden="true" />
+          {t('servedConfirmedBy', {
+            name: item.served_confirmed_by_name || '—',
+            time: confirmedTime(item),
+          })}
+        </span>
       )}
     </>
   );

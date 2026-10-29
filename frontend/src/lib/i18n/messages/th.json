@@ -544,7 +544,7 @@
     "loginSubtitle": "เข้าสู่ระบบด้วยบัญชีพนักงานครัวของคุณ",
     "markAs": "ทำเครื่องหมายเป็น {status}",
     "advanceTo": "เปลี่ยนเป็น {status}",
-    "servedConfirmed": "ถึงโต๊ะแล้ว",
+    "servedConfirmedBy": "ถึงโต๊ะแล้ว · {name} {time}",
     "enableAlertSound": "แตะเพื่อเปิดเสียงแจ้งเตือน",
     "noticeTakeaway": "เปลี่ยนเป็นสั่งกลับบ้าน",
     "noticeCancelled": "ยกเลิก",

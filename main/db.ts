@@ -3409,8 +3409,8 @@ export function listKdsStationCategories(dbInstance: Database.Database): { id: s
 }
 
 /**
- * Tags every KDS item with its menu category, so a display can show one category,
- * and with the price the kitchen set for a weighed or kitchen-priced line.
+ * Tags every KDS item with its menu category, so a display can show one category, with the
+ * price the kitchen set for a weighed or kitchen-priced line, and with who confirmed it at the table.
  */
 export function annotateKdsItems<T extends { items?: any[] }>(
   dbInstance: Database.Database,
@@ -3418,7 +3418,10 @@ export function annotateKdsItems<T extends { items?: any[] }>(
 ): T[] {
   const itemIds = orders.flatMap((order) => (order.items || []).map((item) => item.id));
   if (itemIds.length === 0) return orders;
-  const details = new Map<string, { categoryId: string | null; setPrice: number | null }>();
+  const details = new Map<
+    string,
+    { categoryId: string | null; setPrice: number | null; confirmedByName: string | null }
+  >();
   for (let start = 0; start < itemIds.length; start += 500) {
     const chunk = itemIds.slice(start, start + 500);
     const rows = dbInstance
@@ -3426,16 +3429,24 @@ export function annotateKdsItems<T extends { items?: any[] }>(
         `SELECT oi.id, p.category_id,
                 CASE WHEN oi.weight_pending = 0
                        AND (oi.weight IS NOT NULL OR oi.pending_price_mode = 'kitchen_price')
-                     THEN oi.unit_price END AS set_price
+                     THEN oi.unit_price END AS set_price,
+                confirmer.name AS confirmed_by_name
          FROM order_items oi
          LEFT JOIN products p ON p.id = oi.product_id
+         LEFT JOIN users confirmer ON confirmer.id = oi.served_confirmed_by
          WHERE oi.id IN (${chunk.map(() => '?').join(',')})`,
       )
-      .all(...chunk) as { id: number; category_id: string | null; set_price: number | null }[];
+      .all(...chunk) as {
+      id: number;
+      category_id: string | null;
+      set_price: number | null;
+      confirmed_by_name: string | null;
+    }[];
     for (const row of rows) {
       details.set(String(row.id), {
         categoryId: row.category_id ? String(row.category_id) : null,
         setPrice: row.set_price == null ? null : Number(row.set_price),
+        confirmedByName: row.confirmed_by_name ?? null,
       });
     }
   }
@@ -3443,10 +3454,16 @@ export function annotateKdsItems<T extends { items?: any[] }>(
     (dbInstance.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value?: string } | undefined)
       ?.value;
   let currency: string | undefined;
+  let storeTimezone: string | undefined;
   try {
     currency = resolveTenantCurrency(setting('currency'), setting('country') || '');
+    storeTimezone = resolveRegionalSnapshot({
+      country: setting('country'),
+      currency: setting('currency'),
+      timezone: setting('timezone'),
+    }).timezone;
   } catch {
-    // Regional settings not configured yet; the KDS shows a plain number.
+    // Regional settings not configured yet; the KDS shows a plain number and the device's time.
   }
   return orders.map((order) => ({
     ...order,
@@ -3457,6 +3474,8 @@ export function annotateKdsItems<T extends { items?: any[] }>(
         station_category_id: detail?.categoryId ?? null,
         kitchen_set_price: detail?.setPrice ?? null,
         currency,
+        served_confirmed_by_name: detail?.confirmedByName ?? null,
+        store_timezone: storeTimezone,
       };
     }),
   }));

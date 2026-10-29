@@ -266,13 +266,14 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
             >
             {/* Only the toggle changes status; tapping the row does nothing. */}
             <div className="flex-1 min-w-0 px-2 py-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
                   {item.quantity}×
                 </span>
-                <span className={`text-lg font-medium flex-1 truncate ${item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
+                <span className={`text-lg font-medium flex-1 min-w-32 truncate ${item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
                   {formatItemHeading(item.product_name, item.variant_selection)}
                 </span>
+                <KdsServiceNotice item={item} />
               </div>
               {item.addons && item.addons.length > 0 && (
                 <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
@@ -286,7 +287,6 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                   ))}
                 </div>
               )}
-              <KdsServiceNotice item={item} />
               <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
               {item.special_instructions && (
                 <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
