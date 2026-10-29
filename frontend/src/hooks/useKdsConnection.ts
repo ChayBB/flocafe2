@@ -125,6 +125,9 @@ export interface KdsOrderItem {
   updated_at?: string;
   /** Stations that prepare this item. */
   station_ids?: string[];
+  /** Price the kitchen set for a weighed or kitchen-priced line. */
+  kitchen_set_price?: number | null;
+  currency?: string;
 }
 
 export interface KdsStation {

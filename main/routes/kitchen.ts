@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, listKdsStationsForUser, withKdsItemStationIds, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
+import { getDatabase, listKdsStationsForUser, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
 import { requireKdsEnabled } from '../middleware/security';
 import { requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
@@ -142,7 +142,7 @@ router.get('/orders', (req: Request, res: Response) => {
       countMap[item.status] = (countMap[item.status] || 0) + 1;
     }
 
-    res.json({ orders: withKdsItemStationIds(db, ordersWithItems), counts: countMap });
+    res.json({ orders: annotateKdsItems(db, ordersWithItems), counts: countMap });
   } catch (error: any) {
     console.error('[Kitchen] Orders fetch error:', error);
     res.status(500).json({ error: "Could not fetch kitchen orders" });

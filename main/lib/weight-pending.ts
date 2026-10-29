@@ -77,10 +77,9 @@ export function withWeightPendingNote(note: string | null | undefined): string {
   return current ? `${WEIGHT_PENDING_NOTE} | ${current}` : WEIGHT_PENDING_NOTE;
 }
 
-/** Swaps the waiting marker for the weight once the line is weighed, so the kitchen sees it is done. */
-export function withWeighedNote(note: string | null | undefined, weight: number): string | null {
-  if (!note) return note ?? null;
-  return note.replace(WEIGHT_PENDING_NOTE, `น้ำหนัก ${weight} กก.`);
+/** Drops the waiting markers once the kitchen has priced the line; the KDS shows the price instead. */
+export function withoutPendingPriceNotes(note: string | null | undefined): string | null {
+  return stripPendingPriceNotes(note)?.trim() || null;
 }
 
 export function orderHasWeightPending(db: Db, orderId: unknown): boolean {

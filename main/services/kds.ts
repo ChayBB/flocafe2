@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import {
   getDatabase,
-  withKdsItemStationIds,
+  annotateKdsItems,
   getKdsStationCategoryIds,
   getKdsStationRoutingScope,
   getUserKdsStationIds,
@@ -787,7 +787,7 @@ function buildActiveOrdersSnapshot(
 
   return JSON.stringify({
     type: 'initial_data',
-    orders: withKdsItemStationIds(db, ordersWithItems),
+    orders: annotateKdsItems(db, ordersWithItems),
     counts: countMap,
   });
 }

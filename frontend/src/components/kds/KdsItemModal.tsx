@@ -1,5 +1,6 @@
 'use client';
 
+import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import {
@@ -84,6 +85,8 @@ export function KdsItemModal({ item, orderNumber, updating, onClose, onUpdateSta
             </div>
           </div>
         )}
+
+        <KdsSetPrice item={item} className="text-lg" />
 
         {item.special_instructions && (
           <div className="bg-red-50 rounded-xl p-3">

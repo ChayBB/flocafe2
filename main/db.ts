@@ -18,7 +18,7 @@ import {
   normalizeBusinessDayStartTime,
   utcDayBounds,
 } from '../shared/business-date';
-import { getCurrencyFractionDigits, resolveRegionalSnapshot } from './countries';
+import { getCurrencyFractionDigits, resolveRegionalSnapshot, resolveTenantCurrency } from './countries';
 
 const USER_ROLE_SQL_CHECK = `CHECK (role IN (${ROLE_KEYS.map((role) => `'${role}'`).join(', ')}))`;
 
@@ -3430,36 +3430,58 @@ export function listKdsStationsForUser(
 }
 
 /**
- * Tags every KDS item with the stations that prepare it, so a display can show one station.
+ * Tags every KDS item with the stations that prepare it, so a display can show one station,
+ * and with the price the kitchen set for a weighed or kitchen-priced line.
  * A table assigned to a station routes its items there; otherwise a station takes the items
  * of its categories, and a station without categories takes everything.
  */
-export function withKdsItemStationIds<T extends { items?: any[] }>(
+export function annotateKdsItems<T extends { items?: any[] }>(
   dbInstance: Database.Database,
   orders: T[],
 ): T[] {
   const itemIds = orders.flatMap((order) => (order.items || []).map((item) => item.id));
   if (itemIds.length === 0) return orders;
   const stations = loadActiveKdsStations(dbInstance);
-  const routing = new Map<string, { tableStation: string | null; categoryId: string | null }>();
+  const routing = new Map<
+    string,
+    { tableStation: string | null; categoryId: string | null; setPrice: number | null }
+  >();
   for (let start = 0; start < itemIds.length; start += 500) {
     const chunk = itemIds.slice(start, start + 500);
     const rows = dbInstance
       .prepare(
-        `SELECT oi.id, t.kitchen_station_id AS table_station, p.category_id
+        `SELECT oi.id, t.kitchen_station_id AS table_station, p.category_id,
+                CASE WHEN oi.weight_pending = 0
+                       AND (oi.weight IS NOT NULL OR oi.pending_price_mode = 'kitchen_price')
+                     THEN oi.unit_price END AS set_price
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id
          LEFT JOIN tables t ON t.id = o.table_id
          LEFT JOIN products p ON p.id = oi.product_id
          WHERE oi.id IN (${chunk.map(() => '?').join(',')})`,
       )
-      .all(...chunk) as { id: number; table_station: string | null; category_id: string | null }[];
+      .all(...chunk) as {
+      id: number;
+      table_station: string | null;
+      category_id: string | null;
+      set_price: number | null;
+    }[];
     for (const row of rows) {
       routing.set(String(row.id), {
         tableStation: row.table_station ? String(row.table_station) : null,
         categoryId: row.category_id ? String(row.category_id) : null,
+        setPrice: row.set_price == null ? null : Number(row.set_price),
       });
     }
+  }
+  const setting = (key: string) =>
+    (dbInstance.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value?: string } | undefined)
+      ?.value;
+  let currency: string | undefined;
+  try {
+    currency = resolveTenantCurrency(setting('currency'), setting('country') || '');
+  } catch {
+    // Regional settings not configured yet; the KDS shows a plain number.
   }
   const takes = (station: KdsStationRow, categoryId: string | null) =>
     station.category_ids.length === 0 || (!!categoryId && station.category_ids.includes(categoryId));
@@ -3476,7 +3498,12 @@ export function withKdsItemStationIds<T extends { items?: any[] }>(
           .filter((station) => takes(station, route.categoryId))
           .map((station) => station.id);
       }
-      return { ...item, station_ids: stationIds };
+      return {
+        ...item,
+        station_ids: stationIds,
+        kitchen_set_price: route?.setPrice ?? null,
+        currency,
+      };
     }),
   }));
 }
@@ -7752,6 +7779,25 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
                'น้ำหนัก ' || printf('%g', weight) || ' กก.')
          WHERE weight_pending = 0 AND weight IS NOT NULL
            AND special_instructions LIKE '%รอระบุน้ำหนัก%'`,
+      ).run();
+    },
+  },
+  {
+    version: 124,
+    name: 'clear_price_markers_on_priced_item_notes',
+    up: () => {
+      // Priced lines show the kitchen-set price on the KDS, so their waiting markers go.
+      db.prepare(
+        `UPDATE order_items
+         SET special_instructions = NULLIF(TRIM(
+               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(special_instructions,
+                 'รอระบุน้ำหนัก | ', ''), 'รอระบุน้ำหนัก', ''),
+                 'เมนูพิเศษครัวระบุราคา | ', ''), 'เมนูพิเศษครัวระบุราคา', ''),
+                 'น้ำหนัก ' || printf('%g', weight) || ' กก. | ', ''),
+                 'น้ำหนัก ' || printf('%g', weight) || ' กก.', '')), '')
+         WHERE weight_pending = 0
+           AND (weight IS NOT NULL OR pending_price_mode = 'kitchen_price')
+           AND special_instructions IS NOT NULL`,
       ).run();
     },
   },

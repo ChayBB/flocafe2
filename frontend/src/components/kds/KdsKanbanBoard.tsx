@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
+import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -306,6 +307,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                   <span className="text-[10px] text-blue-600">+{item.addons.length}</span>
                 )}
               </div>
+              <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
               {item.special_instructions && (
                 <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
                   {`"${item.special_instructions}"`}

@@ -29,7 +29,7 @@ import {
   projectKdsItem,
   projectKdsOrder,
   listKdsStationsForUser,
-  withKdsItemStationIds,
+  annotateKdsItems,
 } from './db';
 import { setupKdsWebSocket, notifyKdsUpdate } from './services/kds';
 import { getJWTSecret } from './security/jwt-secret';
@@ -515,7 +515,7 @@ export function startKdsServer(): Promise<void> {
         for (const order of ordersWithItems) {
           for (const item of order.items) counts[item.status] = (counts[item.status] || 0) + 1;
         }
-        res.json({ orders: withKdsItemStationIds(db, ordersWithItems), counts });
+        res.json({ orders: annotateKdsItems(db, ordersWithItems), counts });
       } catch (error: any) {
         console.error('[API] Internal error:', error);
         res.status(500).json({ error: 'Internal server error' });

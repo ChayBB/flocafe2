@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, withKdsItemStationIds, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, now, attachEffectiveAddons, isVoidedItemKdsVisible, KDS_VOIDED_ITEM_VISIBILITY_MS, projectKdsItem, projectKdsOrder, projectKdsStation, withTxn } from '../db';
+import { getDatabase, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, now, attachEffectiveAddons, isVoidedItemKdsVisible, KDS_VOIDED_ITEM_VISIBILITY_MS, projectKdsItem, projectKdsOrder, projectKdsStation, withTxn } from '../db';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { requireKdsEnabled, requireKdsEnabledOr404, isTokenRevoked, isTokenStale } from '../middleware/security';
@@ -171,7 +171,7 @@ router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
     for (const order of ordersWithItems) {
       for (const item of order.items) counts[item.status] = (counts[item.status] || 0) + 1;
     }
-    res.json({ orders: withKdsItemStationIds(db, ordersWithItems), counts });
+    res.json({ orders: annotateKdsItems(db, ordersWithItems), counts });
   } catch (error: any) {
     console.error("[API] Internal error:", error);
     res.status(500).json({ error: "Internal server error" });

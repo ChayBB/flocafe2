@@ -4,6 +4,7 @@ import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
+import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -149,6 +150,7 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
                           ))}
                         </div>
                       )}
+                      <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
                       {item.special_instructions && (
                         <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
                           {`"${item.special_instructions}"`}

@@ -34,7 +34,7 @@ const { getJWTSecret } = require('../main/routes/auth');
 const { orderRoutes } = require('../main/routes/orders');
 const { WEIGHT_PENDING_NOTE, KITCHEN_PRICE_NOTE } = require('../main/lib/weight-pending');
 const { billRoutes } = require('../main/routes/bills');
-const { MIGRATIONS } = require('../main/db');
+const { MIGRATIONS, annotateKdsItems } = require('../main/db');
 
 
 function seedUser(db: any, id: string, role: string) {
@@ -156,9 +156,13 @@ async function main() {
     assertEqualOrThrow(after.weight_pending, 0, 'weighed line is no longer pending');
     assertEqualOrThrow(
       after.special_instructions,
-      'น้ำหนัก 0.35 กก.',
-      'the kitchen note shows the weight instead of waiting for it',
+      null,
+      'weighing drops the waiting note; the KDS shows the price instead',
     );
+    const [annotated] = annotateKdsItems(db, [{ items: [{ id: tofu.id }] }])[0].items;
+    assertEqualOrThrow(annotated.kitchen_set_price, 87.5, 'the KDS item carries the weighed price');
+    const [plainAnnotated] = annotateKdsItems(db, [{ items: [{ id: plain.id }] }])[0].items;
+    assertEqualOrThrow(plainAnnotated.kitchen_set_price, null, 'an ordinary line has no kitchen-set price');
     assertEqualOrThrow(after.weight, 0.35, 'weight is stored on the line');
     assertEqualOrThrow(after.unit_price, 87.5, 'unit price is base price x weight');
     assertEqualOrThrow(after.quantity, 1, 'quantity stays 1');
@@ -179,16 +183,19 @@ async function main() {
     assertOrThrow(Boolean(audit), 'weighing is recorded in the order audit log');
     assertEqualOrThrow(JSON.parse(audit.details_json).weight, 0.35, 'audit records the weight');
 
-    // Lines weighed before the note was swapped are repaired by the v123 migration.
+    // Lines priced before the note was cleared are repaired by the v123 and v124 migrations.
     db.prepare('UPDATE order_items SET special_instructions = ? WHERE id = ?').run(
       `${WEIGHT_PENDING_NOTE} | ไม่เผ็ด`,
       tofu.id,
     );
-    MIGRATIONS.find((migration: { version: number }) => migration.version === 123).up();
+    const runMigration = (version: number) =>
+      MIGRATIONS.find((migration: { version: number }) => migration.version === version).up();
+    runMigration(123);
+    runMigration(124);
     assertEqualOrThrow(
       itemsOf(orderId)[0].special_instructions,
-      'น้ำหนัก 0.35 กก. | ไม่เผ็ด',
-      'the migration shows the weight on lines that were already weighed',
+      'ไม่เผ็ด',
+      'the migrations clear the waiting note on lines that were already weighed',
     );
 
     const added = await api(baseUrl, `/api/orders/${orderId}/items`, {
@@ -272,6 +279,19 @@ async function main() {
     assertEqualOrThrow(pricedLine.unit_price, 359, 'the set price is stored as entered, with no weight calculation');
     assertEqualOrThrow(pricedLine.weight, null, 'no weight is recorded');
     assertEqualOrThrow(pricedLine.total, 718, 'the line total is the set price times the sets ordered');
+    assertEqualOrThrow(pricedLine.special_instructions, 'no chilli', 'pricing drops the kitchen-price note');
+    const [pricedAnnotated] = annotateKdsItems(db, [{ items: [{ id: pricedLine.id }] }])[0].items;
+    assertEqualOrThrow(pricedAnnotated.kitchen_set_price, 359, 'the KDS item carries the kitchen-set price');
+    db.prepare('UPDATE order_items SET special_instructions = ? WHERE id = ?').run(
+      `${KITCHEN_PRICE_NOTE} | no chilli`,
+      pricedLine.id,
+    );
+    runMigration(124);
+    assertEqualOrThrow(
+      itemsOf(specialOrderId)[0].special_instructions,
+      'no chilli',
+      'the migration clears the kitchen-price note on lines that were already priced',
+    );
     assertEqualOrThrow(orderRow(specialOrderId).total, 718, 'the order total is recomputed');
     const pricedAgain = await setPrice(400);
     assertEqualOrThrow(pricedAgain.status, 409, 'a priced line cannot be priced twice');
