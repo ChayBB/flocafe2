@@ -129,7 +129,7 @@ test('on a phone, tapping a table keeps the picker and offers add items, kitchen
     .toBe(5);
   await expect(page.locator('header')).toContainText('Select a table');
 
-  // Choosing the table again shows all five; "Exit" leaves the list and clears the table.
+  // Choosing the table again shows all five; "Exit" leaves the list like the back arrow, keeping the table.
   const picker = page.getByTestId('server-app-table-button');
   if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
   await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
@@ -137,6 +137,7 @@ test('on a phone, tapping a table keeps the picker and offers add items, kitchen
   await expect(page.getByTestId('server-app-ordered-item')).toHaveCount(5);
   await page.getByTestId('server-app-ordered-exit').click();
   await expect(page.getByTestId('server-app-ordered-items')).toHaveCount(0);
-  await expect(page.locator('header')).toContainText('Select a table');
+  await expect(page.locator('header')).toContainText(`Phone ${run}`);
+  await expect(page.getByTestId('server-app-table-actions')).toBeVisible();
   await expect(page.getByTestId('server-app-cart-button')).toBeVisible();
 });

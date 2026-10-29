@@ -83,7 +83,6 @@ export function OrderedItemsScreen({
   timezone,
   onBack,
   onAddItems,
-  onExit,
   onTakeaway,
   onCancel,
 }: {
@@ -93,8 +92,6 @@ export function OrderedItemsScreen({
   timezone?: string;
   onBack: () => void;
   onAddItems: () => void;
-  /** Done with this table: leave the list and clear the table for the next order. */
-  onExit: () => void;
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
 }) {
@@ -277,7 +274,7 @@ export function OrderedItemsScreen({
         <button
           type="button"
           data-testid="server-app-ordered-exit"
-          onClick={onExit}
+          onClick={onBack}
           className="flex h-12 items-center justify-center gap-1.5 rounded-lg bg-brand text-sm font-semibold text-white"
         >
           <LogOut size={17} className="rtl-flip" />

@@ -554,7 +554,13 @@ export default function OrdersPage() {
       });
       return true;
     } catch {
-      if (fetchId === ordersFetchIdRef.current && requestFilterKey === ordersFilterKeyRef.current)
+      // Background refreshes (live push and the 10-second poll) retry on their own, so a server
+      // that is briefly unreachable does not raise a toast every few seconds; the list stays as is.
+      if (
+        !rateLimitedRefresh &&
+        fetchId === ordersFetchIdRef.current &&
+        requestFilterKey === ordersFilterKeyRef.current
+      )
         toast.error(tOrders('loadOrdersFailed'));
       return false;
     } finally {

@@ -1568,7 +1568,6 @@ export default function ServerStandalonePage() {
             setOrderedItemsOpen(false);
             setTablePickerOpen(false);
           }}
-          onExit={clearSelectedTable}
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
         />
