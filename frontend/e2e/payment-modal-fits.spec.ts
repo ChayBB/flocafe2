@@ -3,8 +3,12 @@ import { E2E_BASE_URL as BASE } from "./helpers/urls";
 import { E2E_PASSWORD, getE2eToken } from "./helpers/test-auth";
 
 for (const viewport of [
-  { width: 1280, height: 760 },
+  // 15-inch screens: 1366x768 and 1024x768 panels, and 1920x1080 at 150% scaling, each less the
+  // taskbar and window title bar.
   { width: 1366, height: 768 },
+  { width: 1366, height: 700 },
+  { width: 1024, height: 700 },
+  { width: 1280, height: 650 },
 ]) {
   test(`the payment screen shows the whole keypad without scrolling at ${viewport.width}x${viewport.height}`, async ({
     page,

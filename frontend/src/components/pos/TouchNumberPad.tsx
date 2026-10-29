@@ -59,7 +59,7 @@ export default function TouchNumberPad({
             key={`${quick.label}-${quick.value}`}
             type="button"
             onClick={() => onChange(clampValue(quick.value, max))}
-            className="touch-target flex-1 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors active:bg-muted"
+            className="touch-target short:min-h-10 flex-1 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors active:bg-muted"
           >
             {quick.label}
           </button>
@@ -67,7 +67,7 @@ export default function TouchNumberPad({
         <button
           type="button"
           onClick={() => onChange('')}
-          className="touch-target flex-1 gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors active:bg-muted"
+          className="touch-target short:min-h-10 flex-1 gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors active:bg-muted"
         >
           <RotateCcw size={16} />
           {clearLabel}
@@ -79,7 +79,7 @@ export default function TouchNumberPad({
             key={key}
             type="button"
             onClick={() => onChange(appendDigit(value, key, allowDecimal, max))}
-            className="touch-target rounded-lg border border-border bg-card text-lg font-bold tabular-nums text-foreground transition-colors active:bg-muted"
+            className="touch-target short:min-h-10 rounded-lg border border-border bg-card text-lg font-bold tabular-nums text-foreground transition-colors active:bg-muted"
           >
             {key}
           </button>
@@ -89,7 +89,7 @@ export default function TouchNumberPad({
         <button
           type="button"
           onClick={() => onChange(value.slice(0, -1))}
-          className="touch-target rounded-lg border border-border bg-card text-muted-foreground transition-colors active:bg-muted"
+          className="touch-target short:min-h-10 rounded-lg border border-border bg-card text-muted-foreground transition-colors active:bg-muted"
           aria-label={backspaceLabel}
           title={backspaceLabel}
         >

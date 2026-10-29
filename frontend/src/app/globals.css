@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Short screens, e.g. a 15-inch 1366x768 panel once the taskbar and title bar are taken. */
+@custom-variant short (@media (max-height: 760px));
 
 :root {
   --font-sans: "Geist", "Noto Sans Devanagari", "Nirmala UI", "Kohinoor Devanagari", "Devanagari Sangam MN", system-ui, sans-serif;

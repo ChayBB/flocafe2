@@ -1456,10 +1456,10 @@ export default function PaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-card w-full sm:max-w-4xl sm:max-h-[95vh] sm:flex sm:flex-col rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 sm:short:p-2">
+      <div className="bg-card w-full sm:max-w-4xl sm:max-h-[95vh] sm:short:max-h-[calc(100dvh-1rem)] sm:flex sm:flex-col rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3 border-b border-border">
+        <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3 short:py-2 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{t('payment')}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1984,10 +1984,8 @@ export default function PaymentModal({
               )}
               </>
             )}
-          </div>
-
-          <div className="space-y-3">
-            {/* Equal-share shortcut: divides the remaining balance by payer count */}
+            {/* Equal-share shortcut: divides the remaining balance by payer count. It sits at the foot of
+                the left column, so the tender rows and keypad keep the right column on short screens. */}
             {remainingMinor > 0 && !justPaid && (
               <div className="rounded-xl border border-border overflow-hidden">
                 <button
@@ -2114,6 +2112,9 @@ export default function PaymentModal({
               </div>
             )}
 
+          </div>
+
+          <div className="space-y-3">
             <div className="space-y-2">
               {payments.map((payment, idx) => {
                 const builtIn = PAYMENT_METHODS.find(
@@ -2133,7 +2134,7 @@ export default function PaymentModal({
                     }
                     className="space-y-1"
                   >
-                    <div className="flex min-h-12">
+                    <div className="flex min-h-12 short:min-h-10">
                       <button
                         type="button"
                         title={label}
@@ -2143,7 +2144,7 @@ export default function PaymentModal({
                           setAmountTarget({ kind: 'payment', index: idx });
                           allocateRemainingTo(idx);
                         }}
-                        className={`touch-target w-36 shrink-0 justify-start rounded-s-xl border px-3 gap-2 text-sm font-semibold transition-colors ${active ? 'bg-brand text-white border-brand' : 'bg-muted text-foreground border-border hover:border-brand hover:text-brand'}`}
+                        className={`touch-target short:min-h-10 w-36 shrink-0 justify-start rounded-s-xl border px-3 gap-2 text-sm font-semibold transition-colors ${active ? 'bg-brand text-white border-brand' : 'bg-muted text-foreground border-border hover:border-brand hover:text-brand'}`}
                       >
                         {Icon && <Icon size={15} />}
                         <span className="truncate">{label}</span>
@@ -2188,7 +2189,7 @@ export default function PaymentModal({
             {/* Loyalty Wallet Section */}
             {loyaltySettings?.loyalty_enabled && effectiveCustomerId && walletBalance !== null && (
               <div className="space-y-1">
-                <div className="flex min-h-12">
+                <div className="flex min-h-12 short:min-h-10">
                   <button
                     type="button"
                     disabled={processing || attemptLocked || walletBalance <= 0}
@@ -2207,7 +2208,7 @@ export default function PaymentModal({
                       setWalletAmount(dueDisplay > 0 ? String(dueDisplay) : '');
                       setAmountTarget({ kind: 'wallet' });
                     }}
-                    className={`touch-target w-36 shrink-0 justify-start rounded-s-xl border px-3 gap-2 text-sm font-semibold ${walletAmt > 0 ? 'bg-purple-600 text-white border-purple-600' : 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 disabled:bg-muted disabled:text-muted-foreground disabled:border-border'}`}
+                    className={`touch-target short:min-h-10 w-36 shrink-0 justify-start rounded-s-xl border px-3 gap-2 text-sm font-semibold ${walletAmt > 0 ? 'bg-purple-600 text-white border-purple-600' : 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 disabled:bg-muted disabled:text-muted-foreground disabled:border-border'}`}
                   >
                     <Wallet size={15} />
                     <span className="truncate">{t('loyaltyWallet')}</span>
@@ -2270,7 +2271,7 @@ export default function PaymentModal({
           </div>
         </div>
 
-        <div className="shrink-0 px-5 pb-3 border-t border-border pt-3 space-y-2">
+        <div className="shrink-0 px-5 pb-3 border-t border-border pt-3 short:py-2 space-y-2">
           {justPaid ? (
             <>
               {cartCustomer?.phone &&
