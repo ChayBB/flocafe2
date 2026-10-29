@@ -1637,6 +1637,8 @@
     "printBill": "พิมพ์บิล",
     "billRequested": "พิมพ์บิลแล้ว แจ้งแคชเชียร์แล้ว",
     "billRequestFailed": "พิมพ์บิลไม่สำเร็จ",
+    "billBlockedPricePending": "ยังพิมพ์บิลไม่ได้ มีรายการรอครัวระบุราคา",
+    "billBlockedNotServed": "ยังพิมพ์บิลไม่ได้ ต้องยืนยันเสิร์ฟให้ครบทุกรายการก่อน",
     "confirmServed": "ยืนยันเสิร์ฟ",
     "servedConfirmedTag": "ถึงโต๊ะแล้ว",
     "itemServedConfirmed": "ยืนยันเสิร์ฟแล้ว",

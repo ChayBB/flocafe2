@@ -1637,6 +1637,8 @@
     "printBill": "Print bill",
     "billRequested": "Bill printed; the cashier has been told",
     "billRequestFailed": "Could not print the bill",
+    "billBlockedPricePending": "Can't print the bill yet: an item is still waiting for its price",
+    "billBlockedNotServed": "Can't print the bill yet: confirm every item is served first",
     "confirmServed": "Confirm served",
     "servedConfirmedTag": "At the table",
     "itemServedConfirmed": "Serving confirmed",

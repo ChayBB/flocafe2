@@ -29,6 +29,8 @@ export interface OrderedItem {
   service_change?: string | null;
   /** When service staff confirmed the served item reached the table. */
   served_confirmed_at?: string | null;
+  /** Still waiting for a weight or the kitchen's price. */
+  weight_pending?: boolean | number | null;
 }
 
 /**
@@ -273,8 +275,9 @@ export function OrderedItemsScreen({
   const [printing, setPrinting] = useState(false);
 
   const live = items.filter((item) => !isCancelledItem(item.status));
-  // The bill is printed once every live item has been confirmed at the table.
-  const allServedConfirmed = live.length > 0 && live.every((item) => Boolean(item.served_confirmed_at));
+  // The bill is printed once every live item is priced and confirmed at the table.
+  const billReady =
+    live.length > 0 && live.every((item) => Boolean(item.served_confirmed_at) && !item.weight_pending);
   const counts = stageCounts(items);
   const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
   const tabs: { key: KitchenStage | 'all'; count: number; className: string }[] = [
@@ -305,7 +308,7 @@ export function OrderedItemsScreen({
             )}
           </p>
         </div>
-        {orderNumber && allServedConfirmed && (
+        {orderNumber && billReady && (
           <button
             type="button"
             data-testid="server-app-print-bill"

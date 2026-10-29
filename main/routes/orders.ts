@@ -1,5 +1,7 @@
 import {
   type PendingPriceMode,
+  WEIGHT_PENDING_ERROR,
+  orderHasWeightPending,
   pendingPriceModeForProduct,
   stripPendingPriceNotes,
   withPendingPriceNote,
@@ -5756,6 +5758,21 @@ router.post(
         if (['completed', 'cancelled'].includes(current.status)) {
           throw Object.assign(new Error('This order is already closed'), { statusCode: 409 });
         }
+        if (orderHasWeightPending(db, orderId)) {
+          throw Object.assign(new Error(WEIGHT_PENDING_ERROR), { statusCode: 409, code: 'weight_pending' });
+        }
+        const liveItems = (
+          db.prepare('SELECT status, served_confirmed_at FROM order_items WHERE order_id = ?').all(orderId) as {
+            status: string;
+            served_confirmed_at: string | null;
+          }[]
+        ).filter((item) => !isTerminalItemStatus(item.status));
+        if (liveItems.length === 0 || liveItems.some((item) => !item.served_confirmed_at)) {
+          throw Object.assign(new Error('Confirm every item is served before printing the bill'), {
+            statusCode: 409,
+            code: 'served_unconfirmed',
+          });
+        }
         // A reprint keeps the first request time, so the wait keeps counting from it.
         if (!current.bill_requested_at || current.bill_payment_received_at) {
           const actor = db.prepare('SELECT name FROM users WHERE id = ?').get(actorId) as
@@ -5774,11 +5791,13 @@ router.post(
       notifyOrderUpdated();
       res.json({ order });
     } catch (err) {
-      const error = err as { statusCode?: number; message?: string };
+      const error = err as { statusCode?: number; message?: string; code?: string };
       if (!error.statusCode) console.error('[Orders] Bill request error:', error);
-      res
-        .status(error.statusCode || 500)
-        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+      res.status(error.statusCode || 500).json(
+        error.statusCode
+          ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
+          : { error: 'Internal server error' },
+      );
     }
   },
 );

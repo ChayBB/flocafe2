@@ -383,10 +383,12 @@ status change away from `served` clears the confirmation. The KDS shows confirme
 Server App forwards all three routes.
 
 `POST /:id/bill-request` (`orders.create`, item cancel limiter) records that a table asked for its
-bill: the Server App calls it from the print button, shown once every live item is confirmed
+bill: the Server App calls it from the print button, shown once every live item is priced and confirmed
 served, then prints the bill. It sets `bill_requested_at`, `bill_requested_by` and
 `bill_requested_by_name` (a reprint keeps the first time) and records a `bill_requested` audit
-entry; `409` for a completed or cancelled order. Paying the order's last unpaid bill sets
+entry. It answers `409` for a completed or cancelled order, `409` `weight_pending` while a live
+item still waits for its weight or kitchen price, and `409` `served_unconfirmed` until every live
+item is confirmed served. Paying the order's last unpaid bill sets
 `bill_payment_received_at` (a trigger on `bills.payment_status`). `GET /api/bill-requests`
 (`payments.take`, router `main/routes/bill-requests.ts`) returns
 `{ requests: [{ id, order_number, total, table_name, bill_requested_at, bill_requested_by_name }] }`

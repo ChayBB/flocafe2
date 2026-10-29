@@ -61,8 +61,29 @@ async function main() {
   const pending = async () =>
     (await api(baseUrl, '/api/bill-requests', { headers: cashierAuth })).data.requests as any[];
 
+  const insertItem = db.prepare(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, subtotal, total, status, weight_pending, created_at, updated_at)
+    VALUES (?, 'p-bill', ?, 1, 150, 150, 150, 'served', ?, ?, ?)`);
+  const coffee = insertItem.run(orderId, 'Coffee', 0, now(), now()).lastInsertRowid;
+  const fish = insertItem.run(orderId, 'Market fish', 1, now(), now()).lastInsertRowid;
+  insertItem.run(orderId, 'Cancelled tea', 0, now(), now());
+  db.prepare("UPDATE order_items SET status = 'cancelled' WHERE product_name = 'Cancelled tea'").run();
+  const billRequest = () =>
+    api(baseUrl, `/api/orders/${orderId}/bill-request`, { method: 'POST', body: {}, headers: serverAuth });
+
   try {
-    const request = await api(baseUrl, `/api/orders/${orderId}/bill-request`, { method: 'POST', body: {}, headers: serverAuth });
+    // The bill waits for every live item to be priced and confirmed at the table.
+    db.prepare('UPDATE order_items SET served_confirmed_at = ? WHERE id IN (?, ?)').run(now(), coffee, fish);
+    const unpriced = await billRequest();
+    assertEqualOrThrow(unpriced.status, 409, 'an item waiting for its price blocks the bill');
+    assertEqualOrThrow(unpriced.data.code, 'weight_pending', 'the refusal says a price is missing');
+    db.prepare('UPDATE order_items SET weight_pending = 0, served_confirmed_at = NULL WHERE id = ?').run(fish);
+    const unconfirmed = await billRequest();
+    assertEqualOrThrow(unconfirmed.status, 409, 'an item not yet confirmed at the table blocks the bill');
+    assertEqualOrThrow(unconfirmed.data.code, 'served_unconfirmed', 'the refusal says serving is unconfirmed');
+    assertEqualOrThrow(orderRow().bill_requested_at, null, 'a refused request records nothing');
+    db.prepare('UPDATE order_items SET served_confirmed_at = ? WHERE id = ?').run(now(), fish);
+
+    const request = await billRequest();
     assertEqualOrThrow(request.status, 200, `a server asks for the bill (${JSON.stringify(request.data)})`);
     const first = orderRow();
     assertOrThrow(Boolean(first.bill_requested_at), 'the request time is recorded');

@@ -579,7 +579,10 @@ export default function ServerStandalonePage() {
     try {
       await api.post(`/api/orders/${currentOrder.id}/bill-request`, {});
     } catch (error: unknown) {
-      toastApiError(error, t('billRequestFailed'), apiErrorT);
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'weight_pending') toast.error(t('billBlockedPricePending'));
+      else if (code === 'served_unconfirmed') toast.error(t('billBlockedNotServed'));
+      else toastApiError(error, t('billRequestFailed'), apiErrorT);
       return;
     }
     await printOrderSlip(currentOrder.id, {
