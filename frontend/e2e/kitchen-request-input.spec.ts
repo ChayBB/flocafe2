@@ -83,4 +83,9 @@ test('the kitchen-priced group description becomes a box for what the guest want
     })
   ).json();
   expect(orders.orders[0].items[0].special_instructions).toBe('เมนูพิเศษครัวระบุราคา | ปลากะพงนึ่งมะนาว');
+
+  // Items already sent sit under a "Sent to kitchen" heading that names the order.
+  const sent = page.getByTestId('server-app-sent-heading');
+  await expect(sent).toContainText('Sent to kitchen');
+  await expect(sent).toContainText(`#${orders.orders[0].order_number}`);
 });

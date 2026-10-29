@@ -1210,8 +1210,14 @@ export default function ServerStandalonePage() {
 
       {currentOrder?.items && currentOrder.items.length > 0 && (
         <div className="mt-4 border-t border-border pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-            {t('kitchen')}
+          <p
+            data-testid="server-app-sent-heading"
+            className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground"
+          >
+            <span>{t('sentToKitchen')}</span>
+            <Ltr as="span" className="rounded bg-muted px-1.5 py-0.5 font-mono normal-case text-foreground">
+              #{currentOrder.order_number}
+            </Ltr>
           </p>
           <div className="space-y-2">
             {currentOrder.items.map((item) => (
