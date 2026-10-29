@@ -207,7 +207,7 @@ test.describe('orders master/detail is the default layout', () => {
     });
 
     try {
-      const search = page.getByPlaceholder('Search by order number, name, or phone…');
+      const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
       await search.fill(slowOrder.order_number);
       await slowRequestStarted;
       await search.fill(fastOrder.order_number);
@@ -515,7 +515,7 @@ test.describe('orders cards layout keeps controls visible while order cards scro
 
   async function expectControlsPinnedWhileCardsScroll(page: Page, label: string): Promise<void> {
     const title = page.getByRole('heading', { name: 'Orders' });
-    const search = page.getByPlaceholder('Search by order number, name, or phone…');
+    const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
     const statusTab = page.getByRole('button', { name: 'All', exact: true });
     await expect(title, `${label}: title renders`).toBeVisible();
     await expect(search, `${label}: search renders`).toBeVisible();

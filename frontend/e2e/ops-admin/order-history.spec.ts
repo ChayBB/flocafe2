@@ -103,7 +103,7 @@ test.describe('@ci-tier2 operations admin - order history', () => {
     // search until the operator widens it.
     await page.getByRole('button', { name: 'All', exact: true }).first().click();
 
-    const search = page.getByPlaceholder('Search by order number, name, or phone…');
+    const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
     await expect(search).toBeVisible();
     await search.fill(settled[0].order_number);
     await page.waitForTimeout(1200);
@@ -118,7 +118,7 @@ test.describe('@ci-tier2 operations admin - order history', () => {
     await page.goto(`${E2E_BASE_URL}/orders`);
     await page.getByRole('button', { name: 'All', exact: true }).first().click();
 
-    const search = page.getByPlaceholder('Search by order number, name, or phone…');
+    const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
     await search.fill(customerName);
     await page.waitForTimeout(1200);
 
@@ -131,7 +131,7 @@ test.describe('@ci-tier2 operations admin - order history', () => {
     await login(page, 'owner');
     await page.goto(`${E2E_BASE_URL}/orders`);
 
-    const search = page.getByPlaceholder('Search by order number, name, or phone…');
+    const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
     await search.fill('zzz-no-such-order-zzz');
     await page.waitForTimeout(1200);
 
@@ -278,7 +278,7 @@ test.describe('@ci-tier2 operations admin - order history', () => {
     await page.goto(`${E2E_BASE_URL}/orders`);
     await page.getByRole('button', { name: 'All', exact: true }).first().click();
     await page
-      .getByPlaceholder('Search by order number, name, or phone…')
+      .getByPlaceholder('Search by order number, name, phone, table, staff, or amount…')
       .fill(target.order_number);
     await page.waitForTimeout(2000);
 

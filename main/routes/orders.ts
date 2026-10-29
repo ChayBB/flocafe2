@@ -669,6 +669,8 @@ router.get(
         const isPrintableAscii = /^[\x20-\x7E]+$/.test(search) && !/[iI]$/.test(search);
         const isEligible = isPrintableAscii && search.length >= 3;
         const hasFts = isEligible && isSearchIndexAvailable(db);
+        let matchClause: string;
+        const matchParams: any[] = [];
 
         if (hasFts) {
           let candidateClause: string;
@@ -702,14 +704,37 @@ router.get(
             candidateParams.push(ftsSearch, ftsSearch);
           }
 
-          wheres.push(`(${candidateClause} AND ${udfClause})`);
-          params.push(...candidateParams, search, search);
-          if (isPhoneSearch) params.push(phoneDigits, phoneDigits);
+          matchClause = `(${candidateClause} AND ${udfClause})`;
+          matchParams.push(...candidateParams, search, search);
+          if (isPhoneSearch) matchParams.push(phoneDigits, phoneDigits);
         } else {
-          wheres.push(udfClause);
-          params.push(search, search);
-          if (isPhoneSearch) params.push(phoneDigits, phoneDigits);
+          matchClause = udfClause;
+          matchParams.push(search, search);
+          if (isPhoneSearch) matchParams.push(phoneDigits, phoneDigits);
         }
+
+        const extraClauses = [
+          'orders.table_id IN (SELECT id FROM tables WHERE orders_search_contains(number, ?))',
+          `(orders.user_id IN (SELECT id FROM users WHERE orders_search_contains(name, ?))
+            OR orders.table_owner_user_id IN (SELECT id FROM users WHERE orders_search_contains(name, ?)))`,
+        ];
+        matchParams.push(search, search, search);
+        const amountText = search.replace(/[\s,฿]/g, '');
+        if (/^\d+(\.\d{1,2})?$/.test(amountText)) {
+          const amount = Number(amountText);
+          extraClauses.push(`(
+            ABS(orders.total - ?) < 0.005
+            OR EXISTS (
+              SELECT 1 FROM bills AS search_bill
+              WHERE search_bill.order_id = orders.id
+                AND COALESCE(search_bill.payment_status, 'unpaid') IN ('unpaid', 'partial')
+                AND (ABS(search_bill.balance - ?) < 0.005 OR ABS(search_bill.total - ?) < 0.005)
+            )
+          )`);
+          matchParams.push(amount, amount, amount);
+        }
+        wheres.push(`(${matchClause} OR ${extraClauses.join(' OR ')})`);
+        params.push(...matchParams);
       }
       // Filter by UTC day or date range across indexed created_at column.
       if (req.query.today && req.query.today !== '0' && req.query.today !== 'false') {

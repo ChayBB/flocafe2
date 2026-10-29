@@ -658,6 +658,44 @@ async function main() {
     ]) {
       assertOrThrow(!unpaidNumbers.includes(number), `${number} is excluded from unpaid orders`);
     }
+
+    // Table number, serving staff, and amount (typed with or without separators).
+    db.prepare(`INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+      VALUES ('search-waiter', 'น้องแมว', 'waiter@search.local', 'x', 'server', 1, ?, ?)`).run(
+      '2023-01-01 00:00:00',
+      '2023-01-01 00:00:00',
+    );
+    db.prepare(`INSERT INTO tables (id, number, capacity, status, created_at, updated_at)
+      VALUES ('search-table', 'T-Q7', 4, 'occupied', ?, ?)`).run('2023-01-01 00:00:00', '2023-01-01 00:00:00');
+    db.prepare(`INSERT INTO orders (order_number, type, status, table_id, user_id, subtotal, total, created_at, updated_at)
+      VALUES ('ORD-SEARCH-DINE', 'dine_in', 'served', 'search-table', 'search-waiter', 1100, 1100, ?, ?)`).run(
+      '2023-01-02 00:00:00',
+      '2023-01-02 00:00:00',
+    );
+    const dineOrderId = (db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-SEARCH-DINE'").get() as any).id;
+    db.prepare(`INSERT INTO orders (order_number, type, status, table_owner_user_id, subtotal, total, created_at, updated_at)
+      VALUES ('ORD-SEARCH-OWNED', 'dine_in', 'served', 'search-waiter', 640, 640, ?, ?)`).run(
+      '2023-01-02 00:00:00',
+      '2023-01-02 00:00:00',
+    );
+    db.prepare(`INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, balance, payment_status, created_at, updated_at)
+      VALUES ('B-SEARCH-1', ?, 1100, 0, 1100, 350.5, 'partial', ?, ?)`).run(
+      dineOrderId,
+      '2023-01-02 00:00:00',
+      '2023-01-02 00:00:00',
+    );
+    const searchNumbers = async (query: string) =>
+      ((await api(baseUrl, `/api/orders?per_page=100&search=${encodeURIComponent(query)}`, { headers: owner.authHeader }))
+        .data.orders as any[]).map((order) => order.order_number);
+    assertOrThrow((await searchNumbers('t-q7')).includes('ORD-SEARCH-DINE'), 'search finds an order by table number');
+    const byStaff = await searchNumbers('แมว');
+    assertOrThrow(byStaff.includes('ORD-SEARCH-DINE'), 'search finds an order by the staff who took it');
+    assertOrThrow(byStaff.includes('ORD-SEARCH-OWNED'), 'search finds an order by the staff serving the table');
+    for (const query of ['1100', '1,100', '฿1,100.00']) {
+      assertOrThrow((await searchNumbers(query)).includes('ORD-SEARCH-DINE'), `search "${query}" finds the order total`);
+    }
+    assertOrThrow((await searchNumbers('350.50')).includes('ORD-SEARCH-DINE'), 'search finds an open bill balance');
+    assertOrThrow(!(await searchNumbers('1100')).includes('ORD-SEARCH-OWNED'), 'an amount search skips other totals');
   } finally {
     server.close();
     closeDatabase();

@@ -775,7 +775,7 @@
     "restoreItemFailed": "Failed to restore item",
     "resumeFailed": "Could not resume order",
     "resumeInPos": "Resume in POS",
-    "search": "Search by order number, name, or phone…",
+    "search": "Search by order number, name, phone, table, staff, or amount…",
     "searchCustomer": "Search by phone or name…",
     "searchMenu": "Search menu items…",
     "selectedItems": "Selected Items",
