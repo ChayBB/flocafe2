@@ -77,6 +77,12 @@ export function withWeightPendingNote(note: string | null | undefined): string {
   return current ? `${WEIGHT_PENDING_NOTE} | ${current}` : WEIGHT_PENDING_NOTE;
 }
 
+/** Swaps the waiting marker for the weight once the line is weighed, so the kitchen sees it is done. */
+export function withWeighedNote(note: string | null | undefined, weight: number): string | null {
+  if (!note) return note ?? null;
+  return note.replace(WEIGHT_PENDING_NOTE, `น้ำหนัก ${weight} กก.`);
+}
+
 export function orderHasWeightPending(db: Db, orderId: unknown): boolean {
   if (orderId == null) return false;
   const placeholders = TERMINAL_ITEM_STATUSES.map(() => '?').join(',');

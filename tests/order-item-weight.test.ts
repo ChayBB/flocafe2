@@ -34,6 +34,7 @@ const { getJWTSecret } = require('../main/routes/auth');
 const { orderRoutes } = require('../main/routes/orders');
 const { WEIGHT_PENDING_NOTE, KITCHEN_PRICE_NOTE } = require('../main/lib/weight-pending');
 const { billRoutes } = require('../main/routes/bills');
+const { MIGRATIONS } = require('../main/db');
 
 
 function seedUser(db: any, id: string, role: string) {
@@ -153,7 +154,11 @@ async function main() {
     assertEqualOrThrow(weighed.status, 200, `weighing succeeds (${JSON.stringify(weighed.data)})`);
     const after = itemsOf(orderId)[0];
     assertEqualOrThrow(after.weight_pending, 0, 'weighed line is no longer pending');
-    assertEqualOrThrow(after.special_instructions, WEIGHT_PENDING_NOTE, 'kitchen note stays as a record');
+    assertEqualOrThrow(
+      after.special_instructions,
+      'น้ำหนัก 0.35 กก.',
+      'the kitchen note shows the weight instead of waiting for it',
+    );
     assertEqualOrThrow(after.weight, 0.35, 'weight is stored on the line');
     assertEqualOrThrow(after.unit_price, 87.5, 'unit price is base price x weight');
     assertEqualOrThrow(after.quantity, 1, 'quantity stays 1');
@@ -173,6 +178,18 @@ async function main() {
       .get(String(tofu.id)) as any;
     assertOrThrow(Boolean(audit), 'weighing is recorded in the order audit log');
     assertEqualOrThrow(JSON.parse(audit.details_json).weight, 0.35, 'audit records the weight');
+
+    // Lines weighed before the note was swapped are repaired by the v123 migration.
+    db.prepare('UPDATE order_items SET special_instructions = ? WHERE id = ?').run(
+      `${WEIGHT_PENDING_NOTE} | ไม่เผ็ด`,
+      tofu.id,
+    );
+    MIGRATIONS.find((migration: { version: number }) => migration.version === 123).up();
+    assertEqualOrThrow(
+      itemsOf(orderId)[0].special_instructions,
+      'น้ำหนัก 0.35 กก. | ไม่เผ็ด',
+      'the migration shows the weight on lines that were already weighed',
+    );
 
     const added = await api(baseUrl, `/api/orders/${orderId}/items`, {
       method: 'POST',

@@ -3,6 +3,7 @@ import {
   pendingPriceModeForProduct,
   stripPendingPriceNotes,
   withPendingPriceNote,
+  withWeighedNote,
 } from '../lib/weight-pending';
 import { createHash } from 'crypto';
 import { Router, Request, Response } from 'express';
@@ -5510,6 +5511,7 @@ function completePendingPriceLine(mode: PendingPriceMode) {
           SET unit_price = ?,
               weight = ?,
               weight_pending = 0,
+              special_instructions = ?,
               subtotal = ?,
               tax_amount = ?,
               tax_breakdown = ?,
@@ -5522,6 +5524,7 @@ function completePendingPriceLine(mode: PendingPriceMode) {
         `).run(
           unitPrice,
           weight,
+          weight !== null ? withWeighedNote(item.special_instructions, weight) : item.special_instructions,
           itemSubtotal,
           taxResult.tax_amount,
           JSON.stringify(taxResult.tax_breakdown),

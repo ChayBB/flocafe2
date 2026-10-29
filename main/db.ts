@@ -7741,6 +7741,20 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 123,
+    name: 'show_weight_on_weighed_item_notes',
+    up: () => {
+      // Lines weighed before the note was updated still told the kitchen they were waiting.
+      db.prepare(
+        `UPDATE order_items
+         SET special_instructions = REPLACE(special_instructions, 'รอระบุน้ำหนัก',
+               'น้ำหนัก ' || printf('%g', weight) || ' กก.')
+         WHERE weight_pending = 0 AND weight IS NOT NULL
+           AND special_instructions LIKE '%รอระบุน้ำหนัก%'`,
+      ).run();
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
