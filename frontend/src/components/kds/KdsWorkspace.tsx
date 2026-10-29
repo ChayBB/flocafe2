@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { BellRing } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
@@ -8,6 +9,12 @@ import { KdsSettingsDialog } from '@/components/kds/KdsSettingsDialog';
 import { KdsTabsView } from '@/components/kds/KdsTabsView';
 import { useKdsView } from '@/hooks/useKdsView';
 import type { KitchenStatus, UseKdsConnectionResult } from '@/hooks/useKdsConnection';
+import {
+  isKdsAlertSoundLocked,
+  playKdsAlert,
+  subscribeKdsAlertSound,
+  unlockKdsAlertSound,
+} from '@/lib/kds-alert-sound';
 
 const INACTIVE_STAGES_KEY = 'flocafe:kds-inactive-stages';
 type InactiveStages = Record<string, KitchenStatus[]>;
@@ -25,28 +32,6 @@ function readInactiveStages(): InactiveStages {
 
 const NONE_INACTIVE: KitchenStatus[] = [];
 
-/** Three short beeps, so the kitchen looks up when service staff change a sent item. */
-function playChangeAlert(): void {
-  try {
-    const AudioCtx =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const context = new AudioCtx();
-    for (let beep = 0; beep < 3; beep++) {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = 'square';
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.15;
-      oscillator.connect(gain).connect(context.destination);
-      const start = context.currentTime + beep * 0.3;
-      oscillator.start(start);
-      oscillator.stop(start + 0.18);
-    }
-    setTimeout(() => void context.close(), 1500);
-  } catch {}
-}
-
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
   return new Map(
     orders.flatMap((order) => (order.items || []).map((item) => [item.id, item.service_change ?? null] as const)),
@@ -57,7 +42,21 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
 
+  // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
+  // so it disappearing on that tap never shifts the board under the finger.
+  const soundLocked = useSyncExternalStore(subscribeKdsAlertSound, isKdsAlertSoundLocked, () => false);
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockKdsAlertSound);
+    window.addEventListener('keydown', unlockKdsAlertSound);
+    return () => {
+      window.removeEventListener('pointerdown', unlockKdsAlertSound);
+      window.removeEventListener('keydown', unlockKdsAlertSound);
+    };
+  }, []);
+  const flashRef = useRef<HTMLDivElement>(null);
+
   // Alert when an item already on this display gains a service change; items seen for the first time do not.
+  // While sound is blocked the screen flashes orange instead.
   const knownChangesRef = useRef<Map<number, string | null>>(new Map());
   useEffect(() => {
     const current = serviceChangesById(conn.orders);
@@ -66,7 +65,12 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     for (const [id, change] of current) {
       if (change && known.has(id) && known.get(id) !== change) changed = true;
     }
-    if (changed) playChangeAlert();
+    if (changed && !playKdsAlert()) {
+      flashRef.current?.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
+        duration: 700,
+        iterations: 4,
+      });
+    }
     knownChangesRef.current = new Map([...known, ...current]);
   }, [conn.orders]);
   // Every display opens on all stations; picking one narrows the board to that category.
@@ -102,7 +106,24 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   }, [conn.orders, stationId]);
 
   return (
-    <div data-testid="kds-workspace" className="h-full flex flex-col">
+    <div data-testid="kds-workspace" className="relative h-full flex flex-col">
+      <div
+        ref={flashRef}
+        data-testid="kds-change-flash"
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-50 border-[12px] border-orange-500 bg-orange-400/30 opacity-0"
+      />
+      {soundLocked && (
+        <button
+          type="button"
+          data-testid="kds-sound-banner"
+          onClick={unlockKdsAlertSound}
+          className="fixed bottom-4 start-1/2 z-40 flex min-h-11 -translate-x-1/2 rtl:translate-x-1/2 items-center justify-center gap-2 rounded-full border border-amber-400 bg-amber-50 px-4 text-sm font-semibold text-amber-800 shadow-lg"
+        >
+          <BellRing size={18} />
+          {t('enableAlertSound')}
+        </button>
+      )}
       <KdsHeader
         userName={conn.user!.name}
         userRole={conn.user!.role}

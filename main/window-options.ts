@@ -155,6 +155,8 @@ export function getKdsWindowOptions(): BrowserWindowConstructorOptions {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // The kitchen display must sound its alerts without anyone tapping it first.
+      autoplayPolicy: 'no-user-gesture-required',
     },
   };
 }

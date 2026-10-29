@@ -18,7 +18,7 @@ async function seedOrder(page: Page, headers: Record<string, string>, label: str
       items: statuses.map((_, index) => ({
         product_id: 'e2e-product',
         quantity: 1,
-        special_instructions: `line ${index + 1}`,
+        special_instructions: `${label}-${index + 1}`,
       })),
     },
   });
@@ -45,7 +45,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   const headers = { Authorization: `Bearer ${managerToken}` };
   const run = Math.random().toString(36).slice(2, 7);
   const label = `Change ${run}`;
-  const { order } = await seedOrder(page, headers, label, ['pending', 'preparing', 'served', 'pending']);
+  const { order } = await seedOrder(page, headers, label, ['pending', 'preparing', 'served', 'pending', 'pending']);
 
   // --- Server App: the menu after each status follows the rules.
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
@@ -64,7 +64,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await page.getByRole('button', { name: new RegExp(label) }).click();
   await page.getByTestId('server-app-ordered-items-button').click();
   const rows = page.getByTestId('server-app-ordered-item');
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   await expect(rows.first().locator('img')).toHaveCount(0);
 
   const menuOf = (index: number) => rows.nth(index).getByTestId('server-app-item-menu');
@@ -93,9 +93,17 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await kds.addInitScript(() => {
     const w = window as unknown as { __beeps: number; AudioContext: unknown };
     w.__beeps = 0;
+    // Like a real browser: suspended until the page is tapped.
     class FakeAudioContext {
       currentTime = 0;
       destination = {};
+      state = 'suspended';
+      onstatechange: (() => void) | null = null;
+      resume() {
+        this.state = 'running';
+        this.onstatechange?.();
+        return Promise.resolve();
+      }
       createOscillator() {
         w.__beeps += 1;
         return { type: '', frequency: { value: 0 }, connect: (node: unknown) => node, start() {}, stop() {} };
@@ -117,20 +125,40 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
     await kds.getByTestId('kds-login-submit').click();
   }
   await kds.getByRole('button', { name: 'Kanban' }).click();
-  const card = (text: string) =>
-    kds.getByTestId('kds-item-row').filter({ hasText: text });
-  await expect(card('"line 1"')).toContainText('Cancelled');
-  await expect(card('"line 1"')).toHaveClass(/bg-orange-100/);
-  await expect(card('"line 1"').getByTestId('kds-status-toggle')).toHaveCount(0);
-  await expect(card('"line 2"')).toContainText('Changed to takeaway');
+  // Notes are unique to this run, so earlier runs' orders on the board never match.
+  const card = (line: number) => kds.getByTestId('kds-item-row').filter({ hasText: `${label}-${line}"` });
+  await expect(card(1)).toContainText('Cancelled');
+  await expect(card(1)).toHaveClass(/bg-orange-100/);
+  await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
+  await expect(card(2)).toContainText('Changed to takeaway');
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);
 
-  // A server changes another waiting item from the Server App API; the open KDS beeps.
-  const change = await kds.request.patch(
+  // A fresh page has not been tapped: the display offers to turn sound on, and flashes instead.
+  await kds.reload();
+  const banner = kds.getByTestId('kds-sound-banner');
+  await expect(banner).toHaveText('Tap to turn on alert sounds');
+  const asServer = { Authorization: `Bearer ${serverToken}` };
+  const takeaway = await kds.request.patch(
     `${E2E_SERVER_APP_BASE_URL}/api/orders/${order.id}/items/${order.items[3].id}/takeaway`,
-    { headers: { Authorization: `Bearer ${serverToken}` } },
+    { headers: asServer },
   );
-  expect(change.status()).toBe(200);
-  await expect(card('"line 4"')).toContainText('Changed to takeaway', { timeout: 15000 });
+  expect(takeaway.status()).toBe(200);
+  await expect(card(4)).toContainText('Changed to takeaway', { timeout: 15000 });
+  await expect
+    .poll(() =>
+      kds.evaluate(() => document.querySelector('[data-testid="kds-change-flash"]')!.getAnimations().length),
+    )
+    .toBeGreaterThan(0);
+  expect(await kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);
+
+  // One tap turns sound on; the next change beeps.
+  await banner.click();
+  await expect(banner).toHaveCount(0);
+  const cancel = await kds.request.patch(
+    `${E2E_SERVER_APP_BASE_URL}/api/orders/${order.id}/items/${order.items[4].id}/cancel`,
+    { headers: asServer, data: {} },
+  );
+  expect(cancel.status()).toBe(200);
+  await expect(card(5)).toContainText('Cancelled', { timeout: 15000 });
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(3);
 });

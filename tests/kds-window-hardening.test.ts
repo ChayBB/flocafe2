@@ -362,6 +362,11 @@ async function run(): Promise<void> {
   assert.equal(kdsWindow.webPreferences.preload, undefined, 'KDS window webPreferences.preload is undefined (bridge removed)');
   assert.equal(kdsWindow.webPreferences.contextIsolation, true, 'context isolation remains enabled');
   assert.equal(kdsWindow.webPreferences.nodeIntegration, false, 'node integration remains disabled');
+  assert.equal(
+    kdsWindow.webPreferences.autoplayPolicy,
+    'no-user-gesture-required',
+    'the KDS window may sound alerts without a tap',
+  );
   // gh-513: open-kds-window appends the current palette via appendThemeQueryParam so
   // the KDS window's pre-paint script learns the theme without preload access.
   // Assert both the origin/path invariance and that the theme param is one of the

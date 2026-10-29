@@ -544,6 +544,7 @@
     "loginSubtitle": "Sign in with your kitchen staff account",
     "markAs": "Mark as {status}",
     "advanceTo": "Move to {status}",
+    "enableAlertSound": "Tap to turn on alert sounds",
     "noticeTakeaway": "Changed to takeaway",
     "noticeCancelled": "Cancelled",
     "stageSwitch": "{status} stage on or off",
