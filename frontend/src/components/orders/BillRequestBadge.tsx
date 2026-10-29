@@ -50,7 +50,7 @@ export function BillRequestBadge({ order, showRequester = false }: { order: Bill
       <span className="inline-flex items-center gap-1.5">
         <span
           data-testid="bill-request-waiting"
-          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-night-cash/15 dark:text-night-cash"
+          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
         >
           <ReceiptText size={12} aria-hidden="true" />
           {t('billAwaitingPayment')}
@@ -75,7 +75,7 @@ export function BillRequestBadge({ order, showRequester = false }: { order: Bill
   return (
     <span
       data-testid="bill-request-received"
-      className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-night-success/15 dark:text-night-success"
+      className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-950/50 dark:text-green-300"
     >
       <CheckCircle2 size={12} aria-hidden="true" />
       {t('billPaymentReceived', { time: formatTime(order.bill_payment_received_at!), minutes })}

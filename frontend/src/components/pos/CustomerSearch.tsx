@@ -305,15 +305,15 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
               title={t('editCustomer')}
               className="touch-target flex-1 min-w-0 justify-start gap-x-2 flex-wrap text-start cursor-pointer"
             >
-              <span className="font-semibold text-brand text-sm truncate">
+              <span className="font-semibold text-brand dark:text-indigo-300 text-sm truncate">
                 {customer.name}
               </span>
-              <span className="text-brand/70 text-xs shrink-0">
+              <span className="text-brand/70 dark:text-indigo-300 text-xs shrink-0">
                 <Ltr>{customer.phone}</Ltr>
               </span>
-              <Pencil size={14} className="text-brand/60 shrink-0" />
+              <Pencil size={14} className="text-brand/60 dark:text-indigo-300 shrink-0" />
               {!!loyaltyPoints && loyaltyPoints > 0 && (
-                <span className="flex items-center gap-0.5 text-xs font-medium text-brand bg-card/70 rounded-full px-1.5 py-0.5 shrink-0">
+                <span className="flex items-center gap-0.5 text-xs font-medium text-brand dark:text-indigo-300 bg-card/70 rounded-full px-1.5 py-0.5 shrink-0">
                   <Gift size={11} />
                   {t('loyaltyPointsShort', { count: loyaltyPoints })}
                 </span>
@@ -322,7 +322,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             </button>
             <button
               onClick={handleClear}
-              className="touch-target rounded-full text-brand hover:text-brand-hover active:bg-card/60 shrink-0 ms-auto cursor-pointer"
+              className="touch-target rounded-full text-brand dark:text-indigo-300 hover:text-brand-hover active:bg-card/60 shrink-0 ms-auto cursor-pointer"
               aria-label={t('remove')}
             >
               <X size={16} />
@@ -346,7 +346,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             onClick={() => setEditingCustomer(true)}
             className="touch-target flex-1 min-w-0 justify-start gap-2 text-start cursor-pointer"
           >
-            <span className="font-medium text-brand truncate">
+            <span className="font-medium text-brand dark:text-indigo-300 truncate">
               {customer.name}
             </span>
             {customer.phone && (
@@ -354,18 +354,18 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
                 <Ltr>{customer.phone}</Ltr>
               </span>
             )}
-            <Pencil size={14} className="text-brand/60 shrink-0" />
+            <Pencil size={14} className="text-brand/60 dark:text-indigo-300 shrink-0" />
           </button>
           <button
             onClick={handleClear}
-            className="touch-target rounded-full text-brand hover:text-brand-hover active:bg-card/60 ms-2 shrink-0 cursor-pointer"
+            className="touch-target rounded-full text-brand dark:text-indigo-300 hover:text-brand-hover active:bg-card/60 ms-2 shrink-0 cursor-pointer"
             aria-label={t('remove')}
           >
             <X size={16} />
           </button>
         </div>
         {!!loyaltyPoints && loyaltyPoints > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-brand bg-brand-light dark:bg-[var(--color-brand-light)] rounded-full px-1.5 py-0.5">
+          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-brand dark:text-indigo-300 bg-brand-light dark:bg-[var(--color-brand-light)] rounded-full px-1.5 py-0.5">
             <Gift size={11} />
             {t('loyaltyPointsShort', { count: loyaltyPoints })}
           </span>
@@ -477,7 +477,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
                           className={`text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
                             isSelected
                               ? 'bg-white/20 text-white'
-                              : 'bg-brand-light dark:bg-[var(--color-brand-light)] text-brand'
+                              : 'bg-brand-light dark:bg-[var(--color-brand-light)] text-brand dark:text-indigo-300'
                           }`}
                         >
                           <Gift size={11} className="inline me-0.5" />
@@ -514,7 +514,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
                         isSelected
                           ? 'bg-brand text-white dark:bg-brand dark:text-white'
                           : act.isDefault
-                            ? 'bg-brand/10 text-brand dark:bg-brand/20 hover:bg-brand/20'
+                            ? 'bg-brand/10 text-brand dark:bg-brand/20 dark:text-indigo-300 hover:bg-brand/20'
                             : 'hover:bg-muted text-foreground'
                       }`}
                     >
