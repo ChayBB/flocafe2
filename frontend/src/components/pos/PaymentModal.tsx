@@ -1459,7 +1459,7 @@ export default function PaymentModal({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-card w-full sm:max-w-4xl sm:max-h-[95vh] sm:flex sm:flex-col rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border">
+        <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{t('payment')}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1496,7 +1496,7 @@ export default function PaymentModal({
           </div>
         )}
 
-        <div className="px-5 py-4 max-h-[75vh] overflow-y-auto sm:min-h-0 lg:grid lg:grid-cols-2 lg:gap-5">
+        <div className="px-5 pt-3 pb-2 max-h-[75vh] overflow-y-auto sm:max-h-none sm:flex-1 sm:min-h-0 lg:grid lg:grid-cols-2 lg:gap-5">
           {kitchenOverrideRequired && (
             <div
               role="alert"
@@ -1548,7 +1548,7 @@ export default function PaymentModal({
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Amount + Customer Card */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl px-5 py-4 text-white">
               <div className="flex items-start justify-between mb-3">
@@ -1861,9 +1861,132 @@ export default function PaymentModal({
                 )}
               </div>
             )}
+            {/* Change Returned */}
+            {hasCash && (
+              <div
+                className={`rounded-xl px-4 py-3 flex items-center justify-between border-2 transition-all duration-200 ${
+                  change > 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40'
+                    : 'bg-muted border-border'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                      change > 0
+                        ? 'bg-emerald-100 dark:bg-emerald-950/60'
+                        : 'bg-gray-200 dark:bg-muted'
+                    }`}
+                  >
+                    {change > 0 ? (
+                      <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <ArrowLeftRight size={13} className="text-muted-foreground" />
+                    )}
+                  </div>
+                  <span
+                    className={`text-sm font-semibold ${
+                      change > 0
+                        ? 'text-emerald-800 dark:text-emerald-300'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {t('changeReturned')}
+                  </span>
+                </div>
+                <span
+                  className={`text-xl font-bold tabular-nums ${
+                    change > 0 ? 'text-emerald-600' : 'text-gray-300'
+                  }`}
+                >
+                  {currencyFmt(change)}
+                </span>
+              </div>
+            )}
+
+            {!justPaid && (
+              <>
+              {splitSettingState === 'error' && (
+                <div className="w-full space-y-1" data-testid="split-check-section">
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {splitSettingDenied
+                      ? t('splitCheckSettingDenied')
+                      : t('splitCheckAvailabilityFailed')}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={loadSplitCheckSetting}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {t('splitCheckCheckAvailability')}
+                  </Button>
+                </div>
+              )}
+              {splitSettingState === 'ready' && splitChecksEnabled && (
+                <div className="w-full space-y-1" data-testid="split-check-section">
+                  <p className="text-xs font-semibold text-foreground">
+                    {t('splitItemsIntoChecks')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{t('splitCheckHint')}</p>
+                  {'open' in splitEligibility ? (
+                    <Button
+                      variant="outline"
+                      onClick={handleOpenSplitCheck}
+                      disabled={
+                        openingSplitCheck ||
+                        processing ||
+                        attemptLocked ||
+                        applyingDiscount ||
+                        Boolean(updatingChargeId) ||
+                        chargeStateUncertain
+                      }
+                      className="w-full"
+                      size="lg"
+                    >
+                      <Users size={16} className="me-2" />
+                      {t('splitCheck')}
+                    </Button>
+                  ) : 'unknown' in splitEligibility ? (
+                    <Button
+                      variant="outline"
+                      onClick={handleOpenSplitCheck}
+                      disabled={
+                        openingSplitCheck ||
+                        processing ||
+                        attemptLocked ||
+                        applyingDiscount ||
+                        Boolean(updatingChargeId) ||
+                        chargeStateUncertain
+                      }
+                      className="w-full"
+                      size="lg"
+                    >
+                      <Users size={16} className="me-2" />
+                      {t('splitCheckCheckAvailability')}
+                    </Button>
+                  ) : (
+                    <div className="w-full space-y-1">
+                      <Button variant="outline" disabled className="w-full" size="lg">
+                        <Users size={16} className="me-2" />
+                        {t('splitCheck')}
+                      </Button>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        {t(splitEligibility.reason)}
+                      </p>
+                    </div>
+                  )}
+                  {splitOpenReason && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{t(splitOpenReason)}</p>
+                  )}
+                </div>
+              )}
+              </>
+            )}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Equal-share shortcut: divides the remaining balance by payer count */}
             {remainingMinor > 0 && !justPaid && (
               <div className="rounded-xl border border-border overflow-hidden">
@@ -2062,49 +2185,6 @@ export default function PaymentModal({
               })}
             </div>
 
-            {/* Change Returned */}
-            {hasCash && (
-              <div
-                className={`rounded-xl px-4 py-3 flex items-center justify-between border-2 transition-all duration-200 ${
-                  change > 0
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40'
-                    : 'bg-muted border-border'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                      change > 0
-                        ? 'bg-emerald-100 dark:bg-emerald-950/60'
-                        : 'bg-gray-200 dark:bg-muted'
-                    }`}
-                  >
-                    {change > 0 ? (
-                      <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <ArrowLeftRight size={13} className="text-muted-foreground" />
-                    )}
-                  </div>
-                  <span
-                    className={`text-sm font-semibold ${
-                      change > 0
-                        ? 'text-emerald-800 dark:text-emerald-300'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {t('changeReturned')}
-                  </span>
-                </div>
-                <span
-                  className={`text-xl font-bold tabular-nums ${
-                    change > 0 ? 'text-emerald-600' : 'text-gray-300'
-                  }`}
-                >
-                  {currencyFmt(change)}
-                </span>
-              </div>
-            )}
-
             {/* Loyalty Wallet Section */}
             {loyaltySettings?.loyalty_enabled && effectiveCustomerId && walletBalance !== null && (
               <div className="space-y-1">
@@ -2190,7 +2270,7 @@ export default function PaymentModal({
           </div>
         </div>
 
-        <div className="px-5 pb-5 border-t border-border pt-3 space-y-2">
+        <div className="shrink-0 px-5 pb-3 border-t border-border pt-3 space-y-2">
           {justPaid ? (
             <>
               {cartCustomer?.phone &&
@@ -2221,82 +2301,6 @@ export default function PaymentModal({
             </>
           ) : (
             <>
-              {splitSettingState === 'error' && (
-                <div className="w-full space-y-1" data-testid="split-check-section">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {splitSettingDenied
-                      ? t('splitCheckSettingDenied')
-                      : t('splitCheckAvailabilityFailed')}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={loadSplitCheckSetting}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {t('splitCheckCheckAvailability')}
-                  </Button>
-                </div>
-              )}
-              {splitSettingState === 'ready' && splitChecksEnabled && (
-                <div className="w-full space-y-1" data-testid="split-check-section">
-                  <p className="text-xs font-semibold text-foreground">
-                    {t('splitItemsIntoChecks')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{t('splitCheckHint')}</p>
-                  {'open' in splitEligibility ? (
-                    <Button
-                      variant="outline"
-                      onClick={handleOpenSplitCheck}
-                      disabled={
-                        openingSplitCheck ||
-                        processing ||
-                        attemptLocked ||
-                        applyingDiscount ||
-                        Boolean(updatingChargeId) ||
-                        chargeStateUncertain
-                      }
-                      className="w-full"
-                      size="lg"
-                    >
-                      <Users size={16} className="me-2" />
-                      {t('splitCheck')}
-                    </Button>
-                  ) : 'unknown' in splitEligibility ? (
-                    <Button
-                      variant="outline"
-                      onClick={handleOpenSplitCheck}
-                      disabled={
-                        openingSplitCheck ||
-                        processing ||
-                        attemptLocked ||
-                        applyingDiscount ||
-                        Boolean(updatingChargeId) ||
-                        chargeStateUncertain
-                      }
-                      className="w-full"
-                      size="lg"
-                    >
-                      <Users size={16} className="me-2" />
-                      {t('splitCheckCheckAvailability')}
-                    </Button>
-                  ) : (
-                    <div className="w-full space-y-1">
-                      <Button variant="outline" disabled className="w-full" size="lg">
-                        <Users size={16} className="me-2" />
-                        {t('splitCheck')}
-                      </Button>
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        {t(splitEligibility.reason)}
-                      </p>
-                    </div>
-                  )}
-                  {splitOpenReason && (
-                    <p className="text-xs text-red-600 dark:text-red-400">{t(splitOpenReason)}</p>
-                  )}
-                </div>
-              )}
               <Button
                 onClick={handlePay}
                 disabled={
