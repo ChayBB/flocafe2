@@ -1,6 +1,6 @@
-import { test, expect } from "@playwright/test";
-import { E2E_BASE_URL as BASE } from "./helpers/urls";
-import { E2E_PASSWORD, getE2eToken } from "./helpers/test-auth";
+import { test, expect } from '@playwright/test';
+import { E2E_BASE_URL as BASE } from './helpers/urls';
+import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
 
 for (const viewport of [
   // 15-inch screens: 1366x768 and 1024x768 panels, and 1920x1080 at 150% scaling, each less the
@@ -15,7 +15,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport);
     const headers = {
-      Authorization: `Bearer ${getE2eToken("e2e-manager", "manager@flo.local", "manager")}`,
+      Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
     };
     const run = Math.random().toString(36).slice(2, 7);
     const table = await page.request.post(`${BASE}/api/tables`, {
@@ -25,14 +25,14 @@ for (const viewport of [
     const order = await page.request.post(`${BASE}/api/orders`, {
       headers,
       data: {
-        type: "dine_in",
+        type: 'dine_in',
         table_id: (await table.json()).table.id,
         items: [
-          { product_id: "e2e-product", quantity: 2 },
+          { product_id: 'e2e-product', quantity: 2 },
           {
-            product_id: "e2e-product",
+            product_id: 'e2e-product',
             quantity: 1,
-            special_instructions: "second",
+            special_instructions: 'second',
           },
         ],
       },
@@ -42,16 +42,13 @@ for (const viewport of [
     for (const item of created.items as { id: number }[]) {
       await page.request.patch(`${BASE}/api/order-items/${item.id}/status`, {
         headers,
-        data: { status: "served" },
+        data: { status: 'served' },
       });
     }
 
     // The tallest case: a third payment method and split checks on (both restored afterwards).
-    const methods = (
-      await (
-        await page.request.get(`${BASE}/api/payment-methods`, { headers })
-      ).json()
-    ).payment_methods as {
+    const methods = (await (await page.request.get(`${BASE}/api/payment-methods`, { headers })).json())
+      .payment_methods as {
       id: number;
       name: string;
       is_active: boolean | number;
@@ -72,52 +69,54 @@ for (const viewport of [
             headers,
           })
         ).json()
-      ).setting?.value ?? "false";
+      ).setting?.value ?? 'false';
     await page.request.put(`${BASE}/api/settings/split_checks_enabled`, {
       headers,
-      data: { value: "true" },
+      data: { value: 'true' },
     });
     try {
       await page.goto(`${BASE}/auth/login`);
-      await page.locator("#email").fill("owner@flo.local");
-      await page.locator("#password").fill(E2E_PASSWORD);
+      await page.locator('#email').fill('owner@flo.local');
+      await page.locator('#password').fill(E2E_PASSWORD);
       await page.locator('button[type="submit"]').click();
       await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
       await page.goto(`${BASE}/orders`);
       await page
-        .getByRole("button")
+        .getByRole('button')
         .filter({ hasText: `#${created.order_number}` })
         .first()
         .click();
-      await page.getByRole("button", { name: /Checkout|Take Payment/ }).click();
+      await page.getByRole('button', { name: /Checkout|Take Payment/ }).click();
 
-      await page.getByRole("button", { name: "Cash", exact: true }).click();
-      const keypad = page.getByLabel("Numeric keypad");
+      await page.getByRole('button', { name: 'Cash', exact: true }).click();
+      const keypad = page.getByLabel('Numeric keypad');
       await expect(keypad).toBeVisible();
       await page.screenshot({
         path: `test-results/payment-modal-${viewport.width}x${viewport.height}.png`,
       });
 
       // The modal body needs no scrolling, and the keypad's last key sits above the pay button.
-      const body = keypad.locator(
-        'xpath=ancestor::div[contains(@class,"overflow-y-auto")][1]',
-      );
+      const body = keypad.locator('xpath=ancestor::div[contains(@class,"overflow-y-auto")][1]');
       const { scrollHeight, clientHeight } = await body.evaluate((el) => ({
         scrollHeight: el.scrollHeight,
         clientHeight: el.clientHeight,
       }));
       expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
-      const lastKey = (await keypad
-        .getByRole("button", { name: "0", exact: true })
-        .boundingBox())!;
-      const payButton = (await page
-        .getByRole("button", { name: /^Pay / })
-        .boundingBox())!;
+      const lastKey = (await keypad.getByRole('button', { name: '0', exact: true }).boundingBox())!;
+      const payButton = (await page.getByRole('button', { name: /^Pay / }).boundingBox())!;
       expect(lastKey.y + lastKey.height).toBeLessThan(payButton.y);
-      await expect(
-        keypad.getByRole("button", { name: "Clear amount" }),
-      ).toBeVisible();
-      await expect(page.getByTestId("split-check-section")).toBeVisible();
+      await expect(keypad.getByRole('button', { name: 'Clear amount' })).toBeVisible();
+      await expect(page.getByTestId('split-check-section')).toBeVisible();
+
+      // One tender at a time: choosing Card moves the whole balance off Cash.
+      const tender = (name: string) =>
+        page.getByRole('button', { name, exact: true }).locator('xpath=..').getByRole('spinbutton');
+      expect(Number(await tender('Cash').inputValue())).toBeGreaterThan(0);
+      await page.getByRole('button', { name: 'Card', exact: true }).click();
+      await expect(tender('Cash')).toHaveValue('');
+      expect(Number(await tender('Card').inputValue())).toBeGreaterThan(0);
+      await tender('Cash').fill('500');
+      await expect(tender('Card')).toHaveValue('');
     } finally {
       await page.request.put(`${BASE}/api/settings/split_checks_enabled`, {
         headers,

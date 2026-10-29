@@ -631,11 +631,9 @@ export default function PaymentModal({
   const minorToStored = (minor: number) => minor / minorFactor;
   // A share may only be applied over an empty entry board: the other tenders and
   // the wallet are never overwritten.
-  const tenderHasConflict = (index: number) =>
-    walletAmt > 0 ||
-    payments.some((row, rowIndex) => rowIndex !== index && (parseFloat(row.amount) || 0) > 0);
-  const equalShareConflict =
-    walletAmt > 0 || payments.filter((row) => (parseFloat(row.amount) || 0) > 0).length > 1;
+  // Applying a share replaces any other tender (one at a time); only a wallet amount would be lost.
+  const tenderHasConflict = (_index: number) => walletAmt > 0;
+  const equalShareConflict = walletAmt > 0;
 
   const tenderLabel = (payment: Payment) => {
     const builtIn = PAYMENT_METHODS.find(
@@ -651,7 +649,7 @@ export default function PaymentModal({
     const amountInput = String(toDisplayUnit(minorToStored(shareMinor)));
     setPaymentsTouched(true);
     setPayments((rows) =>
-      rows.map((row, rowIndex) => (rowIndex === index ? { ...row, amount: amountInput } : row)),
+      rows.map((row, rowIndex) => ({ ...row, amount: rowIndex === index ? amountInput : '' })),
     );
     setAppliedEqualShare({
       index,
@@ -712,30 +710,31 @@ export default function PaymentModal({
     );
   }
 
+  // One tender at a time: an amount on one method clears the others.
   const updatePaymentAmount = (idx: number, value: string) => {
     if (attemptLocked) return;
+    const takesOver = (parseFloat(value) || 0) > 0;
     setPaymentsTouched(true);
-    setAppliedEqualShare((current) => (current?.index === idx ? null : current));
+    setAppliedEqualShare((current) => (current?.index === idx || takesOver ? null : current));
     setPayments((current) =>
-      current.map((payment, index) => (index === idx ? { ...payment, amount: value } : payment)),
+      current.map((payment, index) =>
+        index === idx ? { ...payment, amount: value } : takesOver ? { ...payment, amount: '' } : payment,
+      ),
     );
   };
 
+  // Choosing a method moves the whole balance (less any wallet amount) onto it and clears the others.
   const allocateRemainingTo = (idx: number) => {
     if (attemptLocked) return;
-    const allocatedElsewhere = payments.reduce(
-      (sum, payment, index) =>
-        index === idx ? sum : sum + toStoredUnit(parseFloat(payment.amount) || 0),
-      walletAmt,
-    );
-    const dueStored = Math.max(0, remaining - allocatedElsewhere);
+    const dueStored = Math.max(0, remaining - walletAmt);
     const dueDisplay = toDisplayUnit(dueStored);
     setPaymentsTouched(true);
     setAppliedEqualShare(null);
     setPayments(
-      payments.map((payment, index) =>
-        index === idx ? { ...payment, amount: dueDisplay > 0 ? String(dueDisplay) : '' } : payment,
-      ),
+      payments.map((payment, index) => ({
+        ...payment,
+        amount: index === idx && dueDisplay > 0 ? String(dueDisplay) : '',
+      })),
     );
   };
 

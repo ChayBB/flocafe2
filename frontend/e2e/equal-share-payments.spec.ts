@@ -649,19 +649,16 @@ test.describe('equal share payments', () => {
     await expect(page.getByRole('button', { name: 'Apply to Cash' })).toBeDisabled();
     expect(await tenderAmount(page, 'Cash')).toBe('');
 
-    // Clearing it unblocks applying, and a second tender row starts a new conflict.
+    // Clearing it unblocks applying. One tender is paid at a time, so typing on another
+    // method moves the payment there and the cash share clears.
     await walletRow(page).getByRole('spinbutton').fill('');
     await expect(page.getByRole('button', { name: 'Apply to Cash' })).toBeEnabled();
     await applyShareTo(page, 'Cash');
     expect(await tenderAmount(page, 'Cash'), 'two payers split 100.00 evenly').toBe('50');
     await tenderRow(page, 'Card').getByRole('spinbutton').fill('5');
-    await expect(page.getByText('Clear the other amounts before applying a share')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Apply to Cash' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Apply to Card' })).toBeDisabled();
-    expect(
-      await tenderAmount(page, 'Cash'),
-      'the applied share is never discarded on its own',
-    ).toBe('50');
+    expect(await tenderAmount(page, 'Cash'), 'only one tender holds an amount').toBe('');
+    await expect(tenderRow(page, 'Cash')).not.toContainText('Equal share');
+    await expect(page.getByRole('button', { name: 'Apply to Cash' })).toBeEnabled();
 
     await page.unroute('**/api/settings/loyalty');
     await page.unroute('**/api/customers/*/wallet');

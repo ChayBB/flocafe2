@@ -321,26 +321,27 @@ export default function PrepaidCheckoutModal({ onClose, onConfirm }: Props) {
     toMinorUnits(walletAmt);
   const remainingMinor = toMinorUnits(remaining);
 
+  // One tender at a time: an amount on one method clears the others.
   const updatePaymentAmount = (idx: number, value: string) => {
+    const takesOver = (parseFloat(value) || 0) > 0;
     setPaymentsTouched(true);
     setPayments((current) =>
-      current.map((payment, index) => (index === idx ? { ...payment, amount: value } : payment)),
+      current.map((payment, index) =>
+        index === idx ? { ...payment, amount: value } : takesOver ? { ...payment, amount: '' } : payment,
+      ),
     );
   };
 
+  // Choosing a method moves the whole balance (less any wallet amount) onto it and clears the others.
   const allocateRemainingTo = (idx: number) => {
-    const allocatedElsewhere = payments.reduce(
-      (sum, payment, index) =>
-        index === idx ? sum : sum + toStoredUnit(parseFloat(payment.amount) || 0),
-      walletAmt,
-    );
-    const dueStored = Math.max(0, remaining - allocatedElsewhere);
+    const dueStored = Math.max(0, remaining - walletAmt);
     const dueDisplay = toDisplayUnit(dueStored);
     setPaymentsTouched(true);
     setPayments(
-      payments.map((payment, index) =>
-        index === idx ? { ...payment, amount: dueDisplay > 0 ? String(dueDisplay) : '' } : payment,
-      ),
+      payments.map((payment, index) => ({
+        ...payment,
+        amount: index === idx && dueDisplay > 0 ? String(dueDisplay) : '',
+      })),
     );
   };
 
