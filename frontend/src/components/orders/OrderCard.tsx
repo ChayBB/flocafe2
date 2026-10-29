@@ -57,29 +57,33 @@ export const orderStatusBadge: Record<
   { bg: string; text: string; labelKey: OrdersKey }
 > = {
   pending: {
-    bg: 'bg-yellow-100 dark:bg-yellow-950/40',
-    text: 'text-yellow-700 dark:text-yellow-300',
+    bg: 'bg-yellow-100 dark:bg-night-service/15',
+    text: 'text-yellow-700 dark:text-night-service',
     labelKey: 'pending',
   },
   preparing: {
-    bg: 'bg-blue-100 dark:bg-blue-950/40',
-    text: 'text-blue-700 dark:text-blue-300',
+    bg: 'bg-blue-100 dark:bg-night-kitchen/15',
+    text: 'text-blue-700 dark:text-night-kitchen',
     labelKey: 'preparing',
   },
   ready: {
-    bg: 'bg-green-100 dark:bg-green-950/40',
-    text: 'text-green-700 dark:text-green-300',
+    bg: 'bg-green-100 dark:bg-night-success/15',
+    text: 'text-green-700 dark:text-night-success',
     labelKey: 'ready',
   },
   served: {
-    bg: 'bg-purple-100 dark:bg-purple-950/40',
-    text: 'text-purple-700 dark:text-purple-300',
+    bg: 'bg-purple-100 dark:bg-night-service/15',
+    text: 'text-purple-700 dark:text-night-service',
     labelKey: 'served',
   },
-  completed: { bg: 'bg-muted', text: 'text-muted-foreground', labelKey: 'completed' },
+  completed: {
+    bg: 'bg-muted dark:bg-night-success/15',
+    text: 'text-muted-foreground dark:text-night-success',
+    labelKey: 'completed',
+  },
   cancelled: {
-    bg: 'bg-red-100 dark:bg-red-950/40',
-    text: 'text-red-700 dark:text-red-300',
+    bg: 'bg-red-100 dark:bg-night-alert/15',
+    text: 'text-red-700 dark:text-night-alert',
     labelKey: 'cancelled',
   },
 };
@@ -89,18 +93,18 @@ export const paymentStatusBadge: Record<
   { bg: string; text: string; labelKey: OrdersKey }
 > = {
   paid: {
-    bg: 'bg-green-100 dark:bg-green-950/40',
-    text: 'text-green-700 dark:text-green-300',
+    bg: 'bg-green-100 dark:bg-night-success/15',
+    text: 'text-green-700 dark:text-night-success',
     labelKey: 'paid',
   },
   partial: {
-    bg: 'bg-amber-100 dark:bg-amber-950/40',
-    text: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-100 dark:bg-night-cash/15',
+    text: 'text-amber-700 dark:text-night-cash',
     labelKey: 'partiallyPaid',
   },
   unpaid: {
-    bg: 'bg-red-100 dark:bg-red-950/40',
-    text: 'text-red-700 dark:text-red-300',
+    bg: 'bg-red-100 dark:bg-night-alert/15',
+    text: 'text-red-700 dark:text-night-alert',
     labelKey: 'unpaidBadge',
   },
 };
