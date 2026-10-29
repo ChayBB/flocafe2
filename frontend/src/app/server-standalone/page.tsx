@@ -299,7 +299,7 @@ export default function ServerStandalonePage() {
       params: {
         table_id: tableId,
         type: 'dine_in',
-        status: 'pending,preparing,ready',
+        status: 'pending,preparing,ready,served',
         per_page: 1,
       },
     });
@@ -492,15 +492,7 @@ export default function ServerStandalonePage() {
     orderLookupFailedRef.current = false;
     orderLoadedTableIdRef.current = '';
     cancelPendingCustomerLookup();
-    api
-      .get('/api/orders', {
-        params: {
-          table_id: targetTableId,
-          type: 'dine_in',
-          status: 'pending,preparing,ready',
-          per_page: 1,
-        },
-      })
+    fetchTableOrder(targetTableId)
       .then((res) => {
         if (
           cancelled ||
