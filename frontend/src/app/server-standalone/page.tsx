@@ -25,6 +25,7 @@ import { parsePhone } from '@/lib/phone';
 import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
 import { useTranslations, type AppConfig } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
+import { StoreClock } from '@/components/layout/StoreClock';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -78,6 +79,8 @@ type ServerAppInfo = {
   currency_symbol: string;
   currency_position: 'prefix' | 'suffix';
   currency_fraction_digits: number;
+  timezone?: string;
+  server_time?: string;
 };
 
 type ServerAppKey = keyof AppConfig['Messages']['serverApp'];
@@ -1108,6 +1111,16 @@ export default function ServerStandalonePage() {
           onSubmit={handleLogin}
           className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-sm"
         >
+          {regional?.server_time && regional.timezone && (
+            <div className="-mx-6 -mt-6 mb-5 rounded-t-xl border-b border-border bg-muted/40 px-6 py-4">
+              <StoreClock
+                key={regional.server_time}
+                serverTime={regional.server_time}
+                timezone={regional.timezone}
+                country={regional.country}
+              />
+            </div>
+          )}
           <div className="mb-6 text-center">
             <UserRound size={42} className="mx-auto mb-3 text-red-600" aria-hidden="true" />
             <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>

@@ -58,6 +58,7 @@ import {
   hasPermission,
   resolveEffectivePermissions,
 } from './services/authorization';
+import { clockNow } from './lib/clock';
 
 let serverApp: http.Server | null = null;
 let stopPromise: Promise<void> | null = null;
@@ -327,6 +328,8 @@ export function startServerApp(): Promise<void> {
         currency_position: snapshot.currencyPosition,
         currency_fraction_digits: snapshot.currencyFractionDigits,
         kds_enabled: settings.kds_enabled !== 'false',
+        timezone: snapshot.timezone,
+        server_time: clockNow().toISOString(),
       });
     });
 
