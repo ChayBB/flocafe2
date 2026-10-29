@@ -522,9 +522,17 @@ html.dark::-webkit-scrollbar-thumb:hover,
   animation: shake 0.4s ease-in-out;
 }
 
+@keyframes bill-awaiting-blink {
+  50% { background-color: var(--color-green-300); }
+}
+.animate-bill-awaiting {
+  animation: bill-awaiting-blink 0.6s ease-in-out 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-shake,
-  .animate-shake-centered {
+  .animate-shake-centered,
+  .animate-bill-awaiting {
     animation: none;
   }
 }

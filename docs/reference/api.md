@@ -390,7 +390,7 @@ entry; `409` for a completed or cancelled order. Paying the order's last unpaid 
 `bill_payment_received_at` (a trigger on `bills.payment_status`). `GET /api/bill-requests`
 (`payments.take`, router `main/routes/bill-requests.ts`) returns
 `{ requests: [{ id, order_number, total, table_name, bill_requested_at, bill_requested_by_name }] }`
-for open orders still waiting, which the POS polls every 5 seconds to time the wait and beep for a
+for open orders still waiting, which the POS polls every 5 seconds to beep for a
 new request.
 
 The Server App also forwards `POST /api/tables/:id/move-order` (`tables.orders.move`), which its

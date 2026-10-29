@@ -54,6 +54,7 @@ export function OrdersMasterList({
       {orders.map((order) => {
         const badge = orderStatusBadge[order.status];
         const awaitingWeight = orderAwaitingWeight(order);
+        const awaitingPayment = Boolean(order.bill_requested_at) && !order.bill_payment_received_at;
         const active = order.status !== 'cancelled';
         const itemCount = (order.items || []).filter(
           (i) => !['cancelled', 'voided', 'void_adjustment'].includes(i.status),
@@ -64,6 +65,7 @@ export function OrdersMasterList({
               type="button"
               onClick={() => onSelect(order.id)}
               aria-current={selectedOrderId === order.id}
+              data-bill-awaiting={awaitingPayment || undefined}
               className={cn(
                 'w-full text-start px-3 py-2.5 flex flex-col gap-1 transition-colors touch-manipulation',
                 selectedOrderId === order.id
@@ -72,6 +74,8 @@ export function OrdersMasterList({
                 awaitingWeight &&
                   'bg-orange-50 dark:bg-orange-950/30 border-s-4 border-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50',
                 !active && 'opacity-80',
+                awaitingPayment &&
+                  'animate-bill-awaiting bg-green-50 hover:bg-green-100 dark:bg-green-950/40 dark:hover:bg-green-950/60',
               )}
             >
               <div className="flex items-center justify-between gap-2">

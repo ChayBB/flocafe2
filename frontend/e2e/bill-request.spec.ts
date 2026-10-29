@@ -94,18 +94,17 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   await printer.click();
   await expect(phone.getByText('Bill printed; the cashier has been told').first()).toBeVisible();
 
-  // POS: the waiting bar names the table and who printed, counts up, and beeps twice.
-  const alert = page.getByTestId('bill-request-alert').filter({ hasText: label });
-  await expect(alert).toBeVisible({ timeout: 15000 });
-  await expect(alert).toContainText(`Table ${label} awaiting payment`);
-  await expect(alert).toContainText('Bill printed by');
-  await expect(alert).toContainText(/\d+:\d{2}/);
+  // POS: two beeps, no top bar; the order row turns green and the wait counts up.
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps))
+    .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps), { timeout: 15000 })
     .toBe(beepsBefore + 2);
-  await page.reload();
-  await page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first().click();
-  await expect(page.getByTestId('bill-request-waiting').first()).toContainText('Awaiting payment');
+  await expect(page.getByTestId('bill-request-alerts')).toHaveCount(0);
+  const row = page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first();
+  await expect(row).toHaveAttribute('data-bill-awaiting', 'true', { timeout: 15000 });
+  await expect(row).toHaveClass(/animate-bill-awaiting/);
+  await expect(row.getByTestId('bill-request-waiting')).toContainText(/Awaiting payment\s*\d+:\d{2}/);
+  await row.click();
+  await expect(page.getByText('Bill printed by').first()).toBeVisible();
 
   // The cashier takes the money: the wait stops, is stamped, and the table leaves the bar.
   const bill = await page.request.post(`${E2E_BASE_URL}/api/bills/generate`, { headers, data: { order_id: created.id } });
@@ -116,9 +115,12 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     data: { payments: [{ method: 'cash', amount: billBody.total }] },
   });
   expect(paid.ok(), await paid.text()).toBeTruthy();
-  await expect(page.getByTestId('bill-request-alert').filter({ hasText: label })).toHaveCount(0, { timeout: 15000 });
   await page.reload();
   await page.getByRole('button', { name: 'All', exact: true }).first().click();
   await page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first().click();
   await expect(page.getByTestId('bill-request-received').first()).toContainText(/Paid \d{2}:\d{2} · waited \d+ min/);
+  await expect(page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first()).not.toHaveAttribute(
+    'data-bill-awaiting',
+    'true',
+  );
 });

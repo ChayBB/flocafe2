@@ -679,8 +679,6 @@
     "billAwaitingPayment": "รอยืนยันรับเงิน",
     "billRequestedBy": "พิมพ์บิลโดย {name}",
     "billPaymentReceived": "รับเงินแล้ว {time} · รอ {minutes} นาที",
-    "billRequestBar": "โต๊ะ {table} รอยืนยันรับเงิน",
-    "goCollectPayment": "ไปรับเงิน",
     "managerPin": "ป้อน PIN ผู้จัดการ",
     "managerPinLabel": "PIN ผู้จัดการ",
     "managerPinRequired": "การให้ส่วนลดต้องใช้ PIN ผู้จัดการ",

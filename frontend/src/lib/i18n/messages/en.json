@@ -679,8 +679,6 @@
     "billAwaitingPayment": "Awaiting payment",
     "billRequestedBy": "Bill printed by {name}",
     "billPaymentReceived": "Paid {time} · waited {minutes} min",
-    "billRequestBar": "Table {table} awaiting payment",
-    "goCollectPayment": "Collect",
     "managerPin": "Enter manager PIN",
     "managerPinLabel": "Manager PIN",
     "managerPinRequired": "Manager PIN required for discounts",
