@@ -255,16 +255,12 @@ test.describe('Server App tableside ordering', () => {
     const editButton = page.getByRole('button', { name: 'Edit', exact: true }).first();
     const tableBButton = page.getByRole('button', { name: new RegExp(tableBName) });
     const tablePickerButton = page.getByTestId('server-app-table-button');
-    const phoneInput = page.getByPlaceholder('Phone').first();
-    const nameInput = page.getByPlaceholder('Customer name').first();
 
     await expect(productCard).toBeDisabled();
     await expect(removeButton).toBeDisabled();
     await expect(editButton).toBeDisabled();
     await expect(tableBButton).toBeDisabled();
     await expect(tablePickerButton).toBeDisabled();
-    await expect(phoneInput).toBeDisabled();
-    await expect(nameInput).toBeDisabled();
     await expect(notesInput).toBeDisabled();
 
     // Bypassing disabled UI via synthetic clicks or search Enter must also be blocked by the in-flight ref.
@@ -286,7 +282,7 @@ test.describe('Server App tableside ordering', () => {
     // Sending clears the table; picking it again shows what was sent.
     await expect(page.locator('header')).toContainText('Select a table');
     await pickTable(page, tableAName);
-    await expect(page.getByText('1 x E2E Coffee').first()).toBeVisible();
+    await expect(page.getByText('1 × E2E Coffee').first()).toBeVisible();
     releaseKotPrint();
 
     // Now that the first send finished and unlocked the UI, adding and sending a second item must succeed.
@@ -295,7 +291,7 @@ test.describe('Server App tableside ordering', () => {
     await page.getByRole('button', { name: 'Add to order' }).first().click();
     await expect(page.locator('header')).toContainText('Select a table');
     await pickTable(page, tableAName);
-    await expect(page.locator('main').getByText('1 x E2E Coffee')).toHaveCount(2);
+    await expect(page.locator('main').getByText('1 × E2E Coffee')).toHaveCount(2);
     await expect.poll(() => kotPrintPayloads.length).toBe(2);
     expect(kotPrintPayloads[0]?.items).toHaveLength(1);
     expect(kotPrintPayloads[1]?.items).toHaveLength(1);
@@ -444,7 +440,7 @@ test.describe('Server App tableside ordering', () => {
     await pickTable(page, tableBName);
     await pickTable(page, tableAName);
     await reloadTableAOrder;
-    await expect(page.getByText('2 x E2E Coffee').first()).toBeVisible();
+    await expect(page.getByText('2 × E2E Coffee').first()).toBeVisible();
 
     // Retrying the unmodified draft must replay the original POST /api/orders with the same key instead of appending a second time.
     await page.getByRole('button', { name: 'Add to order' }).first().click();
@@ -527,7 +523,7 @@ test.describe('Server App tableside ordering', () => {
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
 
     await expect(page.locator('header')).toContainText(tableBName);
-    await expect(page.getByText('2 x E2E Coffee')).toHaveCount(0);
+    await expect(page.getByText('2 × E2E Coffee')).toHaveCount(0);
 
     // Prepare a new draft on Table B, then return to occupied Table A while its lookup fails:
     // Send must remain blocked until Table A's lookup succeeds so it cannot create a separate order.

@@ -147,8 +147,8 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.getByText('Draft total', { exact: true })).toBeVisible();
     await expect(page.getByText('All', { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder('Search menu')).toBeVisible();
-    await expect(page.getByPlaceholder('Customer name')).toBeVisible();
-    await expect(page.getByPlaceholder('Phone')).toBeVisible();
+    // The ticket no longer asks for the customer's phone or name.
+    await expect(page.getByPlaceholder('Customer name')).toHaveCount(0);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     // Click a table and an item — the simple product lands on the ticket on tap; its
     // Edit action is what reopens the addon/instructions modal.
@@ -252,8 +252,7 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.getByText('جمع پیش‌نویس', { exact: true })).toBeVisible();
     await expect(page.getByText('همه', { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder('جست‌وجو در منو')).toBeVisible();
-    await expect(page.getByPlaceholder('نام مشتری')).toBeVisible();
-    await expect(page.getByPlaceholder('تلفن')).toBeVisible();
+    await expect(page.getByPlaceholder('نام مشتری')).toHaveCount(0);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     // Select table and item — the simple product lands on the ticket on tap; Edit
     // is what reopens the addon/instructions modal.

@@ -14,20 +14,26 @@ import {
   Trash2,
   UserRound,
   UtensilsCrossed,
+  MoreVertical,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { parsePhone } from '@/lib/phone';
 import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
-import { useTranslations, type AppConfig } from 'use-intl';
+import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
-import { ItemStatusBadge } from '@/components/server-app/ItemStatus';
-import { OrderedItemsScreen, TableKitchenSummary, type OrderedItem } from '@/components/server-app/OrderedItems';
+import {
+  OrderedItemList,
+  OrderedItemsScreen,
+  TableKitchenSummary,
+  type OrderedItem,
+} from '@/components/server-app/OrderedItems';
+import { MoveTableSheet, type MoveTarget } from '@/components/server-app/MoveTableSheet';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
-import { formatItemHeading } from '@/lib/printer/item-heading';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { printerService } from '@/lib/printer/PrinterService';
 import { generateCartItemId } from '@/lib/cart-identity';
@@ -87,7 +93,6 @@ type ServerAppInfo = {
   server_time?: string;
 };
 
-type ServerAppKey = keyof AppConfig['Messages']['serverApp'];
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 
@@ -192,6 +197,9 @@ export default function ServerStandalonePage() {
   const [disabled, setDisabled] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [orderedItemsOpen, setOrderedItemsOpen] = useState(false);
+  const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
+  const [moveTableOpen, setMoveTableOpen] = useState(false);
+  const [movingTable, setMovingTable] = useState(false);
   const isCompact = useSyncExternalStore(
     subscribeToCompact,
     () => window.matchMedia(COMPACT_QUERY).matches,
@@ -231,11 +239,11 @@ export default function ServerStandalonePage() {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [customerMatch, setCustomerMatch] = useState<{
+  const [, setCustomerMatch] = useState<{
     id: string;
     name: string;
   } | null>(null);
-  const [customerSearched, setCustomerSearched] = useState(false);
+  const [, setCustomerSearched] = useState(false);
   const phoneDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const phoneAbortRef = useRef<AbortController | null>(null);
   const [sending, setSending] = useState(false);
@@ -505,60 +513,29 @@ export default function ServerStandalonePage() {
     };
   }, []);
 
-  function searchCustomerByPhone(rawPhone: string) {
-    if (sendInFlightRef.current) return;
-    clearTimeout(phoneDebounceRef.current);
-    phoneAbortRef.current?.abort();
-    const digits = rawPhone.replace(/\D/g, '');
-    if (digits.length < 3) {
-      setCustomerMatch(null);
-      setCustomerSearched(false);
-      return;
-    }
-    phoneDebounceRef.current = setTimeout(async () => {
-      if (!api || sendInFlightRef.current) return;
-      const controller = new AbortController();
-      phoneAbortRef.current = controller;
-      try {
-        const parsed = regional?.country ? parsePhone(rawPhone, regional.country) : null;
-        const lookupPhone = parsed ? parsed.e164 : rawPhone;
-        const { data } = await api.get('/api/crm/lookup', {
-          params: { phone: lookupPhone },
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted || sendInFlightRef.current) return;
-        if (data.found && data.customer) {
-          setCustomerMatch({ id: data.customer.id, name: data.customer.name });
-          setCustomerName(data.customer.name || '');
-        } else {
-          setCustomerMatch(null);
-        }
-        setCustomerSearched(true);
-      } catch {
-        if (controller.signal.aborted || sendInFlightRef.current) return;
-        setCustomerMatch(null);
-        setCustomerSearched(true);
-      }
-    }, 300);
-  }
-
-  function handleCustomerPhoneChange(value: string) {
-    if (sendInFlightRef.current) return;
-    setCustomerPhone(value);
-    setCustomerMatch(null);
-    setCustomerSearched(false);
-    setCustomerName('');
-    searchCustomerByPhone(value);
-  }
-
-  function handleCustomerNameChange(value: string) {
-    if (sendInFlightRef.current || customerMatch) return;
-    setCustomerName(value);
-  }
-
   function handleOrderNotesChange(value: string) {
     if (sendInFlightRef.current) return;
     setOrderNotes(value.slice(0, 200));
+  }
+
+  /** Moves the table's open order to a free table and follows it there. */
+  async function moveOrderTo(target: MoveTarget) {
+    if (!api || !currentOrder || !selectedTableId) return;
+    setMovingTable(true);
+    try {
+      await api.post(`/api/tables/${selectedTableId}/move-order`, {
+        target_table_id: target.id,
+        order_id: currentOrder.id,
+      });
+      toast.success(t('tableMoved', { name: target.name }));
+      setMoveTableOpen(false);
+      await loadAll({ allowWhileSending: true }).catch(() => {});
+      selectTable(target.id);
+    } catch (error: unknown) {
+      toastApiError(error, t('moveTableFailed'), apiErrorT);
+    } finally {
+      setMovingTable(false);
+    }
   }
 
   /** Prints the table's bill and records the request, so the POS times the wait for payment. */
@@ -1208,47 +1185,48 @@ export default function ServerStandalonePage() {
 
   const ticketPanelBody = (
     <>
-      <h2 className="text-sm font-semibold">{t('currentTicket')}</h2>
-      {!guestMode && (
-        <>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <input
-          value={customerPhone}
-          disabled={sending}
-          onChange={(event) => handleCustomerPhoneChange(event.target.value)}
-          dir="ltr"
-          placeholder={t('phonePlaceholder')}
-          className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none disabled:opacity-50"
-        />
-        <input
-          value={customerName}
-          disabled={sending}
-          onChange={
-            customerMatch ? undefined : (event) => handleCustomerNameChange(event.target.value)
-          }
-          readOnly={!!customerMatch}
-          placeholder={
-            customerSearched
-              ? customerMatch
-                ? ''
-                : t('customerNamePlaceholder')
-              : t('customerNamePlaceholder')
-          }
-          className={`h-10 rounded-lg border px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none disabled:opacity-50 ${customerMatch ? 'border-border bg-muted' : 'border-border bg-background'}`}
-        />
+      <div className="relative flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{t('currentTicket')}</h2>
+        {user && currentOrder && selectedTableId && (
+          <>
+            <button
+              type="button"
+              data-testid="server-app-ticket-menu"
+              aria-label={t('ticketActions')}
+              aria-haspopup="menu"
+              aria-expanded={ticketMenuOpen}
+              disabled={sending}
+              onClick={() => setTicketMenuOpen((open) => !open)}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-50"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {ticketMenuOpen && (
+              <div
+                role="menu"
+                className="absolute end-0 top-full z-20 min-w-44 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTicketMenuOpen(false);
+                    setMobileCartOpen(false);
+                    setMoveTableOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                >
+                  <ArrowLeftRight size={16} />
+                  {t('moveTable')}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
-      {customerSearched && (
-        <p
-          className={`mt-1 text-xs font-medium ${customerMatch ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}
-        >
-          {customerMatch ? tPos('customerFound') : tPos('newCustomerEnterName')}
-        </p>
-      )}
-        </>
-      )}
 
       {currentOrder?.items && currentOrder.items.length > 0 && (
-        <div className="mt-4 border-t border-border pt-3">
+        <div className="mt-3 border-t border-border pt-3">
           <p
             data-testid="server-app-sent-heading"
             className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground"
@@ -1258,17 +1236,14 @@ export default function ServerStandalonePage() {
               #{currentOrder.order_number}
             </Ltr>
           </p>
-          <div className="space-y-2">
-            {currentOrder.items.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 text-sm">
-                <ItemStatusBadge status={item.status} />
-                <span className="min-w-0 flex-1 truncate">
-                  <Ltr>{item.quantity}</Ltr> x{' '}
-                  {formatItemHeading(item.product_name, item.variant_selection)}
-                </span>
-              </div>
-            ))}
-          </div>
+          <OrderedItemList
+            itemTestId="server-app-ticket-item"
+            items={currentOrder.items as OrderedItem[]}
+            timezone={regional?.timezone}
+            onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
+            onCancel={(item) => changeSentItem(item.id, 'cancel')}
+            onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
+          />
         </div>
       )}
 
@@ -1578,6 +1553,24 @@ export default function ServerStandalonePage() {
             {ticketPanelBody}
           </section>
         </main>
+      )}
+
+      {moveTableOpen && activeTable && (
+        <MoveTableSheet
+          fromName={activeTable.name ?? String(activeTable.number)}
+          moving={movingTable}
+          targets={tables
+            .filter(
+              (table) =>
+                table.id !== activeTable.id &&
+                !table.activeOrder &&
+                !table.current_order &&
+                table.status !== 'reserved',
+            )
+            .map((table) => ({ id: table.id, name: table.name ?? String(table.number) }))}
+          onPick={(target) => void moveOrderTo(target)}
+          onClose={() => setMoveTableOpen(false)}
+        />
       )}
 
       {orderedItemsOpen && activeTable && (

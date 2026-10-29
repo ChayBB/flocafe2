@@ -393,6 +393,9 @@ entry; `409` for a completed or cancelled order. Paying the order's last unpaid 
 for open orders still waiting, which the POS polls every 5 seconds to time the wait and beep for a
 new request.
 
+The Server App also forwards `POST /api/tables/:id/move-order` (`tables.orders.move`), which its
+current-ticket menu uses to move a table's open order to a free table.
+
 ### Order item status
 
 Router: `main/routes/order-items.ts`. Full path: `/api/order-items`.

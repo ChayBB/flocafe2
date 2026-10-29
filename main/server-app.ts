@@ -628,6 +628,9 @@ export function startServerApp(): Promise<void> {
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
     );
+    app.post('/api/tables/:id/move-order', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
+      forwardToMainApi(req, res, `/tables/${encodeURIComponent(String(req.params.id))}/move-order`),
+    );
     app.post('/api/orders/:id/bill-request', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/bill-request`),
     );
