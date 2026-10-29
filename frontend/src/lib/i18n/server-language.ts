@@ -39,19 +39,31 @@ export async function fetchServerInfo(
   }
 }
 
-/** Fetches tenant preferred language on mount and updates posSettingsStore;
- * safe best-effort sync for standalone views. */
+/** Fetches tenant preferred language on mount, and again whenever the page comes back into view,
+ * and updates posSettingsStore; safe best-effort sync for standalone views. A device left open while
+ * the server was briefly replaced or unreachable therefore picks the store language up again
+ * without a reload. */
 export function useSyncServerLanguage(infoPath = '/api/kds/info'): void {
   const setLanguage = usePosSettingsStore((s) => s.setLanguage);
   useEffect(() => {
     let cancelled = false;
-    fetchServerInfo('', 1500, infoPath).then((info) => {
-      if (cancelled) return;
-      // Keep the existing tenant language when metadata is unavailable.
-      if (info.language) setLanguage(info.language);
-    });
+    const sync = () => {
+      fetchServerInfo('', 1500, infoPath).then((info) => {
+        if (cancelled) return;
+        // Keep the existing tenant language when metadata is unavailable.
+        if (info.language) setLanguage(info.language);
+      });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    sync();
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [setLanguage, infoPath]);
 }
