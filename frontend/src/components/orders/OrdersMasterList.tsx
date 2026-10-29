@@ -75,7 +75,7 @@ export function OrdersMasterList({
                   'bg-orange-50 dark:bg-orange-950/30 border-s-4 border-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50',
                 !active && 'opacity-80',
                 awaitingPayment &&
-                  'animate-bill-awaiting bg-green-50 hover:bg-green-100 dark:bg-green-950/40 dark:hover:bg-green-950/60',
+                  'animate-bill-awaiting bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/50 dark:hover:bg-pink-900/50',
               )}
             >
               <div className="flex items-center justify-between gap-2">

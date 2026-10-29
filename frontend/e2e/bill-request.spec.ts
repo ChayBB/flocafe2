@@ -94,7 +94,7 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   await printer.click();
   await expect(phone.getByText('Bill printed; the cashier has been told').first()).toBeVisible();
 
-  // POS: two beeps, no top bar; the order row turns green and the wait counts up.
+  // POS: two beeps, no top bar; the order row turns pink and the wait counts up.
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps), { timeout: 15000 })
     .toBe(beepsBefore + 2);

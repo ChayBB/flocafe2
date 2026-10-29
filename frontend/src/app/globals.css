@@ -523,16 +523,23 @@ html.dark::-webkit-scrollbar-thumb:hover,
 }
 
 @keyframes bill-awaiting-blink {
-  50% { background-color: var(--color-green-300); }
+  50% { background-color: var(--color-pink-300); }
+}
+@keyframes bill-awaiting-blink-dark {
+  50% { background-color: var(--color-pink-800); }
 }
 .animate-bill-awaiting {
   animation: bill-awaiting-blink 0.6s ease-in-out 2;
+}
+.dark .animate-bill-awaiting {
+  animation-name: bill-awaiting-blink-dark;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-shake,
   .animate-shake-centered,
-  .animate-bill-awaiting {
+  .animate-bill-awaiting,
+  .dark .animate-bill-awaiting {
     animation: none;
   }
 }
