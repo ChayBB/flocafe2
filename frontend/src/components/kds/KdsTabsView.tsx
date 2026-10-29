@@ -23,6 +23,8 @@ import { formatItemHeading } from '@/lib/printer/item-heading';
 export interface KdsTabsViewProps {
   orders: KdsOrder[];
   updating: number | null;
+  /** Stages this display has switched off; the item toggle skips them. */
+  skippedStatuses: readonly KitchenStatus[];
   updateItemStatus: (itemId: number, status: KitchenStatus, opts?: { expectedStatus?: KitchenStatus }) => Promise<boolean>;
 }
 
@@ -31,7 +33,7 @@ interface ModalItem {
   orderNumber: string;
 }
 
-export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewProps) {
+export function KdsTabsView({ orders, updating, skippedStatuses, updateItemStatus }: KdsTabsViewProps) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const [activeTab, setActiveTab] = useState<KitchenStatus>('pending');
@@ -159,6 +161,7 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
                     </button>
                     <KdsStatusToggle
                       status={itemStatus}
+                      skipped={skippedStatuses}
                       disabled={updating === item.id}
                       onAdvance={(nextStatus) => {
                         void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });

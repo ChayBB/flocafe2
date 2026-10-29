@@ -9,7 +9,7 @@ import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsItemModal } from '@/components/kds/KdsItemModal';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
+import { KdsStatusToggle, SKIPPABLE_STATUSES } from '@/components/kds/KdsStatusToggle';
 import { Badge } from '@/components/ui/badge';
 import {
   STATUS_CONFIG,
@@ -29,6 +29,9 @@ import { formatItemHeading } from '@/lib/printer/item-heading';
 export interface KdsKanbanBoardProps {
   orders: KdsOrder[];
   updating: number | null;
+  /** Stages this display has switched off. */
+  skippedStatuses: readonly KitchenStatus[];
+  onToggleStatus: (status: KitchenStatus) => void;
   updateItemStatus: (
     itemId: number,
     status: KitchenStatus,
@@ -53,7 +56,13 @@ function statusOf(item: KdsOrderItem): KitchenStatus {
 // to preserve manager-PIN void requirements.
 type BoardStatus = Exclude<KitchenStatus, 'voided'>;
 
-export function KdsKanbanBoard({ orders, updating, updateItemStatus }: KdsKanbanBoardProps) {
+export function KdsKanbanBoard({
+  orders,
+  updating,
+  skippedStatuses,
+  onToggleStatus,
+  updateItemStatus,
+}: KdsKanbanBoardProps) {
   const [modalItem, setModalItem] = useState<{ item: KdsOrderItem; orderNumber: string } | null>(
     null,
   );
@@ -157,7 +166,21 @@ export function KdsKanbanBoard({ orders, updating, updateItemStatus }: KdsKanban
           {STATUS_ORDER.map((status) => {
             const groups = groupsByStatus[status];
             return (
-              <KdsColumn key={status} status={status} count={groups.length}>
+              <KdsColumn
+                key={status}
+                status={status}
+                count={groups.length}
+                inactive={skippedStatuses.includes(status)}
+                footer={
+                  SKIPPABLE_STATUSES.includes(status) ? (
+                    <StageSwitch
+                      status={status}
+                      active={!skippedStatuses.includes(status)}
+                      onToggle={() => onToggleStatus(status)}
+                    />
+                  ) : undefined
+                }
+              >
                 {groups.map(({ order, items }) => (
                   <KanbanOrderCard
                     key={`${order.id}-${status}`}
@@ -165,6 +188,7 @@ export function KdsKanbanBoard({ orders, updating, updateItemStatus }: KdsKanban
                     status={status}
                     items={items}
                     updating={updating}
+                    skipped={skippedStatuses}
                     updateItemStatus={updateItemStatus}
                     onItemOpen={(item) => setModalItem({ item, orderNumber: order.order_number })}
                   />
@@ -207,6 +231,7 @@ type KanbanOrderCardProps = {
   status: KitchenStatus;
   items: KdsOrderItem[];
   updating: number | null;
+  skipped: readonly KitchenStatus[];
   updateItemStatus: KdsKanbanBoardProps['updateItemStatus'];
 };
 
@@ -215,6 +240,7 @@ function kanbanOrderCardPropsEqual(prev: KanbanOrderCardProps, next: KanbanOrder
   return (
     prev.order === next.order &&
     prev.updateItemStatus === next.updateItemStatus &&
+    prev.skipped === next.skipped &&
     prev.status === next.status &&
     prev.updating === next.updating &&
     prev.items.length === next.items.length &&
@@ -227,6 +253,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   status,
   items,
   updating,
+  skipped,
   updateItemStatus,
   onItemOpen,
 }: KanbanOrderCardProps & { onItemOpen: (item: KdsOrderItem) => void }) {
@@ -316,6 +343,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
             </button>
             <KdsStatusToggle
               status={status}
+              skipped={skipped}
               disabled={updating === item.id}
               onAdvance={(nextStatus) => {
                 void updateItemStatus(item.id, nextStatus, { expectedStatus: status });
@@ -328,6 +356,44 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
     </div>
   );
 }, kanbanOrderCardPropsEqual);
+
+/** On/off switch under a stage column; off sends items straight past that stage. */
+function StageSwitch({
+  status,
+  active,
+  onToggle,
+}: {
+  status: KitchenStatus;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  const t = useTranslations('kds');
+  const stage = t(STATUS_CONFIG[status].labelKey);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      aria-label={t('stageSwitch', { status: stage })}
+      data-testid={`kds-stage-switch-${status}`}
+      onClick={onToggle}
+      className="mt-2 self-end flex items-center gap-2 min-h-11 px-2 text-xs font-medium text-muted-foreground"
+    >
+      <span>{active ? t('stageActive') : t('stageSkipped')}</span>
+      <span
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+          active ? 'bg-brand' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            active ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
 
 // Read-only display column for voided items; drag-and-drop transitions are disabled.
 function VoidedColumn({
