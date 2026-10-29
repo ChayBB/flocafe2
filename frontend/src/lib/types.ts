@@ -207,6 +207,10 @@ export interface Customer {
 export interface Order {
   id: number;
   order_number: string;
+  /** The table asked for its bill (Server App print): when, by whom, and when the money came in. */
+  bill_requested_at?: string | null;
+  bill_requested_by_name?: string | null;
+  bill_payment_received_at?: string | null;
   table_id: string | null;
   /** Staff owner of the table when the order was opened; kept for staff performance reporting. */
   table_owner_user_id?: string | null;

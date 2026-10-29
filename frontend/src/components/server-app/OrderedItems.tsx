@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, CheckCheck, ClipboardList, LogOut, MoreVertical, Plus, ShoppingBag, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCheck, ClipboardList, LogOut, MoreVertical, Plus, Printer, ShoppingBag, XCircle } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -92,6 +92,7 @@ export function OrderedItemsScreen({
   onTakeaway,
   onCancel,
   onConfirmServed,
+  onPrintBill,
 }: {
   tableName: string;
   orderNumber?: string;
@@ -102,6 +103,8 @@ export function OrderedItemsScreen({
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
   onConfirmServed: (item: OrderedItem) => Promise<void>;
+  /** Prints the table's bill and tells the POS the table is waiting to pay. */
+  onPrintBill: () => Promise<void>;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
@@ -109,6 +112,7 @@ export function OrderedItemsScreen({
   const [filter, setFilter] = useState<KitchenStage | 'all'>('all');
   const [menuFor, setMenuFor] = useState<number | null>(null);
   const [changing, setChanging] = useState<number | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const run = async (item: OrderedItem, change: 'takeaway' | 'cancel' | 'confirmServed') => {
     setMenuFor(null);
@@ -128,6 +132,8 @@ export function OrderedItemsScreen({
     }
   };
   const live = items.filter((item) => !isCancelledItem(item.status));
+  // The bill is printed once every live item has been confirmed at the table.
+  const allServedConfirmed = live.length > 0 && live.every((item) => Boolean(item.served_confirmed_at));
   const counts = stageCounts(items);
   const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
   const timeOf = (stamp?: string) => {
@@ -172,6 +178,26 @@ export function OrderedItemsScreen({
             )}
           </p>
         </div>
+        {orderNumber && allServedConfirmed && (
+          <button
+            type="button"
+            data-testid="server-app-print-bill"
+            aria-label={t('printBill')}
+            title={t('printBill')}
+            disabled={printing}
+            onClick={async () => {
+              setPrinting(true);
+              try {
+                await onPrintBill();
+              } finally {
+                setPrinting(false);
+              }
+            }}
+            className="ms-auto flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border text-foreground disabled:opacity-50"
+          >
+            <Printer size={20} />
+          </button>
+        )}
       </header>
 
       <div className="grid grid-cols-5 gap-1.5 px-3 pt-3">

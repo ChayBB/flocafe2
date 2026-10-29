@@ -47,11 +47,11 @@ export function unlockKdsAlertSound(): void {
     .catch(() => {});
 }
 
-/** Three short beeps. Returns false when the browser blocked them, so the caller can alert visually. */
-export function playKdsAlert(): boolean {
+/** Short beeps (three by default). Returns false when the browser blocked them, so the caller can alert visually. */
+export function playKdsAlert(beeps = 3): boolean {
   const audio = getContext();
   if (!audio || audio.state !== 'running') return false;
-  for (let beep = 0; beep < 3; beep++) {
+  for (let beep = 0; beep < beeps; beep++) {
     const oscillator = audio.createOscillator();
     const gain = audio.createGain();
     oscillator.type = 'square';

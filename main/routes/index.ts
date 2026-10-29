@@ -50,6 +50,7 @@ import QRCode from 'qrcode';
 import { asyncHandler } from '../middleware/async-handler';
 import expressRateLimit from 'express-rate-limit';
 import { attendanceRoutes } from './attendance';
+import { billRequestRoutes } from './bill-requests';
 
 // Distinguish unregistered store error from cloud connectivity failure.
 function isUnregisteredCloudError(error: any): boolean {
@@ -127,6 +128,7 @@ export function registerRoutes(app: Express): void {
   app.use('/api/customers', customerRoutes);
   app.use('/api/staff', staffRoutes); // users with POS roles
   app.use('/api/attendance', attendanceRoutes);
+  app.use('/api/bill-requests', billRequestRoutes);
   app.use('/api/users', staffRoutes); // same router, dual-mounted
   app.use('/api/settings', settingsRoutes);
   app.use('/api/payment-methods', paymentMethodRoutes);

@@ -5715,6 +5715,49 @@ router.patch(
   },
 );
 
+// POST /api/orders/:id/bill-request — a table asked for its bill; the POS starts timing the wait.
+router.post(
+  '/:id/bill-request',
+  orderItemCancelRateLimit,
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.id);
+      const actorId = String((req as any).user?.userId || '');
+      const db = getDatabase();
+      const order = withTxn(() => {
+        const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        if (!current) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+        if (['completed', 'cancelled'].includes(current.status)) {
+          throw Object.assign(new Error('This order is already closed'), { statusCode: 409 });
+        }
+        // A reprint keeps the first request time, so the wait keeps counting from it.
+        if (!current.bill_requested_at || current.bill_payment_received_at) {
+          const actor = db.prepare('SELECT name FROM users WHERE id = ?').get(actorId) as
+            | { name: string }
+            | undefined;
+          db.prepare(
+            `UPDATE orders
+             SET bill_requested_at = ?, bill_requested_by = ?, bill_requested_by_name = ?,
+                 bill_payment_received_at = NULL, updated_at = ?
+             WHERE id = ?`,
+          ).run(now(), actorId, actor?.name ?? null, now(), orderId);
+          recordOrderAudit(db, { orderId, actorUserId: actorId, action: 'bill_requested', details: {} });
+        }
+        return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+      });
+      notifyOrderUpdated();
+      res.json({ order });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string };
+      if (!error.statusCode) console.error('[Orders] Bill request error:', error);
+      res
+        .status(error.statusCode || 500)
+        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+    }
+  },
+);
+
 // Restore cancelled order item (frontend calls this)
 router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) => {
   try {

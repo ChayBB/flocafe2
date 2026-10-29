@@ -1,5 +1,6 @@
 'use client';
 
+import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -307,6 +308,7 @@ function OrderDetailContent({
                 {tOrders(payBadge.labelKey)}
               </span>
             )}
+            <BillRequestBadge order={order} showRequester />
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {(bill ||

@@ -7837,6 +7837,39 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 128,
+    name: 'add_order_bill_request',
+    up: () => {
+      // A table asked for its bill: who printed it and when, and when the money was received.
+      const columns = getColumns(db, 'orders');
+      for (const column of [
+        'bill_requested_at',
+        'bill_requested_by',
+        'bill_requested_by_name',
+        'bill_payment_received_at',
+      ]) {
+        if (!columns.includes(column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT DEFAULT NULL`);
+      }
+      // The request ends when the order's last open bill is paid.
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS stamp_bill_request_paid
+        AFTER UPDATE OF payment_status ON bills
+        WHEN NEW.payment_status = 'paid'
+        BEGIN
+          UPDATE orders
+          SET bill_payment_received_at = COALESCE(NEW.paid_at, datetime('now'))
+          WHERE id = NEW.order_id
+            AND bill_requested_at IS NOT NULL
+            AND bill_payment_received_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM bills other
+              WHERE other.order_id = NEW.order_id AND other.id != NEW.id AND other.payment_status = 'unpaid'
+            );
+        END
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

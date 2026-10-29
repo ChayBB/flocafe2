@@ -6,6 +6,7 @@ import AuthGuard from '@/components/layout/AuthGuard';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import StatusBar from '@/components/layout/StatusBar';
 import GlobalNotifications from '@/components/layout/GlobalNotifications';
+import BillRequestAlerts from '@/components/layout/BillRequestAlerts';
 import TitleBar from '@/components/layout/TitleBar';
 import UpdateAvailableDialog from '@/components/updates/UpdateAvailableDialog';
 import ProductAnalyticsDialog from '@/components/analytics/ProductAnalyticsDialog';
@@ -42,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="md:hidden flex items-center px-2 py-1.5 border-b border-border bg-card shrink-0">
               <SidebarTrigger className="size-8" aria-label="Open navigation" />
             </div>
+            <BillRequestAlerts />
             {!isPos && <GlobalNotifications />}
             <div
               className={

@@ -87,6 +87,8 @@ export function createMainWindow(
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The POS sounds bill-request alerts without anyone tapping it first.
+      autoplayPolicy: 'no-user-gesture-required',
     },
     show: false,
     ...windowOptions,

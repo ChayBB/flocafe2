@@ -382,6 +382,17 @@ nothing. It returns `{ order: { ...order, items } }` and `409` for an item that 
 status change away from `served` clears the confirmation. The KDS shows confirmed items, and the
 Server App forwards all three routes.
 
+`POST /:id/bill-request` (`orders.create`, item cancel limiter) records that a table asked for its
+bill: the Server App calls it from the print button, shown once every live item is confirmed
+served, then prints the bill. It sets `bill_requested_at`, `bill_requested_by` and
+`bill_requested_by_name` (a reprint keeps the first time) and records a `bill_requested` audit
+entry; `409` for a completed or cancelled order. Paying the order's last unpaid bill sets
+`bill_payment_received_at` (a trigger on `bills.payment_status`). `GET /api/bill-requests`
+(`payments.take`, router `main/routes/bill-requests.ts`) returns
+`{ requests: [{ id, order_number, total, table_name, bill_requested_at, bill_requested_by_name }] }`
+for open orders still waiting, which the POS polls every 5 seconds to time the wait and beep for a
+new request.
+
 ### Order item status
 
 Router: `main/routes/order-items.ts`. Full path: `/api/order-items`.

@@ -561,6 +561,22 @@ export default function ServerStandalonePage() {
     setOrderNotes(value.slice(0, 200));
   }
 
+  /** Prints the table's bill and records the request, so the POS times the wait for payment. */
+  async function requestBill() {
+    if (!api || !currentOrder) return;
+    try {
+      await api.post(`/api/orders/${currentOrder.id}/bill-request`, {});
+    } catch (error: unknown) {
+      toastApiError(error, t('billRequestFailed'), apiErrorT);
+      return;
+    }
+    await printOrderSlip(currentOrder.id, {
+      ...currentOrder,
+      table: activeTable ? { name: activeTable.name ?? String(activeTable.number) } : undefined,
+    } as unknown as Record<string, unknown>);
+    toast.success(t('billRequested'));
+  }
+
   /** Packs a sent item to go, cancels one still waiting, or confirms a served one reached the table. */
   async function changeSentItem(itemId: number, change: 'takeaway' | 'cancel' | 'confirm-served') {
     if (!api || !currentOrder || sendInFlightRef.current) return;
@@ -1578,6 +1594,7 @@ export default function ServerStandalonePage() {
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
+          onPrintBill={requestBill}
         />
       )}
 

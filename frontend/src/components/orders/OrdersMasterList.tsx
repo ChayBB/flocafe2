@@ -1,5 +1,6 @@
 'use client';
 
+import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
 import { Utensils, ShoppingBag, Truck, Globe, Clock } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { Order } from '@/lib/types';
@@ -78,6 +79,7 @@ export function OrdersMasterList({
                   #<Ltr>{order.order_number}</Ltr>
                 </span>
                 <span className="flex items-center gap-1 shrink-0">
+                  <BillRequestBadge order={order} />
                   {awaitingWeight && (
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
                       {tPos(orderPendingLabelKey(order))}
