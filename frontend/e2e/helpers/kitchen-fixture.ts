@@ -1,6 +1,6 @@
 import { expect, APIRequestContext } from '@playwright/test';
 import { E2E_BASE_URL } from './urls';
-import { getE2eToken, E2E_PASSWORD } from './test-auth';
+import { getE2eToken, E2E_OPERATIONAL_PASSWORD, E2E_PASSWORD } from './test-auth';
 
 /** Creates and reuses the variant and add-on catalog needed by kitchen UAT specs. */
 
@@ -233,7 +233,7 @@ export async function ensureUatFixture(request: APIRequestContext, base = E2E_BA
         data: {
           name: 'UAT Chef',
           email: FIXTURE_CHEF_EMAIL,
-          password: E2E_PASSWORD,
+          password: E2E_OPERATIONAL_PASSWORD,
           role: 'chef',
           is_active: true,
         },

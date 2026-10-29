@@ -4,6 +4,8 @@ import { E2E_BASE_URL } from './urls';
 
 export const E2E_JWT_SECRET = process.env.JWT_SECRET || 'e2e-test-secret';
 export const E2E_PASSWORD = process.env.E2E_PASSWORD || 'E2ePass123!';
+/** Cashier, server and chef accounts take a 4-digit password. */
+export const E2E_OPERATIONAL_PASSWORD = '4821';
 
 function base64Url(data: string | Buffer): string {
   return Buffer.from(data).toString('base64url');

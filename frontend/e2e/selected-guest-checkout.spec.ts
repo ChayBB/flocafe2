@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+  E2E_OPERATIONAL_PASSWORD,
   E2E_PASSWORD,
   getE2eToken,
   readOrdersLayout,
@@ -86,10 +87,15 @@ async function readOrderBills(request: APIRequestContext, orderId: number): Prom
   return (await response.json()).bills as GuestBill[];
 }
 
-async function login(page: Page, email = 'manager@flo.local', syncLanguage = true): Promise<void> {
+async function login(
+  page: Page,
+  email = 'manager@flo.local',
+  syncLanguage = true,
+  password = E2E_PASSWORD,
+): Promise<void> {
   await page.goto(`${BASE}/auth/login`);
   await page.locator('#email').fill(email);
-  await page.locator('#password').fill(E2E_PASSWORD);
+  await page.locator('#password').fill(password);
   await page.locator('button[type="submit"]').click();
   await page.waitForURL('**/pos/**', { timeout: 20000 });
   if (syncLanguage) await setLanguage(page, 'en');
@@ -600,7 +606,7 @@ test('a cashier checks guests out while a server is refused the split', async ({
       data: {
         name: 'E2E Cashier',
         email: cashierEmail,
-        password: E2E_PASSWORD,
+        password: E2E_OPERATIONAL_PASSWORD,
         role: 'cashier',
         is_active: true,
       },
@@ -616,7 +622,7 @@ test('a cashier checks guests out while a server is refused the split', async ({
   // The tenant language is a settings write, so it is pinned before the cashier
   // session - a cashier may bill guests but not change tenant configuration.
   await setLanguage(page, 'en');
-  await login(page, cashierEmail, false);
+  await login(page, cashierEmail, false, E2E_OPERATIONAL_PASSWORD);
   await openOrderCheckout(page, order.order_number);
   await page.getByRole('button', { name: 'Split check' }).click();
   await page.getByRole('button', { name: 'Selected items' }).click();

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL as BASE } from './helpers/urls';
-import { E2E_PASSWORD } from './helpers/test-auth';
+import { E2E_OPERATIONAL_PASSWORD, E2E_PASSWORD } from './helpers/test-auth';
 
 /**
  * The Expenses page exposes the ledger the backend already keeps: an operator
@@ -40,10 +40,10 @@ async function ownerAuth(page: Page): Promise<Record<string, string>> {
 }
 
 /** Signs in through the form so the guard and landing page run for real. */
-async function signIn(page: Page, email: string): Promise<void> {
+async function signIn(page: Page, email: string, password = E2E_PASSWORD): Promise<void> {
   await page.goto(`${BASE}/auth/login`);
   await page.locator('#email').fill(email);
-  await page.locator('#password').fill(E2E_PASSWORD);
+  await page.locator('#password').fill(password);
   await page.locator('button[type="submit"]').click();
   await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: 20000 });
 }
@@ -260,7 +260,7 @@ test('expenses.view alone lands the user on the expenses page', async ({ page })
   const email = `expense-only-${STAMP}@flo.local`;
   const created = await page.request.post(`${BASE}/api/staff`, {
     headers,
-    data: { name: `Expense Only ${STAMP}`, email, password: 'E2ePass123!', role: 'server' },
+    data: { name: `Expense Only ${STAMP}`, email, password: E2E_OPERATIONAL_PASSWORD, role: 'server' },
   });
   expect(created.ok()).toBeTruthy();
   const userId = (await created.json()).staff?.id ?? (await created.json()).user?.id;
@@ -293,7 +293,7 @@ test('expenses.view alone lands the user on the expenses page', async ({ page })
     `permission overrides must be accepted (got ${updated.status()})`,
   ).toBeTruthy();
 
-  await signIn(page, email);
+  await signIn(page, email, E2E_OPERATIONAL_PASSWORD);
   // The static export serves the folder with a trailing slash.
   expect(new URL(page.url()).pathname.replace(/\/$/, '')).toBe('/expenses');
   await expect(page.getByTestId('expenses-page')).toBeVisible({ timeout: 20000 });
