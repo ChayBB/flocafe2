@@ -46,6 +46,7 @@ import {
   PRODUCT_ANALYTICS_LEVEL_SETTING,
   parseProductAnalyticsLevel,
 } from '../services/posthog-identity';
+import { recordClockIn, recordClockOut } from '../services/attendance';
 
 const router = Router();
 
@@ -273,6 +274,7 @@ router.post(
       }
 
       resetSuccessfulLogin(ip);
+      recordClockIn(db, user.id, 'pos');
 
       const remember = !!rememberMe;
       const token = jwt.sign(
@@ -366,8 +368,9 @@ router.post('/logout', (req: Request, res: Response) => {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice('Bearer '.length);
     try {
-      const decoded = jwt.verify(token, getJWTSecret()) as { exp?: number };
+      const decoded = jwt.verify(token, getJWTSecret()) as { exp?: number; userId?: string };
       revokeToken(token, typeof decoded.exp === 'number' ? decoded.exp * 1000 : undefined);
+      if (decoded.userId) recordClockOut(getDatabase(), decoded.userId, 'pos');
     } catch {
       // Logout is intentionally idempotent; invalid credentials are not
       // persisted as revocations and are still answered successfully.

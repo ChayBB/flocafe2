@@ -11,6 +11,7 @@ import { useTranslations, type AppConfig } from 'use-intl';
 import { useAuthStore } from '@/store/auth';
 import { PermissionMatrix } from '@/components/settings/PermissionMatrix';
 import { PermissionAuditLog } from '@/components/settings/PermissionAuditLog';
+import { AttendancePanel } from '@/components/staff/AttendancePanel';
 import { OPERATIONAL_ROLES, ROLE_ACCESS, ROLE_KEYS, hasRole } from '@shared/role-permissions';
 import { ROLE_LABEL_KEYS } from '@/lib/i18n-enums';
 import { tenantCan } from '@/lib/permissions';
@@ -51,6 +52,7 @@ export default function StaffPage() {
   const { currentTenant } = useAuthStore();
   const canManagePermissions = tenantCan(currentTenant, 'authorization.manage');
   const canManageStaff = tenantCan(currentTenant, 'staff.operational.manage');
+  const canViewStaff = tenantCan(currentTenant, 'staff.view');
   const canManagePrivilegedStaff = tenantCan(currentTenant, 'staff.privileged.manage');
   const [staff, setStaff] = useState<Staff[]>([]);
   const [kitchenStations, setKitchenStations] = useState<{ id: string; name: string }[]>([]);
@@ -320,6 +322,7 @@ export default function StaffPage() {
         <p className="text-center text-muted-foreground py-12">{t('empty')}</p>
       )}
 
+      {canViewStaff && <AttendancePanel canManage={canManageStaff} />}
       {canManagePermissions && <PermissionMatrix staff={staff} />}
       {canManagePermissions && <PermissionAuditLog staff={staff} />}
 

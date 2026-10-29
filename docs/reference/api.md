@@ -533,6 +533,24 @@ Mounted at both `/api/staff` and `/api/users` from one router, so a request to e
 
 `staff_code` is an optional 4-digit code for any role, stored hashed and separate from the owner/manager approval `pin`. The Server App signs in with a staff name (or email) plus the staff code, PIN or account password. Two active staff members with the same name cannot share a staff code (`409 staff_code_in_use`), and an empty value on update clears it.
 
+### Attendance
+
+Router: `main/routes/attendance.ts`. Full path: `/api/attendance`.
+
+| Method | Path             | Authorization              | Parameters                                                                                         | Response                                                                                                                       |
+| ------ | ---------------- | -------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/`              | `staff.view`               | query: `?from`, `?to` (`YYYY-MM-DD` business dates, at most 366 days apart)                        | `{ from, to, today, timezone, staff: [{ user_id, name, role, hourly_rate, total_hours, total_wage, open_shifts, entries }] }`. |
+| `PUT`  | `/rates/:userId` | `staff.operational.manage` | body: `hourly_rate` (number from 0, or `null`)                                                     | `{ success: true }`; `404` for an unknown user.                                                                                |
+| `PUT`  | `/:id`           | `staff.operational.manage` | body: `clock_in`, `clock_out` (store-local `YYYY-MM-DDTHH:mm`; empty `clock_out` reopens the shift) | `{ success: true }`; `400` when the end is not after the start or the shift exceeds 24 hours.                                  |
+
+Without a range, `GET` covers the first day of the current month to today. A shift is one
+`staff_attendance` row per staff member per business day: the first successful sign-in of that
+day on `:3001`, `:3002` or `:3003` sets `clock_in_at`, and each sign-out (`POST /api/auth/logout`)
+sets `clock_out_at` on the latest shift, unless that shift began more than 24 hours earlier. Times
+come from the NTP-corrected clock. A shift still open counts zero hours. `wage` is hours × the
+user's `hourly_rate`, rounded to 2 decimals. Corrections record `corrected_by` and `corrected_at`.
+The Guest account never clocks in.
+
 ### Printers
 
 Router: `main/routes/printers.ts`. Full path: `/api/printers`.
@@ -693,6 +711,7 @@ Router: `main/routes/kitchen.ts`. Full path: `/api/kitchen`.
 | Method | Path      | Authorization                       | Parameters | Response                                                                         |
 | ------ | --------- | ----------------------------------- | ---------- | -------------------------------------------------------------------------------- |
 | `GET`  | `/orders` | `ROLE_ACCESS.kitchen` + KDS-enabled | none       | `{ orders, counts }`. The `:3001` REST equivalent of the KDS WebSocket snapshot. |
+| `GET`  | `/stations` | `ROLE_ACCESS.kitchen` + KDS-enabled | none     | `{ stations: [{ id, name }] }`, the active menu categories the KDS station picker filters on. |
 
 ### KDS info
 

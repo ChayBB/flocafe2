@@ -7755,6 +7755,33 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       ).run();
     },
   },
+  {
+    version: 125,
+    name: 'add_staff_attendance',
+    up: () => {
+      // One row per staff member per business day: first sign-in to last sign-out.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS staff_attendance (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          business_date TEXT NOT NULL,
+          clock_in_at TEXT NOT NULL,
+          clock_out_at TEXT,
+          clock_in_source TEXT,
+          clock_out_source TEXT,
+          corrected_by TEXT,
+          corrected_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (user_id, business_date)
+        )
+      `);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_staff_attendance_date ON staff_attendance(business_date)');
+      if (!getColumns(db, 'users').includes('hourly_rate')) {
+        db.exec('ALTER TABLE users ADD COLUMN hourly_rate REAL DEFAULT NULL');
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

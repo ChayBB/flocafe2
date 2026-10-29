@@ -59,6 +59,7 @@ import {
   resolveEffectivePermissions,
 } from './services/authorization';
 import { clockNow } from './lib/clock';
+import { recordClockIn, recordClockOut } from './services/attendance';
 
 let serverApp: http.Server | null = null;
 let stopPromise: Promise<void> | null = null;
@@ -422,6 +423,7 @@ export function startServerApp(): Promise<void> {
           getJWTSecret(),
         );
 
+        recordClockIn(db, user.id, 'server_app');
         res.json({
           access_token: token,
           user: {
@@ -467,6 +469,7 @@ export function startServerApp(): Promise<void> {
         const token = req.headers.authorization?.split(' ')[1];
         const user = (req as Request & { user: ServerAppUser }).user;
         if (token) revokeToken(token, typeof user.exp === 'number' ? user.exp * 1000 : undefined);
+        recordClockOut(getDatabase(), user.userId, 'server_app');
         res.json({ success: true });
       },
     );

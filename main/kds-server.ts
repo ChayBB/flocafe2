@@ -57,6 +57,7 @@ import {
   hasPermission,
   resolveEffectivePermissions,
 } from './services/authorization';
+import { recordClockIn, recordClockOut } from './services/attendance';
 
 let kdsServer: http.Server | null = null;
 let kdsWss: WebSocketServer | null = null;
@@ -291,6 +292,7 @@ export function startKdsServer(): Promise<void> {
         }
 
         resetSuccessfulLogin(ip);
+        recordClockIn(db, user.id, 'kds');
 
         const token = jwt.sign(
           { userId: user.id, email: user.email, role: user.role, jti: randomUUID() },
@@ -323,8 +325,9 @@ export function startKdsServer(): Promise<void> {
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice('Bearer '.length);
         try {
-          const decoded = jwt.verify(token, getJWTSecret()) as { exp?: number };
+          const decoded = jwt.verify(token, getJWTSecret()) as { exp?: number; userId?: string };
           revokeToken(token, typeof decoded.exp === 'number' ? decoded.exp * 1000 : undefined);
+          if (decoded.userId) recordClockOut(getDatabase(), decoded.userId, 'kds');
         } catch {
           // Logout remains idempotent without persisting arbitrary bearer data.
         }
