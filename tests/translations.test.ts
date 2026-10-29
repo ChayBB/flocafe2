@@ -321,6 +321,9 @@ function registryConsistencyErrors(
   return errors;
 }
 
+/** Locales kept complete; every other catalogue may lag behind en.json and fall back to English. */
+const FULLY_MAINTAINED_LOCALES: ReadonlySet<string> = new Set(['th']);
+
 function keyParityErrors(enKeys: Set<string>, localeKeys: Set<string>, lang: string): string[] {
   const errors: string[] = [];
   const missing = [...enKeys].filter((k) => !localeKeys.has(k));
@@ -1824,12 +1827,20 @@ async function run(): Promise<void> {
   const enKeys = sets.get('en');
   if (!enKeys) throw new Error('languages registry must include the canonical en locale');
 
-  // 2. Exact nested leaf key parity — en.json is canonical (zero missing,
-  // zero orphan extras) across all registered locales.
+  // 2. Nested leaf key parity — en.json is canonical. Fully maintained locales
+  // must match it exactly; the others may lag (their missing keys render the
+  // English text) but may never carry orphan keys.
   const parityErrors: string[] = [];
   for (const { lang } of FILES) {
     if (lang === 'en') continue;
-    parityErrors.push(...keyParityErrors(enKeys, sets.get(lang)!, lang));
+    const errors = keyParityErrors(enKeys, sets.get(lang)!, lang);
+    if (FULLY_MAINTAINED_LOCALES.has(lang)) {
+      parityErrors.push(...errors);
+    } else {
+      parityErrors.push(...errors.filter((error) => !error.includes('] missing key: ')));
+      const lagging = errors.length - errors.filter((error) => !error.includes('] missing key: ')).length;
+      if (lagging > 0) console.log(`  · ${lang}: ${lagging} keys not yet translated (English shown)`);
+    }
   }
   if (parityErrors.length) {
     console.error(`\nKey parity violations vs en.json (${parityErrors.length}):`);
@@ -1837,7 +1848,7 @@ async function run(): Promise<void> {
     if (parityErrors.length > 100) console.error(`  … and ${parityErrors.length - 100} more`);
     assert(false, 'translation key parity vs en.json violated');
   }
-  console.log('  ✓ exact leaf key parity with en.json (no missing, no orphan keys)');
+  console.log('  ✓ leaf key parity with en.json (en/th complete, no orphan keys anywhere)');
 
   // 3a. Structural leaf validation: only non-empty string leaves, no empty
   // objects / arrays / null / booleans / numbers anywhere.

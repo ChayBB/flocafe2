@@ -10,6 +10,19 @@ const inFlightPromises = new Map<Language, Promise<Messages>>();
 
 messageCache.set('en', en as Messages);
 
+/** Fills keys a catalogue has not translated yet with the English text. */
+function withEnglishFallback(base: Messages, overrides: Messages): Messages {
+  const merged: Messages = { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    const fallback = base[key];
+    merged[key] =
+      value && typeof value === 'object' && fallback && typeof fallback === 'object'
+        ? withEnglishFallback(fallback as Messages, value as Messages)
+        : value;
+  }
+  return merged;
+}
+
 /** Synchronously cached messages for a language (undefined until loaded). */
 export function getCachedMessages(lang: Language): Messages | undefined {
   return messageCache.get(lang);
@@ -31,7 +44,8 @@ export function loadLocaleMessages(lang: Language): Promise<Messages> {
 
   const config = LANGUAGES[lang] ?? LANGUAGES.en;
   const promise = (config.load ? config.load() : Promise.resolve({ default: en })).then((mod) => {
-    const messages = (mod.default ?? mod) as Messages;
+    const loaded = (mod.default ?? mod) as Messages;
+    const messages = lang === 'en' ? loaded : withEnglishFallback(en as Messages, loaded);
     messageCache.set(lang, messages);
     inFlightPromises.delete(lang);
     return messages;

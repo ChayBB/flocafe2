@@ -5,15 +5,17 @@ validated, and how the UI language stays separate from a store's regional settin
 
 ## Source of truth and the parity rule
 
-`frontend/src/lib/i18n/messages/en.json` is the canonical message catalogue. It holds 30
-top-level namespaces and 2,639 non-empty string leaves. Every other catalogue under
-`frontend/src/lib/i18n/messages/` must match it exactly: zero missing keys and zero orphan keys.
+`frontend/src/lib/i18n/messages/en.json` is the canonical message catalogue. The store runs in
+English and Thai, so new strings are written in `en.json` and `th.json` only. `th.json` must match
+`en.json` exactly: zero missing keys and zero orphan keys. Every other catalogue under
+`frontend/src/lib/i18n/messages/` may lag behind `en.json` but must not carry orphan keys.
 
-Exact parity is a hard gate rather than a fallback, because there is no per-key English fallback in
-the runtime. A missing key does not render the English string; it renders nothing, and the
-translation test fails. `npm run i18n:check` runs `tests/translations.test.ts`, which enforces
-registry and file consistency, key parity, ICU validity, placeholder and tag parity, per-language
-completeness, and frontend key safety.
+The loader fills any key a catalogue has not translated with the English text, so a lagging
+language shows English for new strings instead of nothing. `npm run i18n:check` runs
+`tests/translations.test.ts`, which enforces registry and file consistency, key parity (complete
+for `th`, no orphans anywhere), ICU validity, placeholder and tag parity, per-language completeness
+of the keys a catalogue does carry, and frontend key safety. The set of complete locales is
+`FULLY_MAINTAINED_LOCALES` in that test.
 
 The 23 committed catalogues are: `ar`, `bn`, `de`, `en`, `es`, `fa`, `fil`, `fr`, `hi`, `id`, `it`,
 `ja`, `ko`, `nl`, `pt`, `ru`, `sq`, `th`, `tr`, `ur`, `vi`, `zh`, `zh-tw`.
@@ -57,6 +59,7 @@ layout code.
 
 - English is imported statically at module load and pre-seeded into the cache, so a cold boot always
   has a complete catalogue and never waits on the network.
+- Every other catalogue is merged over English when it loads, so a key it lacks renders in English.
 - Every other language is a dynamic import, one chunk per catalogue, declared by the registry's
   `load` function.
 - Concurrent requests for the same language are deduplicated. The second caller receives the same
