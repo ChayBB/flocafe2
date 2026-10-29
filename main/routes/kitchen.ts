@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, listKdsStationCategories, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
+import { getDatabase, listKdsStationCategories, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, parseItemJson, attachEffectiveAddons, isVoidedItemKdsVisible, isCancelledNoticeKdsVisible, projectKdsItem, projectKdsOrder } from '../db';
 import { requireKdsEnabled } from '../middleware/security';
 import { requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
@@ -106,7 +106,7 @@ router.get('/orders', (req: Request, res: Response) => {
     // Resolve addons for every visible item in one batched call.
     const allVisibleItems = rawItems.filter(
       (i) => i.status !== 'void_adjustment'
-        && !['completed', 'cancelled', 'refunded'].includes(i.status)
+        && (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i))
         && (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at))
         && (!allowedProductIds || allowedProductIds.has(String(i.product_id)))
         && isKdsStationItemAllowed(stationIds, stationRoutingCategoryIds, ordersById.get(i.order_id)?.kitchen_station_id, i.category_id, ordersById.get(i.order_id)?.kitchen_station_id ? stationScope.categoryIdsByStation[String(ordersById.get(i.order_id)?.kitchen_station_id)] : undefined, stationScope.hasUnrestrictedStation)
@@ -118,7 +118,7 @@ router.get('/orders', (req: Request, res: Response) => {
       const orderRawItems = itemsByOrder[order.id] || [];
       const visibleItems = orderRawItems
         .filter((i) => i.status !== 'void_adjustment'
-          && !['completed', 'cancelled', 'refunded'].includes(i.status)
+          && (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i))
           && (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at))
           && (!allowedProductIds || allowedProductIds.has(String(i.product_id)))
           && isKdsStationItemAllowed(stationIds, stationRoutingCategoryIds, order.kitchen_station_id, i.category_id, order.kitchen_station_id ? stationScope.categoryIdsByStation[String(order.kitchen_station_id)] : undefined, stationScope.hasUnrestrictedStation))

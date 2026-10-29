@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
+import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor, skipsActiveStage, type BoardStatus } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -207,7 +208,8 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const config = STATUS_CONFIG[status];
-  const dragItems = items.map((i) => ({ id: i.id, status: statusOf(i) }));
+  // A cancelled item only stays to tell the kitchen; it never moves.
+  const dragItems = items.filter((i) => i.status !== 'cancelled').map((i) => ({ id: i.id, status: statusOf(i) }));
   const busy = items.some((i) => updating === i.id);
   const { ref, isDragging } = useDraggable({
     id: `order-${order.id}-${status}`,
@@ -259,7 +261,8 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
           {items.map((item) => (
             <div
               key={item.id}
-              className={`flex items-center gap-1 rounded-lg border ${config.border} ${config.bg} pe-1`}
+              data-testid="kds-item-row"
+              className={`flex items-center gap-1 rounded-lg border ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1`}
             >
             {/* Only the toggle changes status; tapping the row does nothing. */}
             <div className="flex-1 min-w-0 px-2 py-1.5">
@@ -267,7 +270,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                 <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
                   {item.quantity}×
                 </span>
-                <span className="text-lg text-foreground font-medium flex-1 truncate">
+                <span className={`text-lg font-medium flex-1 truncate ${item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
                   {formatItemHeading(item.product_name, item.variant_selection)}
                 </span>
               </div>
@@ -283,6 +286,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                   ))}
                 </div>
               )}
+              <KdsServiceNotice item={item} />
               <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
               {item.special_instructions && (
                 <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
@@ -290,14 +294,16 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                 </p>
               )}
             </div>
-            <KdsStatusToggle
-              status={status}
-              skipped={inactive}
-              disabled={updating === item.id}
-              onAdvance={(nextStatus) => {
-                void updateItemStatus(item.id, nextStatus, { expectedStatus: statusOf(item) });
-              }}
-            />
+            {item.status !== 'cancelled' && (
+              <KdsStatusToggle
+                status={status}
+                skipped={inactive}
+                disabled={updating === item.id}
+                onAdvance={(nextStatus) => {
+                  void updateItemStatus(item.id, nextStatus, { expectedStatus: statusOf(item) });
+                }}
+              />
+            )}
             </div>
           ))}
         </div>

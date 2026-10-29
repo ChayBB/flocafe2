@@ -4,6 +4,7 @@ import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
+import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -124,14 +125,15 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-center gap-1 rounded-xl border-2 ${config.border} ${config.bg} pe-1.5`}
+                      data-testid="kds-item-row"
+                      className={`flex items-center gap-1 rounded-xl border-2 ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1.5`}
                     >
                     {/* Only the toggle changes status; tapping the row does nothing. */}
                     <div className="flex-1 min-w-0 px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
                         <span className={`font-bold text-base w-6 shrink-0 ${config.text}`}>{item.quantity}×</span>
-                        <span className={`text-lg font-semibold flex-1 truncate ${isVoided ? 'text-gray-400 line-through' : 'text-foreground'}`}>
+                        <span className={`text-lg font-semibold flex-1 truncate ${isVoided || item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
                           {formatItemHeading(item.product_name, item.variant_selection)}
                         </span>
                       </div>
@@ -147,6 +149,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                           ))}
                         </div>
                       )}
+                      <KdsServiceNotice item={item} />
                       <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
                       {item.special_instructions && (
                         <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
@@ -154,14 +157,16 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                         </p>
                       )}
                     </div>
-                    <KdsStatusToggle
-                      status={activeTab}
-                      skipped={inactiveStatuses}
-                      disabled={updating === item.id}
-                      onAdvance={(nextStatus) => {
-                        void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });
-                      }}
-                    />
+                    {item.status !== 'cancelled' && (
+                      <KdsStatusToggle
+                        status={activeTab}
+                        skipped={inactiveStatuses}
+                        disabled={updating === item.id}
+                        onAdvance={(nextStatus) => {
+                          void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });
+                        }}
+                      />
+                    )}
                     </div>
                   );
                 })}

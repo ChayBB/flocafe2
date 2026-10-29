@@ -128,6 +128,9 @@ export interface KdsOrderItem {
   /** Price the kitchen set for a weighed or kitchen-priced line. */
   kitchen_set_price?: number | null;
   currency?: string;
+  /** A change service staff made after sending: 'takeaway' or 'cancelled'. */
+  service_change?: string | null;
+  service_change_at?: string | null;
 }
 
 export interface KdsStation {

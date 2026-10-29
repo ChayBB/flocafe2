@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
@@ -25,9 +25,50 @@ function readInactiveStages(): InactiveStages {
 
 const NONE_INACTIVE: KitchenStatus[] = [];
 
+/** Three short beeps, so the kitchen looks up when service staff change a sent item. */
+function playChangeAlert(): void {
+  try {
+    const AudioCtx =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const context = new AudioCtx();
+    for (let beep = 0; beep < 3; beep++) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.15;
+      oscillator.connect(gain).connect(context.destination);
+      const start = context.currentTime + beep * 0.3;
+      oscillator.start(start);
+      oscillator.stop(start + 0.18);
+    }
+    setTimeout(() => void context.close(), 1500);
+  } catch {}
+}
+
+function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
+  return new Map(
+    orders.flatMap((order) => (order.items || []).map((item) => [item.id, item.service_change ?? null] as const)),
+  );
+}
+
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
+
+  // Alert when an item already on this display gains a service change; items seen for the first time do not.
+  const knownChangesRef = useRef<Map<number, string | null>>(new Map());
+  useEffect(() => {
+    const current = serviceChangesById(conn.orders);
+    const known = knownChangesRef.current;
+    let changed = false;
+    for (const [id, change] of current) {
+      if (change && known.has(id) && known.get(id) !== change) changed = true;
+    }
+    if (changed) playChangeAlert();
+    knownChangesRef.current = new Map([...known, ...current]);
+  }, [conn.orders]);
   // Every display opens on all stations; picking one narrows the board to that category.
   const [selectedStation, setSelectedStation] = useState('');
   const stationId = conn.stations.some((station) => station.id === selectedStation) ? selectedStation : '';

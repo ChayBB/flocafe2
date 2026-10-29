@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ClipboardList, Plus, Send } from 'lucide-react';
+import { ArrowLeft, ClipboardList, MoreVertical, Plus, Send, ShoppingBag, XCircle } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
-import { nameToColor } from '@/lib/image-utils';
+import { useConfirm } from '@/hooks/use-confirm';
 import { formatItemHeading } from '@/lib/printer/item-heading';
 import { parseDbTimestamp } from '@/lib/utils';
 import {
@@ -25,6 +25,16 @@ export interface OrderedItem {
   status: string;
   variant_selection?: unknown;
   created_at?: string;
+  /** A change service staff made after sending: 'takeaway' or 'cancelled'. */
+  service_change?: string | null;
+}
+
+/** Any item not yet served can be packed to go; only a waiting item can be cancelled. */
+export function itemChangeOptions(item: OrderedItem): { takeaway: boolean; cancel: boolean } {
+  return {
+    takeaway: ['pending', 'preparing', 'ready'].includes(item.status) && item.service_change !== 'takeaway',
+    cancel: item.status === 'pending',
+  };
 }
 
 /** Per-stage chips for a table's order, with the orange button that opens its item list. */
@@ -71,27 +81,50 @@ export function OrderedItemsScreen({
   orderNumber,
   items,
   timezone,
-  imageFor,
   canSend,
   sending,
   onBack,
   onAddItems,
   onSend,
+  onTakeaway,
+  onCancel,
 }: {
   tableName: string;
   orderNumber?: string;
   items: OrderedItem[];
   timezone?: string;
-  imageFor: (item: OrderedItem) => string | null;
   canSend: boolean;
   sending: boolean;
   onBack: () => void;
   onAddItems: () => void;
   onSend: () => void;
+  onTakeaway: (item: OrderedItem) => Promise<void>;
+  onCancel: (item: OrderedItem) => Promise<void>;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
+  const { confirm, ConfirmDialog } = useConfirm();
   const [filter, setFilter] = useState<KitchenStage | 'all'>('all');
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [changing, setChanging] = useState<number | null>(null);
+
+  const run = async (item: OrderedItem, change: 'takeaway' | 'cancel') => {
+    setMenuFor(null);
+    if (change === 'cancel') {
+      const ok = await confirm(t('cancelItemConfirm', { name: item.product_name }), {
+        title: t('cancelItem'),
+        confirmLabel: t('cancelItem'),
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    setChanging(item.id);
+    try {
+      await (change === 'cancel' ? onCancel(item) : onTakeaway(item));
+    } finally {
+      setChanging(null);
+    }
+  };
   const live = items.filter((item) => !isCancelledItem(item.status));
   const counts = stageCounts(items);
   const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
@@ -162,39 +195,73 @@ export function OrderedItemsScreen({
           <li className="py-10 text-center text-sm text-muted-foreground">{t('noOrderedItems')}</li>
         )}
         {shown.map((item, index) => {
-          const image = imageFor(item);
+          const options = itemChangeOptions(item);
+          const hasOptions = options.takeaway || options.cancel;
           return (
             <li
               key={item.id}
               data-testid="server-app-ordered-item"
-              className="flex items-center gap-3 rounded-lg border border-border bg-card p-2"
+              className="relative flex items-center gap-3 rounded-lg border border-border bg-card p-2"
             >
               <Ltr className="w-5 shrink-0 text-center text-xs text-muted-foreground">{index + 1}</Ltr>
-              <div
-                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg"
-                style={{ backgroundColor: nameToColor(item.product_name) }}
-              >
-                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white/80">
-                  {item.product_name.substring(0, 2).toUpperCase()}
-                </span>
-                {image && (
-                  <img
-                    src={image}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    onError={(event) => {
-                      (event.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                )}
-              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
                   <Ltr>{item.quantity}</Ltr> × {formatItemHeading(item.product_name, item.variant_selection)}
                 </p>
-                <Ltr className="text-xs text-muted-foreground tabular-nums">{timeOf(item.created_at)}</Ltr>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Ltr className="tabular-nums">{timeOf(item.created_at)}</Ltr>
+                  {item.service_change === 'takeaway' && (
+                    <span
+                      data-testid="server-app-takeaway-tag"
+                      className="rounded bg-orange-100 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                    >
+                      {t('takeawayTag')}
+                    </span>
+                  )}
+                </p>
               </div>
               <ItemStatusBadge status={item.status} />
+              <button
+                type="button"
+                data-testid="server-app-item-menu"
+                aria-label={t('itemActions')}
+                aria-haspopup="menu"
+                aria-expanded={menuFor === item.id}
+                disabled={!hasOptions || changing === item.id}
+                onClick={() => setMenuFor(menuFor === item.id ? null : item.id)}
+                className="flex min-h-11 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-30"
+              >
+                <MoreVertical size={18} />
+              </button>
+              {menuFor === item.id && (
+                <div
+                  role="menu"
+                  className="absolute end-2 top-full z-10 mt-1 min-w-48 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+                >
+                  {options.takeaway && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void run(item, 'takeaway')}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                    >
+                      <ShoppingBag size={16} className="text-orange-600" />
+                      {t('changeToTakeaway')}
+                    </button>
+                  )}
+                  {options.cancel && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void run(item, 'cancel')}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm text-red-600 hover:bg-muted"
+                    >
+                      <XCircle size={16} />
+                      {t('cancelItem')}
+                    </button>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}
@@ -221,6 +288,7 @@ export function OrderedItemsScreen({
           {sending ? t('sending') : t('sendMoreItems')}
         </button>
       </footer>
+      {ConfirmDialog}
     </div>
   );
 }

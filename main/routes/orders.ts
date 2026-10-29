@@ -4630,6 +4630,12 @@ router.patch(
           ).run(now(), now(), itemId);
         } else {
           cancelOrderItemAndRestoreStock(db, currentItem, actorId, reason);
+          if (currentItem.status === 'pending') {
+            // The kitchen had not started it: flag the cancellation on the KDS.
+            db.prepare(
+              "UPDATE order_items SET service_change = 'cancelled', service_change_at = ? WHERE id = ?",
+            ).run(now(), itemId);
+          }
         }
 
         // Recalculate order totals excluding terminal items.
@@ -5595,6 +5601,66 @@ router.patch(
   completePendingPriceLine('kitchen_price'),
 );
 
+// PATCH /api/orders/:orderId/items/:itemId/takeaway — pack an item not yet served to go; the KDS flags it.
+router.patch(
+  '/:orderId/items/:itemId/takeaway',
+  orderItemCancelRateLimit,
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.orderId);
+      const itemId = String(req.params.itemId);
+      const actorId = String((req as any).user?.userId || '');
+      const db = getDatabase();
+      const order = withTxn(() => {
+        const currentOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        if (!currentOrder) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+        if (['completed', 'cancelled'].includes(currentOrder.status)) {
+          throw Object.assign(new Error('Cannot change items on completed or cancelled orders'), {
+            statusCode: 400,
+          });
+        }
+        const item = db
+          .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
+          .get(itemId, orderId) as any;
+        if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+        if (!['pending', 'preparing', 'ready'].includes(item.status)) {
+          throw Object.assign(new Error('Only items not yet served can change to takeaway'), {
+            statusCode: 409,
+          });
+        }
+        if (item.service_change !== 'takeaway') {
+          db.prepare(
+            "UPDATE order_items SET service_change = 'takeaway', service_change_at = ?, updated_at = ? WHERE id = ?",
+          ).run(now(), now(), itemId);
+          recordOrderAudit(db, {
+            orderId,
+            orderItemId: itemId,
+            actorUserId: actorId,
+            action: 'item_changed_to_takeaway',
+            details: { product_name: item.product_name },
+          });
+        }
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<string, unknown>;
+        const items = attachEffectiveAddons(
+          db,
+          db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as { id: number }[],
+        );
+        return { ...updatedOrder, items };
+      });
+      cloudSync.recordOrderChanged(orderId, 'order.item_edited');
+      notifyKdsUpdate();
+      res.json({ order });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string };
+      if (!error.statusCode) console.error('[Orders] Takeaway change error:', error);
+      res
+        .status(error.statusCode || 500)
+        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+    }
+  },
+);
+
 // Restore cancelled order item (frontend calls this)
 router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) => {
   try {
@@ -5710,7 +5776,9 @@ router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) =>
       }
 
       // Restore - mark as pending
-      db.prepare("UPDATE order_items SET status = 'pending', updated_at = ? WHERE id = ?").run(
+      db.prepare(
+        "UPDATE order_items SET status = 'pending', service_change = NULL, service_change_at = NULL, updated_at = ? WHERE id = ?",
+      ).run(
         now(),
         itemId,
       );

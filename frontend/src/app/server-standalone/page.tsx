@@ -24,8 +24,6 @@ import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
 import { ItemStatusBadge } from '@/components/server-app/ItemStatus';
 import { OrderedItemsScreen, TableKitchenSummary, type OrderedItem } from '@/components/server-app/OrderedItems';
-import posApi from '@/lib/api';
-import { parseDbTimestamp } from '@/lib/utils';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -65,6 +63,7 @@ type OrderItem = {
   status: string;
   special_instructions?: string | null;
   variant_selection?: unknown;
+  service_change?: string | null;
 };
 type Order = {
   id: number;
@@ -559,6 +558,22 @@ export default function ServerStandalonePage() {
   function handleOrderNotesChange(value: string) {
     if (sendInFlightRef.current) return;
     setOrderNotes(value.slice(0, 200));
+  }
+
+  /** Packs a sent item to go, or cancels one still waiting; the KDS flags the change. */
+  async function changeSentItem(itemId: number, change: 'takeaway' | 'cancel') {
+    if (!api || !currentOrder || sendInFlightRef.current) return;
+    const tableId = selectedTableIdRef.current;
+    try {
+      await api.patch(
+        `/api/orders/${currentOrder.id}/items/${itemId}/${change}`,
+        change === 'cancel' ? { reason: 'Cancelled from the Server App' } : {},
+      );
+      toast.success(change === 'cancel' ? t('itemCancelled') : t('itemChangedToTakeaway'));
+    } catch (error: unknown) {
+      toastApiError(error, t('itemChangeFailed'), apiErrorT);
+    }
+    if (tableId) await loadOrder(tableId).catch(() => {});
   }
 
   function clearSelectedTable() {
@@ -1548,12 +1563,6 @@ export default function ServerStandalonePage() {
           orderNumber={currentOrder?.order_number}
           items={(currentOrder?.items ?? []) as OrderedItem[]}
           timezone={regional?.timezone}
-          imageFor={(item) => {
-            const product = products.find((candidate) => String(candidate.id) === String(item.product_id));
-            if (!product?.has_image) return null;
-            const version = product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0;
-            return `${posApi.defaults.baseURL}/products/${product.id}/image?t=${version}`;
-          }}
           canSend={
             Boolean(selectedTableId) && orderLoadedTableId === selectedTableId && draft.length > 0 && !sending
           }
@@ -1564,6 +1573,8 @@ export default function ServerStandalonePage() {
             setTablePickerOpen(false);
           }}
           onSend={() => void sendDraft()}
+          onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
+          onCancel={(item) => changeSentItem(item.id, 'cancel')}
         />
       )}
 

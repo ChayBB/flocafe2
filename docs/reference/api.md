@@ -363,7 +363,17 @@ does not wrap the handler again.
   line stays visible. Inventory is not restored on the void path. A plain cancel sets the item to
   `cancelled` and restores the recorded inventory deduction and recipe components.
 - Cancelling the last active item cancels the order and frees its table.
+- `orders.item.cancel` ships to `owner`, `manager` and `server`, so service staff can take back an
+  item the kitchen has not started. Cancelling a `pending` item also sets `service_change` to
+  `cancelled` and `service_change_at`; the KDS keeps that item on the board, flagged, for the same
+  15 minutes as a voided item. Restoring the item clears the flag.
 - `override_pin` attempts are rate limited per canonical client IP, not per item, to slow brute force (counting only failed attempts; 429 after 5 failed attempts within 15 minutes; serialized to prevent concurrent brute-force races).
+
+`PATCH /:orderId/items/:itemId/takeaway` (`orders.create`, item cancel limiter) packs an item that
+is `pending`, `preparing` or `ready` to go: it sets `service_change` to `takeaway` and records an
+`item_changed_to_takeaway` audit entry, and the KDS shows the item flagged. It returns
+`{ order: { ...order, items } }`; `409` for an item already served or cancelled, `400` for a
+completed or cancelled order. The Server App forwards both routes.
 
 ### Order item status
 

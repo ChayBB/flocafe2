@@ -36,6 +36,8 @@ const OWNER_MANAGER_CASHIER = ROLE_ACCESS.ownerManagerCashier;
 const SALES = ROLE_ACCESS.sales;
 const KITCHEN = ROLE_ACCESS.kitchen;
 const ALL_STAFF = ROLE_ACCESS.allStaff;
+// Service staff may take back an item the kitchen has not started.
+const OWNER_MANAGER_SERVER = ['owner', 'manager', 'server'] as const satisfies readonly Role[];
 
 /**
  * Stable authorization capabilities and their shipped role defaults.
@@ -84,7 +86,7 @@ export const PERMISSION_DEFINITIONS = [
   {
     id: 'orders.item.cancel',
     area: 'orders',
-    defaultRoles: OWNER_MANAGER,
+    defaultRoles: OWNER_MANAGER_SERVER,
     configurable: true,
     risk: 'sensitive',
   },

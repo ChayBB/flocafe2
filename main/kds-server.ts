@@ -25,6 +25,7 @@ import {
   attachEffectiveAddons,
   isKdsEnabled,
   isVoidedItemKdsVisible,
+  isCancelledNoticeKdsVisible,
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   now,
   projectKdsItem,
@@ -470,7 +471,7 @@ export function startKdsServer(): Promise<void> {
         // item) and age voided items off the board after their grace period.
         const isVisibleItem = (item: any, order: any) =>
           item.status !== 'void_adjustment' &&
-          !['completed', 'cancelled', 'refunded'].includes(item.status) &&
+          (!['completed', 'cancelled', 'refunded'].includes(item.status) || isCancelledNoticeKdsVisible(item)) &&
           (item.status !== 'voided' || isVoidedItemKdsVisible(item.voided_at)) &&
           isKdsStationItemAllowed(
             stationIds,

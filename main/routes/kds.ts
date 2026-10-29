@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, now, attachEffectiveAddons, isVoidedItemKdsVisible, KDS_VOIDED_ITEM_VISIBILITY_MS, projectKdsItem, projectKdsOrder, projectKdsStation, withTxn } from '../db';
+import { getDatabase, annotateKdsItems, getKdsStationCategoryIds, getKdsStationRoutingScope, getUserKdsStationIds, hasUserKdsStationAssignments, isKdsStationItemAllowed, now, attachEffectiveAddons, isVoidedItemKdsVisible, isCancelledNoticeKdsVisible, KDS_VOIDED_ITEM_VISIBILITY_MS, projectKdsItem, projectKdsOrder, projectKdsStation, withTxn } from '../db';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { requireKdsEnabled, requireKdsEnabledOr404, isTokenRevoked, isTokenStale } from '../middleware/security';
@@ -144,7 +144,7 @@ router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
     const allVisibleItems = (orders as any[])
       .flatMap((o) => itemsByOrder[o.id] || [])
       .filter((i) => i.status !== 'void_adjustment'
-        && !['completed', 'cancelled', 'refunded'].includes(i.status)
+        && (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i))
         && (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at))
         && (!allowedProductIds || allowedProductIds.has(String(i.product_id)))
         && isKdsStationItemAllowed(payloadStationIds, requestedRoutingCategoryIds, ordersById.get(i.order_id)?.kitchen_station_id, i.category_id, ordersById.get(i.order_id)?.kitchen_station_id ? requestedScope.categoryIdsByStation[String(ordersById.get(i.order_id)?.kitchen_station_id)] : undefined, requestedScope.hasUnrestrictedStation));
@@ -156,7 +156,7 @@ router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
       // item) and age voided items off the board after their grace period.
       const visibleItems = (itemsByOrder[order.id] || [])
         .filter((i) => i.status !== 'void_adjustment'
-          && !['completed', 'cancelled', 'refunded'].includes(i.status)
+          && (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i))
           && (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at))
           && (!allowedProductIds || allowedProductIds.has(String(i.product_id)))
           && isKdsStationItemAllowed(payloadStationIds, requestedRoutingCategoryIds, order.kitchen_station_id, i.category_id, order.kitchen_station_id ? requestedScope.categoryIdsByStation[String(order.kitchen_station_id)] : undefined, requestedScope.hasUnrestrictedStation))

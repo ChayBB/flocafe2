@@ -146,8 +146,8 @@ async function main() {
   const managerAuth = seedUser(db, 'mgr-cancel', 'manager', '1234');
   const ownerAuth = seedUser(db, 'owner-cancel', 'owner', '5678');
   // A cashier holds `orders.item.void` (SALES) but not `orders.item.cancel`
-  // (owner+manager), so a cashier can start a void but needs a manager PIN to
-  // finish one, and cannot cancel a pending item at all.
+  // (owner, manager and server), so a cashier can start a void but needs a
+  // manager PIN to finish one, and cannot cancel a pending item at all.
   const cashierAuth = seedUser(db, 'cashier-cancel', 'cashier', '9876');
   const waiterAuth = seedUser(db, 'waiter-cancel', 'server');
 
@@ -316,14 +316,66 @@ async function main() {
       // Orders are never ownership-gated: authorization is by role, never by
       // order creator (docs/reference/product-invariants.md).
       const order = seedOrderWithItem(db, 'CANCEL-WAITER-OTHER', 'prod-cancel', 'pending');
-      const forbidden = await cancel(order.orderId, order.itemId, {}, waiterAuth);
-      assertEqualOrThrow(
-        forbidden.status,
-        403,
-        'a server cannot cancel a pending item (it holds no orders.item.cancel)',
+      // A second line keeps the order open, so the cancelled one can be restored.
+      db.prepare(`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, tax_amount, total, status, created_at, updated_at)
+        VALUES (?, 'prod-cancel', 'Other', 100, 1, 100, 0, 100, 'pending', ?, ?)`).run(order.orderId, now(), now());
+      const byServer = await cancel(order.orderId, order.itemId, {}, waiterAuth);
+      assertEqualOrThrow(byServer.status, 200, 'a server can cancel an item the kitchen has not started');
+      const flagged = db
+        .prepare('SELECT status, service_change, service_change_at FROM order_items WHERE id = ?')
+        .get(order.itemId) as any;
+      assertEqualOrThrow(flagged.status, 'cancelled', 'the waiting item is cancelled');
+      assertEqualOrThrow(flagged.service_change, 'cancelled', 'the cancellation is flagged for the kitchen');
+      assertOrThrow(Boolean(flagged.service_change_at), 'the flag records when it was made');
+      const { isCancelledNoticeKdsVisible } = require('../main/db');
+      assertOrThrow(
+        isCancelledNoticeKdsVisible({ ...flagged }),
+        'a freshly flagged cancellation stays on the KDS',
       );
-      const allowed = await cancel(order.orderId, order.itemId, {}, ownerAuth);
-      assertEqualOrThrow(allowed.status, 200, 'the owner can cancel the same order');
+      assertOrThrow(
+        !isCancelledNoticeKdsVisible({ ...flagged, service_change_at: '2000-01-01 00:00:00' }),
+        'the flag leaves the KDS after its grace period',
+      );
+      const restored = await restore(order.orderId, order.itemId, ownerAuth);
+      assertEqualOrThrow(restored.status, 200, 'the owner can restore it');
+      assertEqualOrThrow(
+        (db.prepare('SELECT service_change FROM order_items WHERE id = ?').get(order.itemId) as any).service_change,
+        null,
+        'restoring clears the kitchen flag',
+      );
+
+      const started = seedOrderWithItem(db, 'CANCEL-WAITER-STARTED', 'prod-cancel', 'preparing');
+      const startedByServer = await cancel(started.orderId, started.itemId, {}, waiterAuth);
+      assertOrThrow(
+        startedByServer.status === 400 || startedByServer.status === 403,
+        `a server cannot void an item the kitchen started without a manager PIN (got ${startedByServer.status})`,
+      );
+    }
+    {
+      // Packing an item to go flags it for the kitchen until it is served.
+      const takeaway = (orderId: any, itemId: any, headers: any) =>
+        api(baseUrl, `/api/orders/${orderId}/items/${itemId}/takeaway`, { method: 'PATCH', body: {}, headers });
+      const order = seedOrderWithItem(db, 'TAKEAWAY-WAITING', 'prod-cancel', 'pending');
+      const changed = await takeaway(order.orderId, order.itemId, waiterAuth);
+      assertEqualOrThrow(changed.status, 200, `a server changes a waiting item to takeaway (${JSON.stringify(changed.data)})`);
+      const row = db
+        .prepare('SELECT status, service_change FROM order_items WHERE id = ?')
+        .get(order.itemId) as any;
+      assertEqualOrThrow(row.service_change, 'takeaway', 'the item is flagged as takeaway');
+      assertEqualOrThrow(row.status, 'pending', 'the item keeps waiting for the kitchen');
+      const audit = db
+        .prepare("SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_changed_to_takeaway'")
+        .get(String(order.itemId));
+      assertOrThrow(Boolean(audit), 'the change is recorded in the order audit log');
+
+      for (const status of ['preparing', 'ready']) {
+        const started = seedOrderWithItem(db, `TAKEAWAY-${status}`, 'prod-cancel', status);
+        const allowed = await takeaway(started.orderId, started.itemId, waiterAuth);
+        assertEqualOrThrow(allowed.status, 200, `a ${status} item can still change to takeaway`);
+      }
+      const served = seedOrderWithItem(db, 'TAKEAWAY-SERVED', 'prod-cancel', 'served');
+      const refused = await takeaway(served.orderId, served.itemId, waiterAuth);
+      assertEqualOrThrow(refused.status, 409, 'a served item cannot change to takeaway');
     }
 
     console.log('\n─── Paid and terminal guards ───');

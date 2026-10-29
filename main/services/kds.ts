@@ -12,7 +12,7 @@ import {
   parseItemJson,
   attachEffectiveAddons,
   isKdsEnabled,
-  isVoidedItemKdsVisible,
+  isVoidedItemKdsVisible, isCancelledNoticeKdsVisible,
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
@@ -675,7 +675,7 @@ function buildActiveOrdersSnapshot(
     .filter(
       (i: any) =>
         i.status !== 'void_adjustment' &&
-        !['completed', 'cancelled', 'refunded'].includes(i.status) &&
+        (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i)) &&
         (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at)) &&
         isKdsStationItemAllowed(
           stationIds,
@@ -703,7 +703,7 @@ function buildActiveOrdersSnapshot(
         .filter(
           (i: any) =>
             i.status !== 'void_adjustment' &&
-            !['completed', 'cancelled', 'refunded'].includes(i.status) &&
+            (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i)) &&
             (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at)) &&
             isKdsStationItemAllowed(
               stationIds,

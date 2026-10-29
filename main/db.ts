@@ -7782,6 +7782,20 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 126,
+    name: 'add_order_item_service_change',
+    up: () => {
+      // A change service staff made to an item the kitchen has not started: 'takeaway' or 'cancelled'.
+      const columns = getColumns(db, 'order_items');
+      if (!columns.includes('service_change')) {
+        db.exec('ALTER TABLE order_items ADD COLUMN service_change TEXT DEFAULT NULL');
+      }
+      if (!columns.includes('service_change_at')) {
+        db.exec('ALTER TABLE order_items ADD COLUMN service_change_at TEXT DEFAULT NULL');
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
@@ -8900,6 +8914,20 @@ export async function verifyPinAsync(
 // Duration a voided in-progress item remains visible on KDS boards before dropping off.
 export const KDS_VOIDED_ITEM_VISIBILITY_MS = 15 * 60 * 1000;
 
+/** A waiting item service staff cancelled stays on the KDS, flagged, for the same grace period. */
+export function isCancelledNoticeKdsVisible(item: {
+  status?: string;
+  service_change?: string | null;
+  service_change_at?: string | null;
+}): boolean {
+  return (
+    item.status === 'cancelled' &&
+    item.service_change === 'cancelled' &&
+    Boolean(item.service_change_at) &&
+    isVoidedItemKdsVisible(item.service_change_at)
+  );
+}
+
 /** Determines whether a voided order item should still appear on KDS surfaces. */
 export function isVoidedItemKdsVisible(voidedAt: string | null | undefined): boolean {
   if (!voidedAt) return true;
@@ -8940,6 +8968,8 @@ export function projectKdsItem(item: any, restricted: boolean): any {
     'quantity',
     'status',
     'special_instructions',
+    'service_change',
+    'service_change_at',
     'created_at',
     'updated_at',
     'order_number',
