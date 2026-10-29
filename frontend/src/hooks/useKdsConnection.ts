@@ -190,6 +190,8 @@ export interface UseKdsConnectionResult {
   user: KdsUser | null;
   orders: KdsOrder[];
   stations: KdsStation[];
+  /** Stations the user is assigned to; their default view. */
+  assignedStationIds: string[];
   counts: Record<string, number>;
   loading: boolean;
   connected: boolean;
@@ -849,20 +851,26 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   }, [connectionMode, user, startRestPolling, stopRestPolling, enabled]);
 
   const [stations, setStations] = useState<KdsStation[]>([]);
+  const [assignedStationIds, setAssignedStationIds] = useState<string[]>([]);
   const userId = user?.id;
   useEffect(() => {
     if (!enabled || !userId) {
       setStations([]);
+      setAssignedStationIds([]);
       return;
     }
     let cancelled = false;
     api
       .get(stationsPath)
       .then(({ data }) => {
-        if (!cancelled) setStations(Array.isArray(data?.stations) ? data.stations : []);
+        if (cancelled) return;
+        setStations(Array.isArray(data?.stations) ? data.stations : []);
+        setAssignedStationIds(Array.isArray(data?.assigned_station_ids) ? data.assigned_station_ids : []);
       })
       .catch(() => {
-        if (!cancelled) setStations([]);
+        if (cancelled) return;
+        setStations([]);
+        setAssignedStationIds([]);
       });
     return () => {
       cancelled = true;
@@ -873,6 +881,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     user,
     orders,
     stations,
+    assignedStationIds,
     counts,
     loading,
     connected,

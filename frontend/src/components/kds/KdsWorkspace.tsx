@@ -9,25 +9,26 @@ import type { UseKdsConnectionResult } from '@/hooks/useKdsConnection';
 
 const STATION_KEY = 'flocafe:kds-station';
 
-function readStoredStation(): string {
-  if (typeof window === 'undefined') return '';
+/** The station this display last showed; null until one is picked, '' for all stations. */
+function readStoredStation(): string | null {
+  if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem(STATION_KEY) || '';
+    return window.localStorage.getItem(STATION_KEY);
   } catch {
-    return '';
+    return null;
   }
 }
 
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const { viewMode, setViewMode } = useKdsView(serverDefault);
   const [storedStation, setStoredStation] = useState(readStoredStation);
-  const stationId = conn.stations.some((station) => station.id === storedStation) ? storedStation : '';
+  const preferred = storedStation ?? conn.assignedStationIds[0] ?? '';
+  const stationId = conn.stations.some((station) => station.id === preferred) ? preferred : '';
 
   const changeStation = (next: string) => {
     setStoredStation(next);
     try {
-      if (next) window.localStorage.setItem(STATION_KEY, next);
-      else window.localStorage.removeItem(STATION_KEY);
+      window.localStorage.setItem(STATION_KEY, next);
     } catch {}
   };
 

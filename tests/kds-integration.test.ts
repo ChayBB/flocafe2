@@ -175,6 +175,19 @@ async function run() {
     assert(Array.isArray(authedOrders.body.orders), 'KDS orders returns an orders array');
     assert(!('unit_price' in (authedOrders.body.orders[0]?.items?.[0] || {})), 'Station-only standalone chef receives redacted item pricing');
 
+    const chefStations = await request(`http://127.0.0.1:${port}`)
+      .get('/api/kds/stations')
+      .set('Authorization', `Bearer ${token}`);
+    assert(chefStations.status === 200, 'Standalone stations request succeeds');
+    assert(
+      JSON.stringify(chefStations.body.stations.map((station: any) => station.id)) === '["kds-integration-station"]',
+      'A station-assigned chef can pick only their own station',
+    );
+    assert(
+      JSON.stringify(chefStations.body.assigned_station_ids) === '["kds-integration-station"]',
+      'The assigned station is reported as the chef default',
+    );
+
     const unrestrictedLogin = await request(`http://127.0.0.1:${port}`)
       .post('/api/auth/login')
       .send({ email: 'unrestricted@flo.local', password: 'KitchenPass123!' });

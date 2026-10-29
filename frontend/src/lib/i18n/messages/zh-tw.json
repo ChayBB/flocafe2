@@ -562,6 +562,8 @@
     "viewTabs": "標籤頁",
     "stationFilter": "工作站",
     "allStations": "所有工作站",
+    "noStations": "尚無工作站",
+    "noStationsHint": "在設定中新增廚房工作站即可依工作站篩選",
     "wsConnected": "WebSocket 已連線"
   },
   "nav": {

@@ -562,6 +562,8 @@
     "viewTabs": "علامات التبويب",
     "stationFilter": "المحطة",
     "allStations": "كل المحطات",
+    "noStations": "لا توجد محطات",
+    "noStationsHint": "أضف محطات المطبخ من الإعدادات للتصفية حسب المحطة",
     "wsConnected": "تم الاتصال عبر WebSocket"
   },
   "nav": {

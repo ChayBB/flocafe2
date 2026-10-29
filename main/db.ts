@@ -3416,17 +3416,21 @@ function loadActiveKdsStations(dbInstance: Database.Database): KdsStationRow[] {
 
 /**
  * Active stations a KDS user can pick from: their assigned stations, or every active
- * station when they have no assignment.
+ * station when they have no assignment. The assigned ones are the user's default view.
  */
 export function listKdsStationsForUser(
   dbInstance: Database.Database,
   userId: string,
-): { id: string; name: string }[] | null {
+): { stations: { id: string; name: string }[]; assigned_station_ids: string[] } | null {
   const assigned = getUserKdsStationIds(dbInstance, userId);
   if (!assigned) return null;
-  return loadActiveKdsStations(dbInstance)
+  const stations = loadActiveKdsStations(dbInstance)
     .filter((station) => assigned.length === 0 || assigned.includes(station.id))
     .map(({ id, name }) => ({ id, name }));
+  return {
+    stations,
+    assigned_station_ids: assigned.filter((id) => stations.some((station) => station.id === id)),
+  };
 }
 
 /**

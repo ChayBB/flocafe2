@@ -562,6 +562,8 @@
     "viewTabs": "टैब",
     "stationFilter": "स्टेशन",
     "allStations": "सभी स्टेशन",
+    "noStations": "कोई स्टेशन नहीं",
+    "noStationsHint": "स्टेशन के अनुसार देखने के लिए सेटिंग्स में किचन स्टेशन जोड़ें",
     "wsConnected": "वेबसॉकेट कनेक्ट हुआ"
   },
   "nav": {

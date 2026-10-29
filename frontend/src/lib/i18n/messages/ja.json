@@ -562,6 +562,8 @@
     "viewTabs": "タブ",
     "stationFilter": "ステーション",
     "allStations": "すべてのステーション",
+    "noStations": "ステーションなし",
+    "noStationsHint": "設定でキッチンステーションを追加すると、ステーション別に表示できます",
     "wsConnected": "WebSocket接続済み"
   },
   "nav": {

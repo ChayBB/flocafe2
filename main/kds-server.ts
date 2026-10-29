@@ -362,9 +362,9 @@ export function startKdsServer(): Promise<void> {
       }
       try {
         const kdsUser = (req as any).user as KdsRequestUser;
-        const stations = listKdsStationsForUser(getDatabase(), kdsUser.userId);
-        if (!stations) return res.status(403).json({ error: 'Could not load station permissions' });
-        res.json({ stations });
+        const result = listKdsStationsForUser(getDatabase(), kdsUser.userId);
+        if (!result) return res.status(403).json({ error: 'Could not load station permissions' });
+        res.json(result);
       } catch (error: any) {
         console.error('[API] Internal error:', error);
         res.status(500).json({ error: 'Internal server error' });

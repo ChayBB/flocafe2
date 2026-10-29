@@ -562,6 +562,8 @@
     "viewTabs": "Tabs",
     "stationFilter": "Istasyon",
     "allStations": "Lahat ng istasyon",
+    "noStations": "Walang istasyon",
+    "noStationsHint": "Magdagdag ng kitchen station sa Settings para mag-filter ayon sa istasyon",
     "wsConnected": "Konektado ang WebSocket"
   },
   "nav": {

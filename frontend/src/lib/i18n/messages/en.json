@@ -562,6 +562,8 @@
     "viewTabs": "Tabs",
     "stationFilter": "Station",
     "allStations": "All stations",
+    "noStations": "No stations",
+    "noStationsHint": "Add kitchen stations in Settings to filter by station",
     "wsConnected": "WebSocket connected"
   },
   "nav": {

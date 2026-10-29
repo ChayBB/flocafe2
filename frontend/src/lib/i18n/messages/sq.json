@@ -562,6 +562,8 @@
     "viewTabs": "Kartela",
     "stationFilter": "Stacioni",
     "allStations": "Të gjitha stacionet",
+    "noStations": "Nuk ka stacione",
+    "noStationsHint": "Shtoni stacione kuzhine te Cilësimet për të filtruar sipas stacionit",
     "wsConnected": "WebSocket i lidhur"
   },
   "nav": {

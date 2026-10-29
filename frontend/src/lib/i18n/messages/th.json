@@ -560,8 +560,10 @@
     "updating": "กำลังอัปเดต…",
     "viewKanban": "คานบัน",
     "viewTabs": "แท็บ",
-    "stationFilter": "สเตชั่น",
-    "allStations": "ทุกสเตชั่น",
+    "stationFilter": "สถานี",
+    "allStations": "ทุกสถานี",
+    "noStations": "ยังไม่มีสถานี",
+    "noStationsHint": "เพิ่มสถานีครัวในหน้าตั้งค่าเพื่อเลือกดูตามสถานี",
     "wsConnected": "เชื่อมต่อ WebSocket แล้ว"
   },
   "nav": {

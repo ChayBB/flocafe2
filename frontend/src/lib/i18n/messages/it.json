@@ -562,6 +562,8 @@
     "viewTabs": "Schede",
     "stationFilter": "Postazione",
     "allStations": "Tutte le postazioni",
+    "noStations": "Nessuna postazione",
+    "noStationsHint": "Aggiungi postazioni cucina nelle Impostazioni per filtrare per postazione",
     "wsConnected": "WebSocket connesso"
   },
   "nav": {

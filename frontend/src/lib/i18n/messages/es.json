@@ -562,6 +562,8 @@
     "viewTabs": "Pestañas",
     "stationFilter": "Estación",
     "allStations": "Todas las estaciones",
+    "noStations": "Sin estaciones",
+    "noStationsHint": "Agrega estaciones de cocina en Ajustes para filtrar por estación",
     "wsConnected": "WebSocket conectado"
   },
   "nav": {

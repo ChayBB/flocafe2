@@ -562,6 +562,8 @@
     "viewTabs": "Tabbladen",
     "stationFilter": "Keukenstation",
     "allStations": "Alle stations",
+    "noStations": "Geen stations",
+    "noStationsHint": "Voeg keukenstations toe in Instellingen om per station te filteren",
     "wsConnected": "WebSocket verbonden"
   },
   "nav": {

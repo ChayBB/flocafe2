@@ -23,9 +23,9 @@ const ACTIVE_KITCHEN_ORDER_IDS_SQL = `
 router.get('/stations', (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.userId;
-    const stations = userId ? listKdsStationsForUser(getDatabase(), userId) : null;
-    if (!stations) return res.status(403).json({ error: 'Could not load station permissions' });
-    res.json({ stations });
+    const result = userId ? listKdsStationsForUser(getDatabase(), userId) : null;
+    if (!result) return res.status(403).json({ error: 'Could not load station permissions' });
+    res.json(result);
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

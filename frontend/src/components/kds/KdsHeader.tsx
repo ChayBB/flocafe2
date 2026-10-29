@@ -62,22 +62,22 @@ export function KdsHeader({
               : t('connectionConnecting')}
           </span>
 
-          {stations.length > 0 && (
-            <select
-              data-testid="kds-station-select"
-              aria-label={t('stationFilter')}
-              value={stationId}
-              onChange={(e) => onChangeStation(e.target.value)}
-              className="min-h-11 ms-2 px-2.5 text-xs font-medium rounded-lg border border-border bg-card text-foreground"
-            >
-              <option value="">{t('allStations')}</option>
-              {stations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.name}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            data-testid="kds-station-select"
+            aria-label={t('stationFilter')}
+            title={stations.length === 0 ? t('noStationsHint') : t('stationFilter')}
+            value={stationId}
+            disabled={stations.length === 0}
+            onChange={(e) => onChangeStation(e.target.value)}
+            className="min-h-11 ms-2 px-2.5 text-xs font-medium rounded-lg border border-border bg-card text-foreground disabled:opacity-60"
+          >
+            <option value="">{stations.length === 0 ? t('noStations') : t('allStations')}</option>
+            {stations.map((station) => (
+              <option key={station.id} value={station.id}>
+                {station.name}
+              </option>
+            ))}
+          </select>
 
           <div className="flex items-center bg-muted rounded-lg p-0.5 ms-2" role="tablist">
             <button

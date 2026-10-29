@@ -562,6 +562,8 @@
     "viewTabs": "Abas",
     "stationFilter": "Estação",
     "allStations": "Todas as estações",
+    "noStations": "Sem estações",
+    "noStationsHint": "Adicione estações de cozinha nas Configurações para filtrar por estação",
     "wsConnected": "WebSocket conectado"
   },
   "nav": {

@@ -562,6 +562,8 @@
     "viewTabs": "Reiter",
     "stationFilter": "Küchenstation",
     "allStations": "Alle Stationen",
+    "noStations": "Keine Stationen",
+    "noStationsHint": "Küchenstationen in den Einstellungen anlegen, um nach Station zu filtern",
     "wsConnected": "WebSocket verbunden"
   },
   "nav": {

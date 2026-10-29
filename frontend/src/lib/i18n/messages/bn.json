@@ -562,6 +562,8 @@
     "viewTabs": "ট্যাব",
     "stationFilter": "স্টেশন",
     "allStations": "সব স্টেশন",
+    "noStations": "কোনো স্টেশন নেই",
+    "noStationsHint": "স্টেশন অনুযায়ী দেখতে সেটিংসে কিচেন স্টেশন যোগ করুন",
     "wsConnected": "WebSocket সংযুক্ত"
   },
   "nav": {

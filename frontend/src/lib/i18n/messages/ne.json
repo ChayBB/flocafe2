@@ -562,6 +562,8 @@
     "viewTabs": "ट्याबहरू",
     "stationFilter": "स्टेसन",
     "allStations": "सबै स्टेसन",
+    "noStations": "कुनै स्टेसन छैन",
+    "noStationsHint": "स्टेसन अनुसार हेर्न सेटिङमा किचन स्टेसन थप्नुहोस्",
     "wsConnected": "WebSocket जडान भयो"
   },
   "nav": {

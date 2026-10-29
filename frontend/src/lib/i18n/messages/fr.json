@@ -562,6 +562,8 @@
     "viewTabs": "Onglets",
     "stationFilter": "Poste",
     "allStations": "Tous les postes",
+    "noStations": "Aucun poste",
+    "noStationsHint": "Ajoutez des postes de cuisine dans les Paramètres pour filtrer par poste",
     "wsConnected": "WebSocket connecté"
   },
   "nav": {

@@ -562,6 +562,8 @@
     "viewTabs": "Danh sách thẻ",
     "stationFilter": "Trạm",
     "allStations": "Tất cả trạm",
+    "noStations": "Chưa có trạm",
+    "noStationsHint": "Thêm trạm bếp trong Cài đặt để lọc theo trạm",
     "wsConnected": "Đã kết nối WebSocket"
   },
   "nav": {
