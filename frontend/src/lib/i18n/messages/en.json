@@ -1648,6 +1648,7 @@
     "signInFailed": "Sign in failed",
     "staffCodePlaceholder": "Staff code",
     "staffNamePlaceholder": "Staff name",
+    "statusCancelled": "Cancelled",
     "statusPreparing": "Preparing",
     "statusReady": "Ready",
     "statusServed": "Served",

@@ -4,7 +4,7 @@ import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 
-test('each table with an open order shows waiting-ready-served counts in grey', async ({ page }) => {
+test('each table shows waiting-ready-served counts, and its sent items spell out their status', async ({ page }) => {
   const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
   const headers = { Authorization: `Bearer ${managerToken}` };
   const run = Math.random().toString(36).slice(2, 7);
@@ -58,4 +58,9 @@ test('each table with an open order shows waiting-ready-served counts in grey', 
   await expect(counts).toHaveText('1-1-1');
   await expect(counts).toHaveClass(/text-gray-400/);
   await expect(counts).toHaveAttribute('title', 'Waiting 1 · Ready 1 · Served 1');
+
+  // The sent items spell out their kitchen status in place of the old status icons.
+  await tableButton.click();
+  const statuses = page.getByTestId('server-app-item-status');
+  await expect(statuses).toHaveText(['Waiting', 'Ready', 'Served']);
 });

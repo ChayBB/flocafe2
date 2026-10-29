@@ -3,11 +3,7 @@
 import axios, { AxiosInstance } from 'axios';
 import toast from 'react-hot-toast';
 import {
-  Bell,
-  CheckCircle2,
   ChefHat,
-  Circle,
-  Flame,
   LayoutGrid,
   Minus,
   Plus,
@@ -112,37 +108,26 @@ function createApi(): AxiosInstance {
   return api;
 }
 
-function itemStatusIcon(status: string, t: (key: ServerAppKey) => string) {
-  if (status === 'preparing')
-    return (
-      <Flame
-        size={15}
-        className="text-orange-500 dark:text-orange-400"
-        aria-label={t('statusPreparing')}
-      />
-    );
-  if (status === 'ready')
-    return (
-      <Bell
-        size={15}
-        className="text-emerald-600 dark:text-emerald-400"
-        aria-label={t('statusReady')}
-      />
-    );
-  if (status === 'served')
-    return (
-      <CheckCircle2
-        size={15}
-        className="text-blue-600 dark:text-blue-400"
-        aria-label={t('statusServed')}
-      />
-    );
+const ITEM_STATUS_BADGES: Record<string, { key: ServerAppKey; className: string }> = {
+  pending: { key: 'statusWaiting', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
+  preparing: { key: 'statusPreparing', className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' },
+  ready: { key: 'statusReady', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
+  served: { key: 'statusServed', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
+};
+const CANCELLED_ITEM_BADGE = { key: 'statusCancelled' as ServerAppKey, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+
+/** The kitchen status of a sent item, spelled out. */
+function itemStatusBadge(status: string, t: (key: ServerAppKey) => string) {
+  const badge = ['cancelled', 'voided', 'void_adjustment', 'refunded'].includes(status)
+    ? CANCELLED_ITEM_BADGE
+    : (ITEM_STATUS_BADGES[status] ?? ITEM_STATUS_BADGES.pending);
   return (
-    <Circle
-      size={15}
-      className="text-gray-400 dark:text-gray-500"
-      aria-label={t('statusWaiting')}
-    />
+    <span
+      data-testid="server-app-item-status"
+      className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}
+    >
+      {t(badge.key)}
+    </span>
   );
 }
 
@@ -1224,7 +1209,7 @@ export default function ServerStandalonePage() {
           <div className="space-y-2">
             {currentOrder.items.map((item) => (
               <div key={item.id} className="flex items-center gap-2 text-sm">
-                {itemStatusIcon(item.status, t)}
+                {itemStatusBadge(item.status, t)}
                 <span className="min-w-0 flex-1 truncate">
                   <Ltr>{item.quantity}</Ltr> x{' '}
                   {formatItemHeading(item.product_name, item.variant_selection)}
