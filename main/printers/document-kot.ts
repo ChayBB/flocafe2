@@ -212,7 +212,7 @@ function kotHeaderLines(
 ): string[] {
   const cols = options.columns;
   const lines: string[] = [];
-  const tzOptions = options.timezone ? { timeZone: options.timezone } : undefined;
+  const tzOptions = { hourCycle: 'h23' as const, ...(options.timezone ? { timeZone: options.timezone } : {}) };
   const thermalCapabilities = mergeThermalCapabilities(options.capabilities, options.arabicShaping);
   const banner = thermalSafeText(
     labelOf(header.banner),

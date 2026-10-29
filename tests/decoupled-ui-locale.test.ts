@@ -134,7 +134,7 @@ async function runTests() {
   );
   console.log(`  [AR store + en-US UI]: ${arEnDate}`);
   assert.ok(arEnDate.includes('Aug') || arEnDate.includes('August'), `Expected English month in en-US output, got: ${arEnDate}`);
-  assert.ok(arEnDate.includes('PM') || arEnDate.includes('pm'), `Expected English 12-hour period in en-US output, got: ${arEnDate}`);
+  assert.ok(arEnDate.includes('12:30') && !/[AP]M/i.test(arEnDate), `Expected a 24-hour clock in en-US output, got: ${arEnDate}`);
   assert.ok(!arEnDate.includes('de ago'), `Unexpected Spanish 'de ago' preposition in en-US output: ${arEnDate}`);
 
   const neNumber = formatNumberForTenant(1234567.89, 'NP');
@@ -855,7 +855,7 @@ async function runTests() {
     <div class="rule-box">
       <div class="rule-title">Verified Architecture Boundary:</div>
       <div>
-        Even though the store is registered in <strong>Argentina (AR)</strong>, dates in the English UI display <code>Aug 20, 2026, 12:30 PM</code> with English month names and 12-hour period markers without Spanish grammar strings (<code>de ago</code>). Meanwhile, the business timestamp strictly evaluates against <strong>America/Argentina/Buenos_Aires (UTC-3)</strong>.
+        Even though the store is registered in <strong>Argentina (AR)</strong>, dates in the English UI display <code>Aug 20, 2026, 12:30</code> with English month names on a 24-hour clock without Spanish grammar strings (<code>de ago</code>). Meanwhile, the business timestamp strictly evaluates against <strong>America/Argentina/Buenos_Aires (UTC-3)</strong>.
       </div>
     </div>
   </div>

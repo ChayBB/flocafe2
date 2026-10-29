@@ -234,7 +234,7 @@ test('formatDateForTenant: UI locale override decouples display language from te
     'en-US',
   );
   assert.ok(enOut.includes('Aug') || enOut.includes('August'), `expected English month in en-US output, got: ${enOut}`);
-  assert.ok(enOut.includes('PM') || enOut.includes('pm'), `expected English 12-hour period in en-US output, got: ${enOut}`);
+  assert.ok(enOut.includes('12:30') && !/[AP]M/i.test(enOut), `expected a 24-hour clock in en-US output, got: ${enOut}`);
   assert.ok(!enOut.includes('de ago'), `unexpected Spanish preposition in en-US output: ${enOut}`);
 
   // Argentina store with Spanish UI

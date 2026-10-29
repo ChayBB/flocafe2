@@ -193,10 +193,10 @@ function shiftDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-/** Formats a 0-23 local hour index as a locale-appropriate time label (e.g. "2 PM"). */
+/** Formats a 0-23 local hour index as a locale-appropriate time label on a 24-hour clock (e.g. "14"). */
 function formatHourLabel(hour: number, locale: string): string {
   const reference = new Date(Date.UTC(2000, 0, 1, hour));
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone: 'UTC' }).format(reference);
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', hourCycle: 'h23', timeZone: 'UTC' }).format(reference);
 }
 
 /** Formats a 0=Sunday..6=Saturday index as a locale-appropriate weekday name. */

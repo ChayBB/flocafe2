@@ -94,7 +94,7 @@ export function formatClassicReceiptLegacy(order: any, bill: any, biz: any, cols
   const hasTax = Number(bill.tax_amount) !== 0
     || taxComponents.some((component) => component.amount !== 0);
 
-  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+  const tzOptions = { hourCycle: 'h23' as const, ...(biz.timezone ? { timeZone: biz.timezone } : {}) };
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** ' + printLabel(lang, 'receipt.reprint') + ' **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
@@ -235,7 +235,7 @@ export function formatCompactReceiptLegacy(order: any, bill: any, biz: any, cols
   const hasTax = Number(bill.tax_amount) !== 0
     || taxComponents.some((component) => component.amount !== 0);
 
-  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+  const tzOptions = { hourCycle: 'h23' as const, ...(biz.timezone ? { timeZone: biz.timezone } : {}) };
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** ' + printLabel(lang, 'receipt.reprint') + ' **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');

@@ -321,6 +321,7 @@ function formatReportDateTime(value: string, locale: string, timeZone: string): 
     return new Intl.DateTimeFormat(locale, {
       dateStyle: 'short',
       timeStyle: 'short',
+      hourCycle: 'h23',
       timeZone,
     }).format(date);
   } catch {

@@ -1801,7 +1801,7 @@ async function main() {
         );
         assert(longPreview.includes('Period start:'), 'print (32-col): period start label renders');
         assert(
-          longPreview.includes('9:15:30 AM'),
+          longPreview.includes('09:15:30'),
           'print (32-col): period start timestamp renders intact',
         );
         assert(

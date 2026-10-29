@@ -1110,7 +1110,7 @@ export async function printKOT(
       currency: getSettingValue('currency') ?? undefined,
       timezone: getSettingValue('timezone') ?? undefined,
     }).timezone;
-    const tzOptions = { timeZone: timezone };
+    const tzOptions = { hourCycle: 'h23' as const, timeZone: timezone };
 
     const warnings: PrintWarning[] = [];
     const nativeCapabilities = nativeFallbackCapabilities(capabilities);
@@ -2377,7 +2377,7 @@ function renderEscposLineTemplateV1(
       fitTemplateLabel(normalize(resolveTemplateLabel(payload?.labels, 'taxInvoice', lang)), cols)
     : fitTemplateLabel(normalize(String(payload?.header?.titleWhenTaxAbsent || '')), cols) ||
       fitTemplateLabel(normalize(resolveTemplateLabel(payload?.labels, 'invoice', lang)), cols);
-  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+  const tzOptions = { hourCycle: 'h23' as const, ...(biz.timezone ? { timeZone: biz.timezone } : {}) };
 
   lines.push('{INIT}');
   if (isReprint)
@@ -3129,7 +3129,7 @@ export function buildTestPage(
     ruler,
     edgeProbe,
     bar,
-    `${label('print.time')}: ${new Date().toLocaleString('en-US-u-nu-latn', timezone ? { timeZone: timezone } : undefined)}`,
+    `${label('print.time')}: ${new Date().toLocaleString('en-US-u-nu-latn', { hourCycle: 'h23', ...(timezone ? { timeZone: timezone } : {}) })}`,
     '',
     bar,
     '{CENTER}' + label('print.test.success') + '{/CENTER}',
@@ -3215,7 +3215,7 @@ export function buildZReportBody(
     try {
       const d = parseDbTimestamp(iso);
       if (isNaN(d.getTime())) return iso;
-      return d.toLocaleString('en-US-u-nu-latn', { timeZone: tz });
+      return d.toLocaleString('en-US-u-nu-latn', { hourCycle: 'h23', timeZone: tz });
     } catch {
       return iso;
     }

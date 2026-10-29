@@ -131,6 +131,10 @@ document's timestamp with `parseDbTimestamp` and format it for the requested loc
 The print timezone comes from the print language policy, not from the host machine, so a receipt
 prints the store's local time regardless of which machine renders it.
 
+Times use a 24-hour clock (`hourCycle: 'h23'`, e.g. `19:26:22`) on every receipt, kitchen ticket,
+and delivery slip, and in `formatDateForTenant`, so screens, web prints, and shares never show
+AM/PM regardless of locale.
+
 ## Frontend boundaries
 
 The renderer does not compute business days. It receives `businessDate` and the report rows from the

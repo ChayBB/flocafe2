@@ -323,7 +323,7 @@ function formatThermalTimestamp(iso: string, locale: string, timezone?: string |
   const parsed = parseDbTimestamp(iso);
   if (Number.isNaN(parsed.getTime())) return iso;
   const safeLocale = getSafeLatnLocale(locale);
-  const options = timezone ? { timeZone: timezone } : undefined;
+  const options = { hourCycle: 'h23' as const, ...(timezone ? { timeZone: timezone } : {}) };
   return `${parsed.toLocaleDateString(safeLocale, options)} ${parsed.toLocaleTimeString(safeLocale, options)}`;
 }
 

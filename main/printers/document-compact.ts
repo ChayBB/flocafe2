@@ -128,7 +128,7 @@ export function renderBillDocumentToCompactLines(
   const prefix = resolveCurrencyPrefix(options.currencySymbol, options.useUnicode, options.capabilities, options.preserveCurrencySymbol === true, options.currency);
   const fractionDigits = getCurrencyFractionDigits(options.currency);
   const trimDecimals = options.trimDecimals === true;
-  const tzOptions = options.timezone ? { timeZone: options.timezone } : undefined;
+  const tzOptions = { hourCycle: 'h23' as const, ...(options.timezone ? { timeZone: options.timezone } : {}) };
   const bar = '='.repeat(cols);
   const dash = '-'.repeat(cols);
   const normalize = (text: string): string => normalizeThermalText(text, options.capabilities);

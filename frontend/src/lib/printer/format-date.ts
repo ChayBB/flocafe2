@@ -11,6 +11,7 @@ export function formatDate(iso?: string, locale: string = 'en-US', options?: Int
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      hourCycle: 'h23',
       ...options
     }).format(d);
   } catch {
@@ -26,6 +27,7 @@ export function formatTime(iso?: string, locale: string = 'en-US', options?: Int
     return new Intl.DateTimeFormat(locale, {
       hour: '2-digit',
       minute: '2-digit',
+      hourCycle: 'h23',
       ...options
     }).format(d);
   } catch {

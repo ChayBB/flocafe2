@@ -499,6 +499,7 @@ export const formatDateForTenant = (
       timeZone: timezone,
       ...(numberingSystem ? { numberingSystem } : {}),
       ...(calendarValue ? { calendar: calendarValue } : {}),
+      hourCycle: 'h23',
       ...options,
     }).format(date);
   } catch {
