@@ -702,7 +702,7 @@
     "overridePinLabel": "PIN สำหรับดำเนินการแทน",
     "paid": "ชำระแล้ว",
     "partiallyPaid": "ชำระบางส่วน",
-    "pending": "รอดำเนินการ",
+    "pending": "กำลังให้บริการ",
     "percentOnSubtotal": "({value}% ของยอดรวมย่อย)",
     "preparing": "กำลังเตรียม",
     "printHistory": "ประวัติการพิมพ์",

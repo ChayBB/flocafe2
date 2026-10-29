@@ -690,7 +690,7 @@ const PRINT_LABELS: Record<PrintLabelLanguage, PrintLabelTable> = {
     'dashboard.variance': "ผลต่าง",
     'dashboard.ticketFooter': "สร้างโดย FloCafe",
     'common.unknown': "ไม่ทราบ",
-    'orders.pending': "รอดำเนินการ",
+    'orders.pending': "กำลังให้บริการ",
   },
   "fil": {
     'print.menu.title': "Listahan ng pagkain",
