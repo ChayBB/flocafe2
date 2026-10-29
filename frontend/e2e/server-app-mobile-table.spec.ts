@@ -129,5 +129,13 @@ test('on a phone, tapping a table keeps the picker and offers add items, kitchen
       return body.order.items.length;
     })
     .toBe(5);
+
+  // Sending clears the table; choosing it again shows all five items.
+  await expect(page.getByTestId('server-app-ordered-items')).toHaveCount(0);
+  await expect(page.locator('header')).toContainText('Select a table');
+  const picker = page.getByTestId('server-app-table-button');
+  if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
+  await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
+  await page.getByTestId('server-app-ordered-items-button').click();
   await expect(page.getByTestId('server-app-ordered-item')).toHaveCount(5);
 });

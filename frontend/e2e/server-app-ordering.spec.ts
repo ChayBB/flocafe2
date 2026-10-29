@@ -283,6 +283,9 @@ test.describe('Server App tableside ordering', () => {
     releaseOrderPost();
     await expect(page.getByText('Order sent').first()).toBeVisible();
     await expect(page.getByText('Tap menu items to add them here.').first()).toBeVisible();
+    // Sending clears the table; picking it again shows what was sent.
+    await expect(page.locator('header')).toContainText('Select a table');
+    await pickTable(page, tableAName);
     await expect(page.getByText('1 x E2E Coffee').first()).toBeVisible();
     releaseKotPrint();
 
@@ -290,6 +293,8 @@ test.describe('Server App tableside ordering', () => {
     await search.fill('E2E Coffee');
     await search.press('Enter');
     await page.getByRole('button', { name: 'Add to order' }).first().click();
+    await expect(page.locator('header')).toContainText('Select a table');
+    await pickTable(page, tableAName);
     await expect(page.locator('main').getByText('1 x E2E Coffee')).toHaveCount(2);
     await expect.poll(() => kotPrintPayloads.length).toBe(2);
     expect(kotPrintPayloads[0]?.items).toHaveLength(1);

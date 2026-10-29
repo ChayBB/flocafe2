@@ -54,7 +54,8 @@ test('Server App lists only the tables a staff member owns, but a table QR still
   await page.getByTestId('server-app-table-button').click();
   await expect(page.getByRole('button', { name: new RegExp(mine) })).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(theirs) })).toHaveCount(0);
-  await expect(page.locator('header')).toContainText(mine);
+  // No table is chosen until the staff member picks one.
+  await expect(page.locator('header')).toContainText('Select a table');
 
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${ids[theirs]}`);
   await expect(page.locator('header')).toContainText(theirs);

@@ -1621,6 +1621,7 @@
     "guestLabel": "Guest",
     "itemNotePlaceholder": "Item note",
     "kitchen": "Kitchen",
+    "chooseTableFirst": "Choose a table to send",
     "addFoodItems": "Add food items",
     "orderedItemsTitle": "Ordered items",
     "filterAll": "All",

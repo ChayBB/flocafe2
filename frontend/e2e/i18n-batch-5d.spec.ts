@@ -100,19 +100,15 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.getByText('Dine In').first()).toBeVisible();
     await captureScreenshot(page, 'kds-tabs-en.png');
 
-    // 1c. KDS Item Modal (EN)
+    // 1c. KDS item status toggle (EN): the toggle is the only control; tapping the item opens nothing.
     const ticketEn = page
       .locator('div.bg-card')
       .filter({ hasText: `#${order.order_number}` })
       .first();
     await ticketEn.getByText('E2E Coffee').click();
-    const modalHeader = page.locator('#kds-item-modal-title');
-    await expect(modalHeader).toBeVisible();
-    await expect(page.getByText(`Order #${order.order_number}`)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Mark as Preparing' })).toBeVisible();
-    await captureScreenshot(page, 'kds-item-modal-en.png');
-    await page.getByLabel('Close').click();
-    await expect(modalHeader).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(ticketEn.getByRole('button', { name: 'Move to Preparing' }).first()).toBeVisible();
+    await captureScreenshot(page, 'kds-item-toggle-en.png');
 
     // 1d. Standalone KDS Kanban View (EN)
     await page.getByRole('button', { name: 'Kanban' }).click();
@@ -131,9 +127,8 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Server App');
     await expect(page.getByText('Tableside ordering for service staff')).toBeVisible();
-    await expect(page.getByPlaceholder('server@flo.local')).toBeVisible();
-    await expect(page.getByPlaceholder('Password')).toBeVisible();
-    await expect(page.getByText('Keep me logged in')).toBeVisible();
+    await expect(page.getByPlaceholder('Staff name')).toBeVisible();
+    await expect(page.getByPlaceholder('Staff code')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
     await captureScreenshot(page, 'server-login-en.png');
 
@@ -145,6 +140,7 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
 
     // 1f. Server App Main UI (EN)
     await expect(page.getByRole('heading', { name: 'Server App' })).toBeVisible();
+    await page.getByTestId('server-app-table-button').click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Current ticket' })).toBeVisible();
     await expect(page.getByText('New items', { exact: true })).toBeVisible();
@@ -208,21 +204,15 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.getByText('خوردن در محل').first()).toBeVisible();
     await captureScreenshot(page, 'kds-tabs-fa.png');
 
-    // 2c. KDS Item Modal (FA)
+    // 2c. KDS item status toggle (FA)
     const ticketFa = page
       .locator('div.bg-card')
       .filter({ hasText: `#${order.order_number}` })
       .first();
     await ticketFa.getByText('E2E Coffee').click();
-    const modalHeaderFa = page.locator('#kds-item-modal-title');
-    await expect(modalHeaderFa).toBeVisible();
-    await expect(page.getByText(`سفارش شماره ${order.order_number}`)).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'تغییر وضعیت به در حال آماده‌سازی' }),
-    ).toBeVisible();
-    await captureScreenshot(page, 'kds-item-modal-fa.png');
-    await page.getByLabel('بستن').click();
-    await expect(modalHeaderFa).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(ticketFa.getByRole('button', { name: 'انتقال به در حال آماده‌سازی' }).first()).toBeVisible();
+    await captureScreenshot(page, 'kds-item-toggle-fa.png');
 
     // 2d. Standalone KDS Kanban View (FA)
     await page.getByRole('button', { name: 'کانبان' }).click();
@@ -241,9 +231,8 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('برنامه سرور');
     await expect(page.getByText('ثبت سفارش کنار میز برای کارکنان خدمات')).toBeVisible();
-    await expect(page.getByPlaceholder('server@flo.local')).toBeVisible();
-    await expect(page.getByPlaceholder('گذرواژه')).toBeVisible();
-    await expect(page.getByText('ورود من را به یاد بسپار')).toBeVisible();
+    await expect(page.getByPlaceholder('نام کارمند')).toBeVisible();
+    await expect(page.getByPlaceholder('کد کارمند')).toBeVisible();
     await expect(page.getByRole('button', { name: 'ورود' })).toBeVisible();
     await captureScreenshot(page, 'server-login-fa.png');
 
@@ -256,6 +245,7 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     // 2f. Server App Main UI (FA)
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { name: 'برنامه سرور' })).toBeVisible();
+    await page.getByTestId('server-app-table-button').click();
     await expect(page.getByRole('heading', { name: 'میزها' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'صورتحساب جاری' })).toBeVisible();
     await expect(page.getByText('کالاهای تازه', { exact: true })).toBeVisible();

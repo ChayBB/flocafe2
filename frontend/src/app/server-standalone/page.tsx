@@ -163,16 +163,11 @@ function ownedOrAllTables<T extends { owner_user_id?: string | null }>(
 }
 
 /** A table QR opens this app with `?table=<id>`; otherwise the first table the staff member sees is selected. */
-function pickInitialTable<T extends { id: string; owner_user_id?: string | null }>(
-  tables: T[],
-  userId: string | undefined,
-): T | undefined {
-  if (typeof window !== 'undefined') {
-    const wanted = new URLSearchParams(window.location.search).get('table');
-    const match = wanted ? tables.find((table) => table.id === wanted) : undefined;
-    if (match) return match;
-  }
-  return ownedOrAllTables(tables, userId)[0];
+/** A table named in the link (`?table=`); staff otherwise pick the table for every order. */
+function pickLinkedTable<T extends { id: string }>(tables: T[]): T | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const wanted = new URLSearchParams(window.location.search).get('table');
+  return wanted ? tables.find((table) => table.id === wanted) : undefined;
 }
 
 export default function ServerStandalonePage() {
@@ -257,6 +252,8 @@ export default function ServerStandalonePage() {
   const addonModalSendSeqRef = useRef(0);
   const editingDraftSendSeqRef = useRef(0);
   const selectedTableIdRef = useRef('');
+  // The linked table is applied once; after an order is sent the table is cleared for the next one.
+  const linkedTableAppliedRef = useRef(false);
   const orderLoadedTableIdRef = useRef('');
   const orderLookupFailedRef = useRef(false);
   const orderLoadSeqRef = useRef(0);
@@ -275,10 +272,11 @@ export default function ServerStandalonePage() {
     const loadedTables = tablesRes.data.tables || [];
     setTables(loadedTables);
     setTablesLoaded(true);
-    const initialTable = pickInitialTable(loadedTables, user?.id);
-    if (!selectedTableIdRef.current && initialTable) {
-      selectedTableIdRef.current = initialTable.id;
-      setSelectedTableId(initialTable.id);
+    const linkedTable = linkedTableAppliedRef.current ? undefined : pickLinkedTable(loadedTables);
+    linkedTableAppliedRef.current = true;
+    if (!selectedTableIdRef.current && linkedTable) {
+      selectedTableIdRef.current = linkedTable.id;
+      setSelectedTableId(linkedTable.id);
     }
   }
 
@@ -387,10 +385,11 @@ export default function ServerStandalonePage() {
         const loadedTables = tablesRes.data.tables || [];
         setTables(loadedTables);
         setTablesLoaded(true);
-        const initialTable = pickInitialTable(loadedTables, user?.id);
-        if (!selectedTableIdRef.current && initialTable) {
-          selectedTableIdRef.current = initialTable.id;
-          setSelectedTableId(initialTable.id);
+        const linkedTable = linkedTableAppliedRef.current ? undefined : pickLinkedTable(loadedTables);
+        linkedTableAppliedRef.current = true;
+        if (!selectedTableIdRef.current && linkedTable) {
+          selectedTableIdRef.current = linkedTable.id;
+          setSelectedTableId(linkedTable.id);
         }
       })
       .catch((error) => {
@@ -560,6 +559,22 @@ export default function ServerStandalonePage() {
   function handleOrderNotesChange(value: string) {
     if (sendInFlightRef.current) return;
     setOrderNotes(value.slice(0, 200));
+  }
+
+  function clearSelectedTable() {
+    selectedTableIdRef.current = '';
+    orderLookupFailedRef.current = false;
+    orderLoadedTableIdRef.current = '';
+    orderLoadSeqRef.current += 1;
+    cancelPendingCustomerLookup();
+    setOrderLoadedTableId('');
+    setCurrentOrder(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerMatch(null);
+    setCustomerSearched(false);
+    setOrderedItemsOpen(false);
+    setSelectedTableId('');
   }
 
   function selectTable(tableId: string) {
@@ -1026,6 +1041,7 @@ export default function ServerStandalonePage() {
         loadOrder(snapshot.tableId, { allowWhileSending: true }),
       ]).catch(() => {});
       toast.success(t('orderSent'));
+      if (user && !guestTable) clearSelectedTable();
       // rawOrder only has table_id/customer_id; the KOT/slip renderers need the nested table/customer for display.
       const enrichedOrder = {
         ...rawOrder,
@@ -1318,19 +1334,34 @@ export default function ServerStandalonePage() {
           <Ltr>{money(draftTotal, regional)}</Ltr>
         </span>
       </div>
-      <button
-        onClick={sendDraft}
-        disabled={
-          !selectedTableId ||
-          orderLoadedTableId !== selectedTableId ||
-          draft.length === 0 ||
-          sending
-        }
-        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white disabled:opacity-50"
-      >
-        <Send size={17} />
-        {sending ? t('sending') : currentOrder ? t('addToOrder') : t('sendToKitchen')}
-      </button>
+      {!selectedTableId && user ? (
+        <button
+          type="button"
+          data-testid="server-app-choose-table"
+          onClick={() => {
+            setMobileCartOpen(false);
+            setTablePickerOpen(true);
+          }}
+          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-amber-400 bg-amber-50 font-semibold text-amber-700"
+        >
+          <UtensilsCrossed size={17} />
+          {t('chooseTableFirst')}
+        </button>
+      ) : (
+        <button
+          onClick={sendDraft}
+          disabled={
+            !selectedTableId ||
+            orderLoadedTableId !== selectedTableId ||
+            draft.length === 0 ||
+            sending
+          }
+          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white disabled:opacity-50"
+        >
+          <Send size={17} />
+          {sending ? t('sending') : currentOrder ? t('addToOrder') : t('sendToKitchen')}
+        </button>
+      )}
     </>
   );
 
