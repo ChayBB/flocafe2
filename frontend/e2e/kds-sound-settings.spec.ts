@@ -33,16 +33,23 @@ async function recordSounds(page: Page) {
     }
     w.AudioContext = FakeAudioContext;
     w.SpeechSynthesisUtterance = FakeUtterance;
+    const voices = [{ name: 'Fake English', lang: 'en-US' }];
     Object.defineProperty(window, 'speechSynthesis', {
       configurable: true,
-      value: { getVoices: () => [], speak: (utterance: FakeUtterance) => w.__spoken.push(utterance.text) },
+      value: {
+        getVoices: () => voices,
+        speak: (utterance: FakeUtterance & { onend?: () => void }) => {
+          w.__spoken.push(utterance.text);
+          setTimeout(() => utterance.onend?.(), 0);
+        },
+      },
     });
   });
 }
 
 const sounds = (page: Page) => page.evaluate(() => ({ ...(window as unknown as SoundLog) }));
 
-test('KDS sound switches turn reading new items aloud and the ready-to-serve chime on and off', async ({ page }) => {
+test('KDS sound switches turn reading new items aloud and the ready-to-serve announcement on and off', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
   const run = Math.random().toString(36).slice(2, 7);
@@ -103,6 +110,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve chi
   const beepsBefore = (await sounds(page)).__beeps;
   await markReady(first.items[0].id);
   await expect.poll(async () => (await sounds(page)).__beeps, { timeout: 15000 }).toBe(beepsBefore + 2);
+  await expect
+    .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
+    .toContain(`Order ${first.order_number} is ready to serve`);
 
   // Switched off, and still off after a reload: new orders and ready orders stay silent.
   await page.getByTestId('kds-settings-button').click();

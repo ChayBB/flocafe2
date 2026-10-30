@@ -64,3 +64,22 @@ export function playKdsAlert(beeps = 3): boolean {
   }
   return true;
 }
+
+/** Plays encoded audio (such as a spoken announcement) and resolves when it ends. False when sound is blocked. */
+export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
+  const audio = getContext();
+  if (!audio || audio.state !== 'running') return false;
+  try {
+    const buffer = await audio.decodeAudioData(data);
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audio.destination);
+    await new Promise<void>((resolve) => {
+      source.onended = () => resolve();
+      source.start();
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -59,6 +59,7 @@ import {
   resolveEffectivePermissions,
 } from './services/authorization';
 import { recordClockIn, recordClockOut } from './services/attendance';
+import { handleKdsSpeech } from './services/kds-speech';
 
 let kdsServer: http.Server | null = null;
 let kdsWss: WebSocketServer | null = null;
@@ -704,6 +705,8 @@ export function startKdsServer(): Promise<void> {
     });
 
     // Get categories for filtering
+    app.post('/api/kds/speech', requireAuth, handleKdsSpeech);
+
     app.get('/api/categories', requireAuth, (req: Request, res: Response) => {
       if (!isKdsEnabled()) {
         return res.status(403).json({ error: 'KDS is disabled for this business' });

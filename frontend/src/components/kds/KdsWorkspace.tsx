@@ -169,8 +169,19 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         .filter(Boolean);
       if (phrases.length > 0) speakKds(phrases.join('. '), speechLang());
     }
-    if (knownReady && soundSettingsRef.current.orderReady && [...readyIds].some((id) => !knownReady.has(id))) {
+    const newlyReady = knownReady ? orders.filter((order) => readyIds.has(order.id) && !knownReady.has(order.id)) : [];
+    if (newlyReady.length > 0 && soundSettingsRef.current.orderReady) {
       playKdsAlert(2);
+      speakKds(
+        newlyReady
+          .map((order) =>
+            order.table?.name
+              ? t('readyToServeTable', { table: order.table.name })
+              : t('readyToServeOrder', { number: order.order_number }),
+          )
+          .join('. '),
+        speechLang(),
+      );
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
     readyOrderIdsRef.current = readyIds;

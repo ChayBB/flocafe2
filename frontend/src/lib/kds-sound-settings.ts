@@ -1,10 +1,13 @@
+import api from '@/lib/api';
+import { playKdsAudio } from '@/lib/kds-alert-sound';
+
 /** Which sounds this KDS display plays; kept per display like its stage switches. */
 export interface KdsSoundSettings {
   /** Speak newly arrived menu items aloud. */
   readAloud: boolean;
   /** Beep when service staff change an item (take-away, cancel, confirmed served). */
   statusChange: boolean;
-  /** Chime when every item of an order is ready to serve. */
+  /** Chime and announce when every item of an order is ready to serve. */
   orderReady: boolean;
 }
 
@@ -33,15 +36,75 @@ export function writeKdsSoundSettings(settings: KdsSoundSettings): void {
   } catch {}
 }
 
-/** Reads text aloud in the display's language. Returns false where the browser cannot speak. */
-export function speakKds(text: string, lang: string): boolean {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  const base = lang.slice(0, 2).toLowerCase();
-  const voice = window.speechSynthesis.getVoices().find((candidate) => candidate.lang.toLowerCase().startsWith(base));
-  if (voice) utterance.voice = voice;
-  utterance.rate = 0.95;
-  window.speechSynthesis.speak(utterance);
-  return true;
+const VOICE_WAIT_MS = 1000;
+const SPEECH_TIMEOUT_MS = 20000;
+let speechQueue: Promise<void> = Promise.resolve();
+const serverVoiceMissing = new Set<string>();
+
+/** Browsers list voices late, so wait briefly for them before deciding there is none. */
+async function deviceVoice(lang: string): Promise<SpeechSynthesisVoice | null> {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const synth = window.speechSynthesis;
+  if (synth.getVoices().length === 0) {
+    await new Promise<void>((resolve) => {
+      const timer = window.setTimeout(resolve, VOICE_WAIT_MS);
+      synth.addEventListener?.(
+        'voiceschanged',
+        () => {
+          window.clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+    });
+  }
+  const voices = synth.getVoices();
+  const exact = lang.toLowerCase();
+  const base = exact.slice(0, 2);
+  return (
+    voices.find((voice) => voice.lang.toLowerCase().replace('_', '-') === exact) ??
+    voices.find((voice) => voice.lang.toLowerCase().startsWith(base)) ??
+    null
+  );
+}
+
+function speakOnDevice(text: string, lang: string, voice: SpeechSynthesisVoice): Promise<void> {
+  return new Promise((resolve) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.voice = voice;
+    utterance.rate = 0.95;
+    const timer = window.setTimeout(resolve, SPEECH_TIMEOUT_MS);
+    const done = () => {
+      window.clearTimeout(timer);
+      resolve();
+    };
+    utterance.onend = done;
+    utterance.onerror = done;
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+/** The POS computer's own voice for the language (offline Windows voices), played on this display. */
+async function speakFromServer(text: string, lang: string): Promise<void> {
+  if (serverVoiceMissing.has(lang)) return;
+  try {
+    const response = await api.post('/kds/speech', { text, lang }, { responseType: 'arraybuffer' });
+    if (response.status === 204) {
+      serverVoiceMissing.add(lang);
+      return;
+    }
+    await playKdsAudio(response.data as ArrayBuffer);
+  } catch {}
+}
+
+async function speakNow(text: string, lang: string): Promise<void> {
+  const voice = await deviceVoice(lang);
+  if (voice) await speakOnDevice(text, lang, voice);
+  else await speakFromServer(text, lang);
+}
+
+/** Reads text aloud in the given language, one announcement after another. */
+export function speakKds(text: string, lang: string): void {
+  speechQueue = speechQueue.then(() => speakNow(text, lang)).catch(() => {});
 }
