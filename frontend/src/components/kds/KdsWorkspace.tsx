@@ -41,20 +41,9 @@ function readInactiveStages(): InactiveStages {
 }
 
 const NONE_INACTIVE: KitchenStatus[] = [];
-const READY_STATUSES = ['ready', 'served', 'completed'];
 
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
-}
-
-/** Every live item is ready or already served, and at least one is waiting to go out. */
-function isOrderReady(order: UseKdsConnectionResult['orders'][number]): boolean {
-  const items = liveItems(order);
-  return (
-    items.length > 0 &&
-    items.every((item) => READY_STATUSES.includes(item.status || '')) &&
-    items.some((item) => item.status === 'ready')
-  );
 }
 
 
@@ -144,14 +133,13 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       .filter((order) => order.items.length > 0);
   }, [conn.orders, stationId]);
 
-  // Items and ready orders already on this display when it opens are not announced again.
+  // Items already on this display when it opens are not announced again, nor are items already ready.
   const knownItemIdsRef = useRef<Set<number> | null>(null);
-  const readyOrderIdsRef = useRef<Set<number> | null>(null);
+  const knownStatusesRef = useRef<Map<number, string>>(new Map());
   useEffect(() => {
     const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
-    const readyIds = new Set(orders.filter(isOrderReady).map((order) => order.id));
     const knownItems = knownItemIdsRef.current;
-    const knownReady = readyOrderIdsRef.current;
+    const knownStatuses = knownStatusesRef.current;
     if (knownItems && soundSettingsRef.current.readAloud) {
       const phrases = orders
         .map((order) => {
@@ -167,22 +155,29 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         .filter(Boolean);
       if (phrases.length > 0) speakKds(phrases.join('. '), kdsSpeechLang());
     }
-    const newlyReady = knownReady ? orders.filter((order) => readyIds.has(order.id) && !knownReady.has(order.id)) : [];
-    if (newlyReady.length > 0 && soundSettingsRef.current.orderReady) {
+    // Each menu item that turns ready rings the bell, even while the rest of its order is still cooking.
+    const readyPhrases = orders
+      .map((order) => {
+        const ready = liveItems(order).filter(
+          (item) => item.status === 'ready' && knownStatuses.has(item.id) && knownStatuses.get(item.id) !== 'ready',
+        );
+        if (ready.length === 0) return null;
+        const items = ready
+          .map((item) => t('readAloudItem', { name: item.product_name, quantity: item.quantity }))
+          .join(', ');
+        return order.table?.name
+          ? t('readyToServeTable', { table: order.table.name, items })
+          : t('readyToServeOrder', { number: order.order_number, items });
+      })
+      .filter(Boolean);
+    if (readyPhrases.length > 0 && soundSettingsRef.current.orderReady) {
       playKdsAlert(2);
-      speakKds(
-        newlyReady
-          .map((order) =>
-            order.table?.name
-              ? t('readyToServeTable', { table: order.table.name })
-              : t('readyToServeOrder', { number: order.order_number }),
-          )
-          .join('. '),
-        kdsSpeechLang(),
-      );
+      speakKds(readyPhrases.join('. '), kdsSpeechLang());
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
-    readyOrderIdsRef.current = readyIds;
+    knownStatusesRef.current = new Map(
+      orders.flatMap((order) => liveItems(order).map((item) => [item.id, item.status || ''] as const)),
+    );
   }, [orders, t]);
 
   return (

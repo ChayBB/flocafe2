@@ -7,7 +7,7 @@ export interface KdsSoundSettings {
   readAloud: boolean;
   /** Beep when service staff change an item (take-away, cancel, confirmed served). */
   statusChange: boolean;
-  /** Chime and announce when every item of an order is ready to serve. */
+  /** Ring and announce each menu item as it turns ready to serve. */
   orderReady: boolean;
 }
 

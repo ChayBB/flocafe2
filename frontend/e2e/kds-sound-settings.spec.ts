@@ -77,7 +77,13 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const placeOrder = async () => {
     const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
       headers,
-      data: { type: 'takeaway', items: [{ product_id: productId, quantity: 2 }] },
+      data: {
+        type: 'takeaway',
+        items: [
+          { product_id: productId, quantity: 2 },
+          { product_id: productId, quantity: 1, special_instructions: 'later' },
+        ],
+      },
     });
     expect(order.status()).toBe(201);
     return (await order.json()).order as { order_number: string; items: { id: number }[] };
@@ -108,7 +114,8 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   }
   await page.keyboard.press('Escape');
 
-  // On by default: a new order is read out, and its chime sounds once it is ready to serve.
+  // On by default: a new order is read out, and the bell rings for each menu item that turns
+  // ready to serve, even while the rest of the order is still cooking.
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
@@ -118,7 +125,13 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect.poll(async () => (await sounds(page)).__beeps, { timeout: 15000 }).toBe(beepsBefore + 2);
   await expect
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
-    .toContain(`Order ${first.order_number} is ready to serve`);
+    .toContain(`Order ${first.order_number}: 2 ${productName} ready to serve`);
+  const beepsAfterFirst = (await sounds(page)).__beeps;
+  await markReady(first.items[1].id);
+  await expect.poll(async () => (await sounds(page)).__beeps, { timeout: 15000 }).toBe(beepsAfterFirst + 2);
+  await expect
+    .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
+    .toContain(`Order ${first.order_number}: 1 ${productName} ready to serve`);
 
   // The display can pick another voice; the choice is read out as a sample.
   await page.getByTestId('kds-settings-button').click();
