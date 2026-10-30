@@ -1,10 +1,20 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'use-intl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
-import type { KdsSoundSetting, KdsSoundSettings } from '@/lib/kds-sound-settings';
+import {
+  isNaturalVoice,
+  kdsSpeechLang,
+  kdsVoicesFor,
+  readKdsVoiceName,
+  speakKds,
+  writeKdsVoiceName,
+  type KdsSoundSetting,
+  type KdsSoundSettings,
+} from '@/lib/kds-sound-settings';
 
 const SOUND_ROWS = [
   { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
@@ -71,6 +81,25 @@ export function KdsSettingsDialog({
 }) {
   const t = useTranslations('kds');
   const active = activeStages(inactiveStatuses);
+  const [voices, setVoices] = useState<{ name: string; natural: boolean }[]>([]);
+  const [voiceName, setVoiceName] = useState(readKdsVoiceName);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void kdsVoicesFor(kdsSpeechLang()).then((list) => {
+      if (!cancelled) setVoices(list.map((voice) => ({ name: voice.name, natural: isNaturalVoice(voice) })));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const chooseVoice = (name: string) => {
+    setVoiceName(name);
+    writeKdsVoiceName(name);
+    speakKds(t('voiceSample'), kdsSpeechLang());
+  };
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -126,6 +155,28 @@ export function KdsSettingsDialog({
               </div>
             );
           })}
+        </div>
+        <div className="space-y-1.5 pt-1">
+          <label htmlFor="kds-voice-select" className="block text-sm font-medium text-foreground">
+            {t('voiceLabel')}
+          </label>
+          <select
+            id="kds-voice-select"
+            data-testid="kds-voice-select"
+            value={voices.some((voice) => voice.name === voiceName) ? voiceName : ''}
+            onChange={(event) => chooseVoice(event.target.value)}
+            className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            <option value="">{t('voiceAuto')}</option>
+            {voices.map((voice) => (
+              <option key={voice.name} value={voice.name}>
+                {voice.natural ? t('voiceNatural', { name: voice.name }) : voice.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {voices.some((voice) => voice.natural) ? t('voiceHintNatural') : t('voiceHintEdge')}
+          </p>
         </div>
       </DialogContent>
     </Dialog>

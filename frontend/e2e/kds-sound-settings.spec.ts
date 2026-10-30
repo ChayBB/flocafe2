@@ -2,13 +2,14 @@ import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-type SoundLog = { __beeps: number; __spoken: string[] };
+type SoundLog = { __beeps: number; __spoken: string[]; __voices: string[] };
 
 async function recordSounds(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as SoundLog & Record<string, unknown>;
     w.__beeps = 0;
     w.__spoken = [];
+    w.__voices = [];
     class FakeAudioContext {
       currentTime = 0;
       destination = {};
@@ -33,13 +34,17 @@ async function recordSounds(page: Page) {
     }
     w.AudioContext = FakeAudioContext;
     w.SpeechSynthesisUtterance = FakeUtterance;
-    const voices = [{ name: 'Fake English', lang: 'en-US' }];
+    const voices = [
+      { name: 'Fake Local English', lang: 'en-US', localService: true },
+      { name: 'Microsoft Fake Online (Natural) - English', lang: 'en-US', localService: false },
+    ];
     Object.defineProperty(window, 'speechSynthesis', {
       configurable: true,
       value: {
         getVoices: () => voices,
-        speak: (utterance: FakeUtterance & { onend?: () => void }) => {
+        speak: (utterance: FakeUtterance & { onend?: () => void; voice: { name: string } | null }) => {
           w.__spoken.push(utterance.text);
+          w.__voices.push(utterance.voice?.name ?? '');
           setTimeout(() => utterance.onend?.(), 0);
         },
       },
@@ -106,6 +111,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // On by default: a new order is read out, and its chime sounds once it is ready to serve.
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
+  expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
   expect((await sounds(page)).__spoken.join(' | ')).toContain(`Order ${first.order_number}: 2 ${productName}`);
   const beepsBefore = (await sounds(page)).__beeps;
   await markReady(first.items[0].id);
@@ -114,8 +120,19 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
     .toContain(`Order ${first.order_number} is ready to serve`);
 
-  // Switched off, and still off after a reload: new orders and ready orders stay silent.
+  // The display can pick another voice; the choice is read out as a sample.
   await page.getByTestId('kds-settings-button').click();
+  const voiceSelect = dialog.getByTestId('kds-voice-select');
+  await expect(voiceSelect.locator('option')).toHaveText([
+    'Automatic (Edge natural voice when available)',
+    'Microsoft Fake Online (Natural) - English · natural, online',
+    'Fake Local English',
+  ]);
+  await voiceSelect.selectOption('Fake Local English');
+  await expect.poll(async () => (await sounds(page)).__voices.at(-1)).toBe('Fake Local English');
+  expect((await sounds(page)).__spoken.at(-1)).toBe('Table 5, fried rice, 2');
+
+  // Switched off, and still off after a reload: new orders and ready orders stay silent.
   await dialog.getByTestId('kds-sound-switch-readAloud').click();
   await dialog.getByTestId('kds-sound-switch-orderReady').click();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');

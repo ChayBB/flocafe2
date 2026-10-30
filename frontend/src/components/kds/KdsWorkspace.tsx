@@ -16,6 +16,7 @@ import {
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
 import {
+  kdsSpeechLang,
   readKdsSoundSettings,
   speakKds,
   writeKdsSoundSettings,
@@ -55,11 +56,6 @@ function isOrderReady(order: UseKdsConnectionResult['orders'][number]): boolean 
   );
 }
 
-/** The browser speech language for the display's UI language. */
-function speechLang(): string {
-  const lang = document.documentElement.lang || 'en';
-  return lang === 'th' ? 'th-TH' : lang;
-}
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
   return new Map(
@@ -167,7 +163,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
             : t('readAloudOrder', { number: order.order_number, items });
         })
         .filter(Boolean);
-      if (phrases.length > 0) speakKds(phrases.join('. '), speechLang());
+      if (phrases.length > 0) speakKds(phrases.join('. '), kdsSpeechLang());
     }
     const newlyReady = knownReady ? orders.filter((order) => readyIds.has(order.id) && !knownReady.has(order.id)) : [];
     if (newlyReady.length > 0 && soundSettingsRef.current.orderReady) {
@@ -180,7 +176,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
               : t('readyToServeOrder', { number: order.order_number }),
           )
           .join('. '),
-        speechLang(),
+        kdsSpeechLang(),
       );
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
