@@ -251,6 +251,7 @@ export default function ServerStandalonePage() {
   } | null>(null);
   const [, setCustomerSearched] = useState(false);
   const phoneDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tablePickerRef = useRef<HTMLElement>(null);
   const phoneAbortRef = useRef<AbortController | null>(null);
   const [sending, setSending] = useState(false);
   // Synchronous re-entry guard: `sending` state updates too late to stop a second click fired before the first render.
@@ -1424,6 +1425,8 @@ export default function ServerStandalonePage() {
           onClick={() => {
             setMobileCartOpen(false);
             setTablePickerOpen(true);
+            // Below the three-column layout the table list sits above the menu, out of view from here.
+            window.setTimeout(() => tablePickerRef.current?.scrollIntoView({ block: 'start' }), 350);
           }}
           className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-amber-400 bg-amber-50 font-semibold text-amber-700"
         >
@@ -1526,7 +1529,7 @@ export default function ServerStandalonePage() {
           className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${user && tablePickerOpen ? 'lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
           {user && tablePickerOpen && (
-          <section className="min-w-0 rounded-lg border border-border bg-card p-3">
+          <section ref={tablePickerRef} data-testid="server-app-table-picker" className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-card p-3">
             <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               {t('tables')}
             </h2>
