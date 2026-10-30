@@ -298,9 +298,10 @@ export function startServerApp(): Promise<void> {
       });
     });
 
+    const configuredApiLimit = Number.parseInt(process.env.FLO_SERVER_APP_API_RATE_LIMIT_MAX || '', 10);
     const serverAppApiRateLimit = expressRateLimit({
       windowMs: 60 * 1000,
-      limit: 600,
+      limit: Number.isFinite(configuredApiLimit) && configuredApiLimit > 0 ? configuredApiLimit : 600,
       standardHeaders: true,
       legacyHeaders: false,
     });
