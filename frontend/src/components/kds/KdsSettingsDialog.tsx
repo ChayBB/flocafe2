@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
-import { KDS_SCREEN_MODES, type KdsScreenMode } from '@/lib/kds-screen-mode';
+import { KDS_BRIGHTNESS_LEVELS, KDS_SCREEN_MODES, type KdsScreenMode } from '@/lib/kds-screen-mode';
 import {
   isNaturalVoice,
   kdsSpeechLang,
@@ -21,17 +22,8 @@ import {
 } from '@/lib/kds-sound-settings';
 
 const SCREEN_MODE_LABELS = {
-  auto: 'screenModeAuto',
   day: 'screenModeDay',
   night: 'screenModeNight',
-  lowlight: 'screenModeLowLight',
-} as const satisfies Record<KdsScreenMode, string>;
-
-const SCREEN_MODE_HINTS = {
-  auto: 'screenModeAutoHint',
-  day: 'screenModeDayHint',
-  night: 'screenModeNightHint',
-  lowlight: 'screenModeLowLightHint',
 } as const satisfies Record<KdsScreenMode, string>;
 
 const SOUND_ROWS = [
@@ -89,6 +81,8 @@ export function KdsSettingsDialog({
   onToggleSound,
   screenMode,
   onScreenMode,
+  brightness,
+  onBrightness,
   onClose,
 }: {
   open: boolean;
@@ -99,6 +93,8 @@ export function KdsSettingsDialog({
   onToggleSound: (setting: KdsSoundSetting) => void;
   screenMode: KdsScreenMode;
   onScreenMode: (mode: KdsScreenMode) => void;
+  brightness: number;
+  onBrightness: (brightness: number) => void;
   onClose: () => void;
 }) {
   const t = useTranslations('kds');
@@ -167,7 +163,7 @@ export function KdsSettingsDialog({
         </div>
         <div className="space-y-1.5 pt-2">
           <h3 className="text-sm font-semibold text-foreground">{t('screenModeTitle')}</h3>
-          <div role="radiogroup" aria-label={t('screenModeTitle')} className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
+          <div role="radiogroup" aria-label={t('screenModeTitle')} className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
             {KDS_SCREEN_MODES.map((mode) => (
               <button
                 key={mode}
@@ -184,7 +180,26 @@ export function KdsSettingsDialog({
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">{t(SCREEN_MODE_HINTS[screenMode])}</p>
+          <div className="flex items-center gap-3 pt-2">
+            <Sun size={18} aria-hidden="true" className="shrink-0 text-muted-foreground" />
+            <label htmlFor="kds-brightness" className="shrink-0 text-sm font-medium text-foreground">
+              {t('brightnessLabel')}
+            </label>
+            <input
+              id="kds-brightness"
+              data-testid="kds-brightness"
+              type="range"
+              min={KDS_BRIGHTNESS_LEVELS[0]}
+              max={KDS_BRIGHTNESS_LEVELS[KDS_BRIGHTNESS_LEVELS.length - 1]}
+              step={KDS_BRIGHTNESS_LEVELS[1] - KDS_BRIGHTNESS_LEVELS[0]}
+              value={brightness}
+              onChange={(event) => onBrightness(Number(event.target.value))}
+              className="h-11 min-w-0 flex-1 accent-brand"
+            />
+            <span data-testid="kds-brightness-value" className="w-12 shrink-0 text-end text-sm tabular-nums text-muted-foreground">
+              {brightness}%
+            </span>
+          </div>
         </div>
         <h3 className="pt-2 text-sm font-semibold text-foreground">{t('soundSettingsTitle')}</h3>
         <div className="divide-y divide-border">

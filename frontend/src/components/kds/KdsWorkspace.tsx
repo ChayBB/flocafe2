@@ -56,7 +56,7 @@ function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<numbe
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
-  const [screenMode, setScreenMode] = useKdsScreenMode();
+  const screen = useKdsScreenMode();
 
   // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
   // so it disappearing on that tap never shifts the board under the finger.
@@ -180,6 +180,15 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
 
   return (
     <div data-testid="kds-workspace" className="relative h-full flex flex-col">
+      {/* Dims the board but not the settings dialog, so brightness can always be turned back up. */}
+      {screen.brightness < 100 && (
+        <div
+          data-testid="kds-dimmer"
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-[45] bg-black"
+          style={{ opacity: (100 - screen.brightness) / 100 }}
+        />
+      )}
       <div
         ref={flashRef}
         data-testid="kds-change-flash"
@@ -234,8 +243,10 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         onToggleStatus={toggleStage}
         soundSettings={soundSettings}
         onToggleSound={toggleSound}
-        screenMode={screenMode}
-        onScreenMode={setScreenMode}
+        screenMode={screen.mode}
+        onScreenMode={screen.setMode}
+        brightness={screen.brightness}
+        onBrightness={screen.setBrightness}
         onClose={() => setSettingsOpen(false)}
       />
       {conn.ConfirmDialog}
