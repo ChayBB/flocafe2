@@ -4,19 +4,69 @@ import { useTranslations } from 'use-intl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
+import type { KdsSoundSetting, KdsSoundSettings } from '@/lib/kds-sound-settings';
 
-/** Display settings: which Kanban columns this station uses. */
+const SOUND_ROWS = [
+  { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
+  { setting: 'statusChange' as KdsSoundSetting, labelKey: 'soundStatusChange' as const },
+  { setting: 'orderReady' as KdsSoundSetting, labelKey: 'soundOrderReady' as const },
+];
+
+function Switch({
+  checked,
+  label,
+  testId,
+  disabled,
+  onToggle,
+}: {
+  checked: boolean;
+  label: string;
+  testId: string;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onToggle}
+      className="min-w-11 min-h-11 flex items-center justify-center disabled:opacity-40"
+    >
+      <span
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+          checked ? 'bg-brand' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
+/** Display settings: which Kanban columns this station uses, and which sounds it plays. */
 export function KdsSettingsDialog({
   open,
   stationName,
   inactiveStatuses,
   onToggleStatus,
+  soundSettings,
+  onToggleSound,
   onClose,
 }: {
   open: boolean;
   stationName: string;
   inactiveStatuses: readonly KitchenStatus[];
   onToggleStatus: (status: KitchenStatus) => void;
+  soundSettings: KdsSoundSettings;
+  onToggleSound: (setting: KdsSoundSetting) => void;
   onClose: () => void;
 }) {
   const t = useTranslations('kds');
@@ -45,28 +95,34 @@ export function KdsSettingsDialog({
                 <span className="text-xs text-muted-foreground">
                   {isActive ? t('stageActive') : t('stageSkipped')}
                 </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isActive}
-                  aria-label={t('stageSwitch', { status: stage })}
-                  data-testid={`kds-stage-switch-${status}`}
+                <Switch
+                  checked={isActive}
+                  label={t('stageSwitch', { status: stage })}
+                  testId={`kds-stage-switch-${status}`}
                   disabled={locked}
-                  onClick={() => onToggleStatus(status)}
-                  className="min-w-11 min-h-11 flex items-center justify-center disabled:opacity-40"
-                >
-                  <span
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      isActive ? 'bg-brand' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                        isActive ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'
-                      }`}
-                    />
-                  </span>
-                </button>
+                  onToggle={() => onToggleStatus(status)}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <h3 className="pt-2 text-sm font-semibold text-foreground">{t('soundSettingsTitle')}</h3>
+        <div className="divide-y divide-border">
+          {SOUND_ROWS.map(({ setting, labelKey }) => {
+            const on = soundSettings[setting];
+            const label = t(labelKey);
+            return (
+              <div key={setting} className="flex items-center gap-3 py-3">
+                <span className={`flex-1 text-sm font-medium ${on ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {label}
+                </span>
+                <span className="text-xs text-muted-foreground">{on ? t('stageActive') : t('stageSkipped')}</span>
+                <Switch
+                  checked={on}
+                  label={label}
+                  testId={`kds-sound-switch-${setting}`}
+                  onToggle={() => onToggleSound(setting)}
+                />
               </div>
             );
           })}

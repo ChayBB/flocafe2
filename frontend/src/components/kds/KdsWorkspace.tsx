@@ -15,6 +15,14 @@ import {
   subscribeKdsAlertSound,
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
+import {
+  readKdsSoundSettings,
+  speakKds,
+  writeKdsSoundSettings,
+  type KdsSoundSetting,
+  type KdsSoundSettings,
+} from '@/lib/kds-sound-settings';
+import { TERMINAL_ITEM_STATUSES } from '@shared/order-item-status';
 
 const INACTIVE_STAGES_KEY = 'flocafe:kds-inactive-stages';
 type InactiveStages = Record<string, KitchenStatus[]>;
@@ -31,6 +39,27 @@ function readInactiveStages(): InactiveStages {
 }
 
 const NONE_INACTIVE: KitchenStatus[] = [];
+const READY_STATUSES = ['ready', 'served', 'completed'];
+
+function liveItems(order: UseKdsConnectionResult['orders'][number]) {
+  return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
+}
+
+/** Every live item is ready or already served, and at least one is waiting to go out. */
+function isOrderReady(order: UseKdsConnectionResult['orders'][number]): boolean {
+  const items = liveItems(order);
+  return (
+    items.length > 0 &&
+    items.every((item) => READY_STATUSES.includes(item.status || '')) &&
+    items.some((item) => item.status === 'ready')
+  );
+}
+
+/** The browser speech language for the display's UI language. */
+function speechLang(): string {
+  const lang = document.documentElement.lang || 'en';
+  return lang === 'th' ? 'th-TH' : lang;
+}
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
   return new Map(
@@ -54,6 +83,18 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     };
   }, []);
   const flashRef = useRef<HTMLDivElement>(null);
+  const [soundSettings, setSoundSettings] = useState<KdsSoundSettings>(readKdsSoundSettings);
+  const soundSettingsRef = useRef(soundSettings);
+  useEffect(() => {
+    soundSettingsRef.current = soundSettings;
+  }, [soundSettings]);
+  const toggleSound = (setting: KdsSoundSetting) => {
+    setSoundSettings((current) => {
+      const next = { ...current, [setting]: !current[setting] };
+      writeKdsSoundSettings(next);
+      return next;
+    });
+  };
 
   // Alert when an item already on this display gains a service change; items seen for the first time do not.
   // While sound is blocked the screen flashes orange instead.
@@ -65,7 +106,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     for (const [id, change] of current) {
       if (change && known.has(id) && known.get(id) !== change) changed = true;
     }
-    if (changed && !playKdsAlert()) {
+    if (changed && soundSettingsRef.current.statusChange && !playKdsAlert()) {
       flashRef.current?.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
         duration: 700,
         iterations: 4,
@@ -104,6 +145,36 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       }))
       .filter((order) => order.items.length > 0);
   }, [conn.orders, stationId]);
+
+  // Items and ready orders already on this display when it opens are not announced again.
+  const knownItemIdsRef = useRef<Set<number> | null>(null);
+  const readyOrderIdsRef = useRef<Set<number> | null>(null);
+  useEffect(() => {
+    const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
+    const readyIds = new Set(orders.filter(isOrderReady).map((order) => order.id));
+    const knownItems = knownItemIdsRef.current;
+    const knownReady = readyOrderIdsRef.current;
+    if (knownItems && soundSettingsRef.current.readAloud) {
+      const phrases = orders
+        .map((order) => {
+          const fresh = liveItems(order).filter((item) => !knownItems.has(item.id));
+          if (fresh.length === 0) return null;
+          const items = fresh
+            .map((item) => t('readAloudItem', { name: item.product_name, quantity: item.quantity }))
+            .join(', ');
+          return order.table?.name
+            ? t('readAloudTable', { table: order.table.name, items })
+            : t('readAloudOrder', { number: order.order_number, items });
+        })
+        .filter(Boolean);
+      if (phrases.length > 0) speakKds(phrases.join('. '), speechLang());
+    }
+    if (knownReady && soundSettingsRef.current.orderReady && [...readyIds].some((id) => !knownReady.has(id))) {
+      playKdsAlert(2);
+    }
+    knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
+    readyOrderIdsRef.current = readyIds;
+  }, [orders, t]);
 
   return (
     <div data-testid="kds-workspace" className="relative h-full flex flex-col">
@@ -159,6 +230,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         stationName={stationName ?? t('allStations')}
         inactiveStatuses={inactiveStatuses}
         onToggleStatus={toggleStage}
+        soundSettings={soundSettings}
+        onToggleSound={toggleSound}
         onClose={() => setSettingsOpen(false)}
       />
       {conn.ConfirmDialog}
