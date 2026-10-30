@@ -99,14 +99,6 @@ const LIVE_REFRESH_MS = 5000;
 
 const subscribeToNothing = () => () => {};
 
-// Phones and tablets: below the three-column desktop layout.
-const COMPACT_QUERY = '(max-width: 1023px)';
-function subscribeToCompact(onChange: () => void) {
-  const media = window.matchMedia(COMPACT_QUERY);
-  media.addEventListener('change', onChange);
-  return () => media.removeEventListener('change', onChange);
-}
-
 function createApi(): AxiosInstance {
   const api = axios.create({ baseURL: window.location.origin, timeout: 10000 });
   api.interceptors.request.use((config) => {
@@ -201,11 +193,6 @@ export default function ServerStandalonePage() {
   const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
   const [moveTableOpen, setMoveTableOpen] = useState(false);
   const [movingTable, setMovingTable] = useState(false);
-  const isCompact = useSyncExternalStore(
-    subscribeToCompact,
-    () => window.matchMedia(COMPACT_QUERY).matches,
-    () => false,
-  );
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
     return () => document.documentElement.classList.remove('theme-server-app');
@@ -1505,11 +1492,8 @@ export default function ServerStandalonePage() {
                   <button
                     key={table.id}
                     disabled={sending}
-                    onClick={() => {
-                      selectTable(table.id);
-                      // On a phone or tablet the picker stays open so the table is chosen on purpose.
-                      if (!isCompact) setTablePickerOpen(false);
-                    }}
+                    // The picker stays open so the table's actions show before adding food.
+                    onClick={() => selectTable(table.id)}
                     className={`min-h-14 rounded-lg border px-2 py-2 text-start disabled:opacity-50 ${selected ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}
                   >
                     <span className="block truncate text-sm font-semibold">
@@ -1536,7 +1520,7 @@ export default function ServerStandalonePage() {
           )}
 
           <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
-            {user && tablePickerOpen && isCompact && activeTable && (
+            {user && tablePickerOpen && activeTable && (
               <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
                 <button
                   type="button"

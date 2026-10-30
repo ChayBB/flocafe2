@@ -86,7 +86,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
-  test('keeps the table list hidden until Select Table is pressed and closes it after a pick', async ({
+  test('keeps the table list hidden until Select Table is pressed, and Add food items closes it after a pick', async ({
     page,
   }) => {
     const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -108,6 +108,10 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
 
+    // The list stays open with the table's actions until staff choose to add food.
+    await expect(page.locator('header')).toContainText(tableName);
+    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
+    await page.getByTestId('server-app-add-food').click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
     await expect(page.locator('header')).toContainText(tableName);
   });
@@ -192,7 +196,7 @@ test.describe('Server App tableside ordering', () => {
     await notesInput.fill('Initial note');
 
     // Keep the table list open so the frozen table buttons can be checked during Send.
-    await page.getByTestId('server-app-table-button').click();
+    await expect(page.getByTestId('server-app-table-button')).toHaveAttribute('aria-expanded', 'true');
 
     // Open the customizer before Send is clicked so its callback is live when Send starts.
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
