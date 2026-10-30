@@ -137,12 +137,13 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await expect(card(1)).toHaveClass(/bg-orange-100/);
   await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
   await expect(card(2)).toContainText('Changed to takeaway');
-  // A confirmed line turns green and says plainly, under the menu name, when and by whom.
+  // A confirmed line turns green and shows, beside the menu name, when and by whom.
   const confirmed = card(3).getByTestId('kds-served-confirmed');
-  await expect(confirmed).toHaveText(/^Served \d{2}:\d{2} · .+$/);
+  await expect(confirmed).toHaveText(/^\d{2}:\d{2} · .+$/);
   const confirmedBox = (await confirmed.boundingBox())!;
   const nameBox = (await card(3).getByText('E2E Coffee').first().boundingBox())!;
-  expect(confirmedBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 2);
+  expect(Math.abs(confirmedBox.y + confirmedBox.height / 2 - (nameBox.y + nameBox.height / 2))).toBeLessThan(12);
+  await expect(card(3)).not.toHaveClass(/border-s-4/);
   await expect(card(3)).toHaveAttribute('data-served-confirmed', 'true');
   await expect(card(3)).toHaveClass(/bg-emerald-50/);
   await expect(card(2).getByTestId('kds-served-confirmed')).toHaveCount(0);

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, CheckCheck } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { KdsOrderItem } from '@/hooks/useKdsConnection';
 import { parseDbTimestamp } from '@/lib/utils';
@@ -14,7 +14,7 @@ export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
     return 'border-orange-400 bg-orange-100 dark:border-orange-600 dark:bg-orange-950/60 border-s-4';
   }
   if (item.served_confirmed_at) {
-    return 'border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50 border-s-4';
+    return 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/50';
   }
   return null;
 }
@@ -35,7 +35,7 @@ function confirmedTime(item: KdsOrderItem): string {
 
 /**
  * Service staff notes on the menu line itself: a change made after sending (takeaway or
- * cancelled), and, on its own line, when a served item was confirmed at the table and by whom.
+ * cancelled), and when a served item was confirmed at the table and by whom.
  */
 export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
   const t = useTranslations('kds');
@@ -53,12 +53,11 @@ export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
       {item.served_confirmed_at && (
         <span
           data-testid="kds-served-confirmed"
-          className="basis-full flex items-center gap-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+          title={t('servedConfirmedMark')}
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-semibold text-emerald-700 dark:text-emerald-300"
         >
-          <Check size={16} strokeWidth={3} aria-hidden="true" />
-          {item.served_confirmed_by_name
-            ? t('servedConfirmedBy', { name: item.served_confirmed_by_name, time: confirmedTime(item) })
-            : t('servedConfirmedAt', { time: confirmedTime(item) })}
+          <CheckCheck size={16} strokeWidth={2.5} aria-label={t('servedConfirmedMark')} />
+          {[confirmedTime(item), item.served_confirmed_by_name].filter(Boolean).join(' · ')}
         </span>
       )}
     </>
