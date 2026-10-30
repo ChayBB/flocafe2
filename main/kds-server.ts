@@ -59,7 +59,7 @@ import {
   resolveEffectivePermissions,
 } from './services/authorization';
 import { recordClockIn, recordClockOut } from './services/attendance';
-import { handleKdsSpeech } from './services/kds-speech';
+import { handleKdsSpeech, handleKdsSpeechEngine } from './services/kds-speech';
 
 let kdsServer: http.Server | null = null;
 let kdsWss: WebSocketServer | null = null;
@@ -705,6 +705,7 @@ export function startKdsServer(): Promise<void> {
     });
 
     // Get categories for filtering
+    app.get('/api/kds/speech', requireAuth, handleKdsSpeechEngine);
     app.post('/api/kds/speech', requireAuth, handleKdsSpeech);
 
     app.get('/api/categories', requireAuth, (req: Request, res: Response) => {

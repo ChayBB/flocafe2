@@ -6,7 +6,7 @@ import { requireKdsEnabled, requireKdsEnabledOr404, isTokenRevoked, isTokenStale
 import { hasPermission, requirePermission } from '../services/authorization';
 import { parseCategoryIds } from './auth';
 import { notifyKdsUpdate } from '../services/kds';
-import { handleKdsSpeech } from '../services/kds-speech';
+import { handleKdsSpeech, handleKdsSpeechEngine } from '../services/kds-speech';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
 
 const router = Router();
@@ -42,6 +42,7 @@ router.use('/pairing', requireKdsEnabledOr404);
 
 router.use(requirePermission('kitchen.use'));
 
+router.get('/speech', requireKdsEnabled, handleKdsSpeechEngine);
 router.post('/speech', requireKdsEnabled, handleKdsSpeech);
 
 router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {

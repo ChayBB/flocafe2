@@ -749,6 +749,8 @@ The role gate is a `router.use` layer below the `/pairing` mount, so it also app
 | `POST`  | `/pairing`          | `ROLE_ACCESS.ownerManager`                | body: `station_id`                            | Registers a display against `station_id`.                                                                                                                                                  |
 | `GET`   | `/display`          | `ROLE_ACCESS.kitchen` + KDS-enabled       | query: `?station_id`                          | Display-mode view of the same snapshot.                                                                                                                                                    |
 | `PATCH` | `/items/:id/status` | `ROLE_ACCESS.kitchen` + KDS-enabled       | path: `id`; body: `status`, `expected_status` | Body `status` in `pending`, `preparing`, `ready`, `served`, plus optional `expected_status` for a compare-and-set. Station and category scope are re-checked inside the write transaction. |
+| `GET`   | `/speech`           | `ROLE_ACCESS.kitchen` + KDS-enabled       | none                                          | `{ engine }`: `local` when a local voice service is configured, else `system`.                                                                                                             |
+| `POST`  | `/speech`           | `ROLE_ACCESS.kitchen` + KDS-enabled       | body: `text` (max 500), `lang`                | WAV audio of the text; `204` when this computer has no voice for `lang`.                                                                                                                   |
 
 ### Kitchen
 
@@ -960,10 +962,18 @@ The KDS server reads the same database as the main API. Its whole surface:
 | `GET`   | `/api/auth/me`              | `ROLE_ACCESS.kitchen`                                    | none                                          | `{ user: { id, name, email, role } }`                                                                                                                                                                                                                                              |
 | `GET`   | `/api/kds/orders`           | `ROLE_ACCESS.kitchen`                                    | none                                          | `{ orders, counts }`, the same projection and the same category and station narrowing as the WebSocket `initial_data` frame. `403` when KDS is disabled or the caller has no active station.                                                                                       |
 | `PATCH` | `/api/kds/items/:id/status` | `ROLE_ACCESS.kitchen`                                    | path: `id`; body: `status`, `expected_status` | `{ success: true }`. `400` for a terminal or voided item, `403` for a station or category the caller does not cover, `409` when the row changed before the write.                                                                                                                  |
+| `GET`   | `/api/kds/speech`           | `ROLE_ACCESS.kitchen`                                    | none                                          | Same as the main API's `GET /api/kds/speech`.                                                                                                                                                                                                                                      |
+| `POST`  | `/api/kds/speech`           | `ROLE_ACCESS.kitchen`                                    | body: `text`, `lang`                          | Same as the main API's `POST /api/kds/speech`.                                                                                                                                                                                                                                     |
 | `GET`   | `/api/categories`           | `ROLE_ACCESS.kitchen`                                    | none                                          | `{ categories: [ ... ] }` narrowed to the caller's station and category scope.                                                                                                                                                                                                     |
 
 Plus three static handlers: `express.static` over the frontend export, `GET /` redirecting to
 `/kds-standalone`, and a `GET /*splat` fallback that serves the standalone KDS page.
+
+`POST /api/kds/speech` reads text aloud for KDS displays on the POS computer. When FloCafe starts
+with `FLO_KDS_TTS_URL` set (for example `http://127.0.0.1:5005`), Thai text goes first to that local
+voice service as `POST {url}/tts` with `{ text }`, expecting WAV back within 30 seconds; otherwise, or
+when it fails, the computer's own Windows voice for `lang` speaks. Displays that see `engine: local`
+prefer this audio over their own browser voices unless a voice was picked on that display.
 
 `PATCH /api/kds/items/:id/status` re-verifies the caller's active status, token revocation, and token
 staleness **inside** its `IMMEDIATE` transaction, so a session revoked between the middleware and the

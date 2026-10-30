@@ -129,10 +129,22 @@ async function speakFromServer(text: string, lang: string): Promise<boolean> {
 }
 
 /**
- * The chosen voice, else an Edge natural voice, else the POS computer's offline voice, else any
- * voice this device has. An online voice that fails (no internet) falls through to the next.
+ * The POS computer's own voice service when it runs one, else the chosen voice, else an Edge
+ * natural voice, else the POS computer's offline voice, else any voice this device has. An online voice that fails (no internet) falls through to the next.
  */
+let serverEngine: Promise<string> | null = null;
+
+/** 'local' when the POS computer runs its own voice service (such as F5-TTS-THAI). */
+function kdsServerEngine(): Promise<string> {
+  serverEngine ??= api
+    .get('/kds/speech')
+    .then((response) => String(response.data?.engine || 'system'))
+    .catch(() => 'system');
+  return serverEngine;
+}
+
 async function speakNow(text: string, lang: string): Promise<void> {
+  if ((await kdsServerEngine()) === 'local' && !readKdsVoiceName() && (await speakFromServer(text, lang))) return;
   const voices = await kdsVoicesFor(lang);
   const chosenName = readKdsVoiceName();
   const preferred = voices.find((voice) => voice.name === chosenName) ?? voices.find(isNaturalVoice);

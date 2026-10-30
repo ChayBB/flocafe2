@@ -33,8 +33,41 @@ $reader.ReadBytes($bytes)
 [Console]::Out.Write([Convert]::ToBase64String($bytes))
 `;
 
-/** WAV audio of the text in a voice for the language, or null when this computer has no such voice. */
+const LOCAL_VOICE_TIMEOUT_MS = 30000;
+
+/** A local voice service (such as F5-TTS-THAI) for Thai, when FloCafe is started with FLO_KDS_TTS_URL. */
+export function kdsLocalVoiceUrl(): string | null {
+  const url = (process.env.FLO_KDS_TTS_URL || '').trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(url) ? url : null;
+}
+
+async function synthesizeWithLocalVoice(text: string, lang: string): Promise<Buffer | null> {
+  const url = kdsLocalVoiceUrl();
+  if (!url || !lang.toLowerCase().startsWith('th')) return null;
+  try {
+    const response = await fetch(`${url}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(LOCAL_VOICE_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const audio = Buffer.from(await response.arrayBuffer());
+    return audio.length > 0 ? audio : null;
+  } catch (error) {
+    console.warn('[KDS] Local voice unavailable, using the Windows voice:', (error as Error).message);
+    return null;
+  }
+}
+
+/** WAV audio of the text: the local voice service when set up, else this computer's own voice; null when neither speaks the language. */
 export async function synthesizeKdsSpeech(text: string, lang: string): Promise<Buffer | null> {
+  const local = await synthesizeWithLocalVoice(text, lang);
+  if (local) return local;
+  return synthesizeSystemSpeech(text, lang);
+}
+
+async function synthesizeSystemSpeech(text: string, lang: string): Promise<Buffer | null> {
   if (process.platform !== 'win32') return null;
   const key = `${lang}\n${text}`;
   const cached = cache.get(key);
@@ -59,6 +92,11 @@ export async function synthesizeKdsSpeech(text: string, lang: string): Promise<B
   } catch {
     return null;
   }
+}
+
+/** GET: which voice the POS computer reads with, so displays know to prefer it over their own. */
+export function handleKdsSpeechEngine(_req: Request, res: Response) {
+  res.json({ engine: kdsLocalVoiceUrl() ? 'local' : 'system' });
 }
 
 /** POST { text, lang }: WAV audio, or 204 when this computer cannot speak that language. */
