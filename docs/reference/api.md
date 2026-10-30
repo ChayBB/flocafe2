@@ -385,8 +385,11 @@ Server App forwards all three routes.
 `POST /:id/merge-table` (`tables.orders.move`) folds a dine-in order into the open order on
 `target_table_id`: every item moves, the target's totals and unpaid bills are recomputed, the source
 order is cancelled with reason `Merged into <order>`, its table becomes available, and both orders
-record an `order_merged` audit entry. It answers `409` with `code` `target_empty` (use move-order),
-`source_billed`, `source_discount`, or `target_paying` (a payment or split on the target).
+record an `order_merged` audit entry. Unpaid bills combine into one: the target keeps its bill, or
+takes over the source's when it has none; any other source bill is deleted and its print history
+moves to the kept bill. It answers `409` with `code` `target_empty` (use move-order),
+`source_billed` (a payment or split on the source), `source_discount`, or `target_paying` (a payment
+or split on the target).
 
 `POST /:id/bill-request` (`orders.create`, item cancel limiter) records that a table asked for its
 bill: the Server App calls it from the print button, shown once every live item is priced and confirmed

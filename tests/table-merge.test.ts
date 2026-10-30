@@ -1,7 +1,7 @@
 /**
  * Merging tables: a table's open order folds into another table's open order. Every item moves,
- * the target's totals are recomputed, the source order closes and its table frees up; merges that
- * would lose a bill, a payment or an order discount are refused.
+ * the target's totals are recomputed, the source order closes and its table frees up, and printed
+ * unpaid bills combine into one. Merges that would lose a payment or an order discount are refused.
  *
  * Usage: node tests/run-electron-node-test.cjs tests/table-merge.test.ts
  */
@@ -98,14 +98,38 @@ async function main() {
     assertEqualOrThrow(audits.length, 2, 'both orders record the merge');
     assertEqualOrThrow((await merge(source, 'T2')).status, 409, 'a merged order cannot merge again');
 
-    // Refusals that would lose money or a bill.
+    // A printed, unpaid bill joins the target: it moves over when the target has none...
+    const billRow = (number: string) => db.prepare('SELECT * FROM bills WHERE bill_number = ?').get(number) as any;
     const billed = addOrder('ORD-BILLED', 'T4', 30);
     addItem(billed, 'Soup', 30);
     db.prepare(`INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, payment_status, created_at, updated_at)
       VALUES ('B-SRC', ?, 30, 0, 30, 'unpaid', ?, ?)`).run(billed, now(), now());
-    const billedMerge = await merge(billed, 'T2');
-    assertEqualOrThrow(billedMerge.status, 409, 'a source order with a bill is refused');
-    assertEqualOrThrow(billedMerge.data.code, 'source_billed', 'the refusal names the bill');
+    assertEqualOrThrow((await merge(billed, 'T2')).status, 200, 'a table with a printed bill merges');
+    assertEqualOrThrow(billRow('B-SRC').order_id, target, 'the printed bill now belongs to the merged order');
+    assertEqualOrThrow(Number(billRow('B-SRC').total), 280, 'the bill covers both tables');
+
+    // ...and folds into the target's bill when both tables printed one.
+    const second = addOrder('ORD-SECOND', 'T4', 20);
+    addItem(second, 'Juice', 20);
+    db.prepare(`INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, payment_status, created_at, updated_at)
+      VALUES ('B-SECOND', ?, 20, 0, 20, 'unpaid', ?, ?)`).run(second, now(), now());
+    db.prepare("INSERT INTO print_logs (bill_id, user_id, print_type) VALUES (?, 'server-merge', 'bill')").run(billRow('B-SECOND').id);
+    assertEqualOrThrow((await merge(second, 'T2')).status, 200, 'two printed bills merge');
+    assertOrThrow(!billRow('B-SECOND'), 'the source bill folds into the target bill');
+    assertEqualOrThrow(Number(billRow('B-SRC').total), 300, 'one bill carries every item');
+    const billCount = db.prepare('SELECT COUNT(*) AS n FROM bills WHERE order_id = ?').get(target) as any;
+    assertEqualOrThrow(billCount.n, 1, 'the merged order has one bill');
+    const printed = db.prepare('SELECT bill_id FROM print_logs').get() as any;
+    assertEqualOrThrow(printed.bill_id, billRow('B-SRC').id, 'the print history follows the kept bill');
+
+    // Refusals that would lose money.
+    const paid = addOrder('ORD-PAID', 'T4', 30);
+    addItem(paid, 'Soup', 30);
+    db.prepare(`INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, paid_amount, payment_status, created_at, updated_at)
+      VALUES ('B-PAID', ?, 30, 0, 30, 10, 'partial', ?, ?)`).run(paid, now(), now());
+    const paidMerge = await merge(paid, 'T2');
+    assertEqualOrThrow(paidMerge.status, 409, 'a source order that started paying is refused');
+    assertEqualOrThrow(paidMerge.data.code, 'source_billed', 'the refusal names the payment');
 
     const discounted = addOrder('ORD-DISC', 'T5', 40);
     addItem(discounted, 'Cake', 40);
@@ -114,8 +138,7 @@ async function main() {
 
     const paying = addOrder('ORD-PAYING', 'T6', 60);
     addItem(paying, 'Noodles', 60);
-    db.prepare(`INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, paid_amount, payment_status, created_at, updated_at)
-      VALUES ('B-DST', ?, 250, 0, 250, 100, 'partial', ?, ?)`).run(target, now(), now());
+    db.prepare("UPDATE bills SET paid_amount = 100, payment_status = 'partial' WHERE bill_number = 'B-SRC'").run();
     const payingMerge = await merge(paying, 'T2');
     assertEqualOrThrow(payingMerge.data.code, 'target_paying', 'a target that started paying is refused');
     assertOrThrow(orderRow(paying).status === 'pending', 'a refused merge leaves the source order open');

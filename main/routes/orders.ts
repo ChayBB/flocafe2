@@ -5802,6 +5802,34 @@ router.post(
   },
 );
 
+interface MergeBillRow {
+  id: number;
+  bill_number: string;
+  split_group_id: string | null;
+  payment_status: string;
+  paid_amount: number | null;
+}
+
+const isBillPaying = (bill: MergeBillRow) =>
+  Boolean(bill.split_group_id) || bill.payment_status !== 'unpaid' || Number(bill.paid_amount || 0) > 0;
+
+const BILL_RECORDS_KEPT_ON_MERGE = new Set(['bills', 'bill_items', 'print_logs']);
+
+/** True when any payment, refund or message record points at the bill, so it must not be folded away. */
+function billHasMoneyRecords(db: ReturnType<typeof getDatabase>, billId: number): boolean {
+  const tables = db
+    .prepare(
+      `SELECT m.name FROM sqlite_master m JOIN pragma_table_info(m.name) c
+       WHERE m.type = 'table' AND c.name = 'bill_id'`,
+    )
+    .all() as { name: string }[];
+  return tables.some(
+    ({ name }) =>
+      !BILL_RECORDS_KEPT_ON_MERGE.has(name) &&
+      db.prepare(`SELECT 1 FROM "${name.replace(/"/g, '""')}" WHERE bill_id = ? OR bill_id = ? LIMIT 1`).get(billId, String(billId)),
+  );
+}
+
 // POST /api/orders/:id/merge-table — fold a table's open order into another table's open order.
 router.post(
   '/:id/merge-table',
@@ -5828,8 +5856,9 @@ router.post(
         if (Number(source.discount_amount || 0) > 0) {
           throw fail('Remove the order discount before merging tables', 409, 'source_discount');
         }
-        if (db.prepare('SELECT 1 FROM bills WHERE order_id = ? LIMIT 1').get(source.id)) {
-          throw fail('This order already has a bill; take payment before merging', 409, 'source_billed');
+        const sourceBills = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id').all(source.id) as MergeBillRow[];
+        if (sourceBills.some(isBillPaying)) {
+          throw fail('This order has started paying; finish its payment before merging', 409, 'source_billed');
         }
 
         const targetTable = db.prepare('SELECT * FROM tables WHERE id = ?').get(targetTableId) as
@@ -5843,16 +5872,8 @@ router.post(
           )
           .get(targetTableId) as (EditableOrderRow & { id: number; order_number: string }) | undefined;
         if (!target) throw fail('The target table has no open order; move the order instead', 409, 'target_empty');
-        const targetBills = db.prepare('SELECT * FROM bills WHERE order_id = ?').all(target.id) as {
-          split_group_id: string | null;
-          payment_status: string;
-          paid_amount: number | null;
-        }[];
-        if (
-          targetBills.some(
-            (bill) => bill.split_group_id || bill.payment_status !== 'unpaid' || Number(bill.paid_amount || 0) > 0,
-          )
-        ) {
+        const targetBills = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id').all(target.id) as MergeBillRow[];
+        if (targetBills.some(isBillPaying)) {
           throw fail('The target table has started paying; finish its payment first', 409, 'target_paying');
         }
 
@@ -5871,10 +5892,26 @@ router.post(
         const movedItems = db
           .prepare('UPDATE order_items SET order_id = ?, updated_at = ? WHERE order_id = ?')
           .run(target.id, now(), source.id).changes;
+        // One bill carries both tables: the target's own, else the source's printed bill moves over.
+        const keptBill = targetBills[0] ?? sourceBills[0];
+        const mergedBills: string[] = [];
+        for (const bill of sourceBills) {
+          if (bill === keptBill) {
+            db.prepare('UPDATE bills SET order_id = ?, updated_at = ? WHERE id = ?').run(target.id, now(), bill.id);
+            continue;
+          }
+          if (billHasMoneyRecords(db, bill.id)) {
+            throw fail('This order has started paying; finish its payment before merging', 409, 'source_billed');
+          }
+          db.prepare('UPDATE print_logs SET bill_id = ? WHERE bill_id = ?').run(keptBill.id, bill.id);
+          db.prepare('DELETE FROM bill_items WHERE bill_id = ?').run(bill.id);
+          db.prepare('DELETE FROM bills WHERE id = ?').run(bill.id);
+          mergedBills.push(bill.bill_number);
+        }
         persistRecomputedOrderTotals(db, String(target.id), target, {
           tenantInfo,
           customer,
-          bills: targetBills,
+          bills: keptBill ? [keptBill] : [],
           decimals,
         });
         db.prepare(
@@ -5889,6 +5926,8 @@ router.post(
           to_order: target.order_number,
           to_table: targetTable.number,
           items: movedItems,
+          ...(keptBill ? { bill: keptBill.bill_number } : {}),
+          ...(mergedBills.length ? { merged_bills: mergedBills } : {}),
         };
         recordOrderAudit(db, { orderId: String(source.id), actorUserId: actorId, action: 'order_merged', details });
         recordOrderAudit(db, { orderId: String(target.id), actorUserId: actorId, action: 'order_merged', details });

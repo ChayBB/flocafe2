@@ -61,7 +61,7 @@ test('the ordered-items menu merges a table into another table by its typed numb
   );
   await input.fill(`nope ${run}`);
   await confirm.click();
-  await expect(dialog.getByTestId('server-app-table-transfer-error')).toHaveText(`No table nope ${run}`);
+  await expect(dialog.getByTestId('server-app-table-transfer-error')).toHaveText(`No table nope ${run}, or it is switched off in table settings`);
   await input.fill(into.toLowerCase());
   await confirm.click();
 
