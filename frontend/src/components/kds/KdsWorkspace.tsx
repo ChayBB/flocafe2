@@ -155,21 +155,19 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         .filter(Boolean);
       if (phrases.length > 0) speakKds(phrases.join('. '), kdsSpeechLang());
     }
-    // Each menu item that turns ready rings the bell, even while the rest of its order is still cooking.
+    // Any menu item that turns ready rings the bell and names its table, even while the rest of the
+    // order is still cooking.
     const readyPhrases = orders
-      .map((order) => {
-        const ready = liveItems(order).filter(
+      .filter((order) =>
+        liveItems(order).some(
           (item) => item.status === 'ready' && knownStatuses.has(item.id) && knownStatuses.get(item.id) !== 'ready',
-        );
-        if (ready.length === 0) return null;
-        const items = ready
-          .map((item) => t('readAloudItem', { name: item.product_name, quantity: item.quantity }))
-          .join(', ');
-        return order.table?.name
-          ? t('readyToServeTable', { table: order.table.name, items })
-          : t('readyToServeOrder', { number: order.order_number, items });
-      })
-      .filter(Boolean);
+        ),
+      )
+      .map((order) =>
+        order.table?.name
+          ? t('readyToServeTable', { table: order.table.name })
+          : t('readyToServeOrder', { number: order.order_number }),
+      );
     if (readyPhrases.length > 0 && soundSettingsRef.current.orderReady) {
       playKdsAlert(2);
       speakKds(readyPhrases.join('. '), kdsSpeechLang());
