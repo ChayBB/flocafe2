@@ -436,6 +436,37 @@ div:hover > .flo-toast-drain,
   --color-brand-ring: #ea580c80;
 }
 
+/* KDS day and night palettes; set on <html> while a KDS screen is open so its dialogs match. */
+.theme-kds {
+  --background: #f3f5f7;
+  --foreground: #202936;
+  --card: #ffffff;
+  --card-foreground: #202936;
+  --popover: #ffffff;
+  --popover-foreground: #202936;
+  --panel: #ffffff;
+  --muted: #edf0f3;
+  --muted-foreground: #647488;
+  --border: #dce2e8;
+  --input: #dce2e8;
+  --kds-pending: #e0a344;
+  --kds-pending-text: #8a5a00;
+  --kds-pending-tint: #fdf4e3;
+  --kds-pending-line: #f2d9a8;
+  --kds-preparing: #3b78d8;
+  --kds-preparing-text: #1f5bb5;
+  --kds-preparing-tint: #eaf2fd;
+  --kds-preparing-line: #bfd5f5;
+  --kds-ready: #2fae7e;
+  --kds-ready-text: #17734f;
+  --kds-ready-tint: #e6f6ef;
+  --kds-ready-line: #b5e3cf;
+  --kds-served: #9b6bd6;
+  --kds-served-text: #6e3fb0;
+  --kds-served-tint: #f3ecfc;
+  --kds-served-line: #d9c6f2;
+}
+
 .dark {
   --background: oklch(0.17 0 0);
   --foreground: oklch(0.985 0 0);
@@ -470,6 +501,36 @@ div:hover > .flo-toast-drain,
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: #6366f1;
+}
+
+.theme-kds.dark {
+  --background: #171c23;
+  --foreground: #e8edf3;
+  --card: #222a34;
+  --card-foreground: #e8edf3;
+  --popover: #222a34;
+  --popover-foreground: #e8edf3;
+  --panel: #222a34;
+  --muted: #2a333f;
+  --muted-foreground: #a8b3c2;
+  --border: #394451;
+  --input: #394451;
+  --kds-pending: #e0a344;
+  --kds-pending-text: #e0a344;
+  --kds-pending-tint: #3d3b36;
+  --kds-pending-line: #64543a;
+  --kds-preparing: #75a9f2;
+  --kds-preparing-text: #75a9f2;
+  --kds-preparing-tint: #2e3c4f;
+  --kds-preparing-line: #3f5676;
+  --kds-ready: #52c69b;
+  --kds-ready-text: #52c69b;
+  --kds-ready-tint: #294042;
+  --kds-ready-line: #336158;
+  --kds-served: #bd92e8;
+  --kds-served-text: #bd92e8;
+  --kds-served-tint: #38394d;
+  --kds-served-line: #584e73;
 }
 
 html.dark::-webkit-scrollbar-thumb,

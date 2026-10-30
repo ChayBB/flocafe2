@@ -45,31 +45,31 @@ interface StatusConfigEntry {
 export const STATUS_CONFIG = {
   pending: {
     labelKey: 'statusWaiting',
-    color: 'bg-yellow-500',
-    border: 'border-yellow-300 dark:border-yellow-700',
-    text: 'text-yellow-700 dark:text-yellow-300',
-    bg: 'bg-yellow-50 dark:bg-yellow-950/60',
+    color: 'bg-(--kds-pending)',
+    border: 'border-(--kds-pending-line)',
+    text: 'text-(--kds-pending-text)',
+    bg: 'bg-(--kds-pending-tint)',
   },
   preparing: {
     labelKey: 'statusPreparing',
-    color: 'bg-blue-500',
-    border: 'border-blue-300 dark:border-blue-700',
-    text: 'text-blue-700 dark:text-blue-300',
-    bg: 'bg-blue-50 dark:bg-blue-950/60',
+    color: 'bg-(--kds-preparing)',
+    border: 'border-(--kds-preparing-line)',
+    text: 'text-(--kds-preparing-text)',
+    bg: 'bg-(--kds-preparing-tint)',
   },
   ready: {
     labelKey: 'statusReady',
-    color: 'bg-green-500',
-    border: 'border-green-300 dark:border-green-700',
-    text: 'text-green-700 dark:text-green-300',
-    bg: 'bg-green-50 dark:bg-green-950/60',
+    color: 'bg-(--kds-ready)',
+    border: 'border-(--kds-ready-line)',
+    text: 'text-(--kds-ready-text)',
+    bg: 'bg-(--kds-ready-tint)',
   },
   served: {
     labelKey: 'statusDelivered',
-    color: 'bg-purple-500',
-    border: 'border-purple-300 dark:border-purple-700',
-    text: 'text-purple-700 dark:text-purple-300',
-    bg: 'bg-purple-50 dark:bg-purple-950/60',
+    color: 'bg-(--kds-served)',
+    border: 'border-(--kds-served-line)',
+    text: 'text-(--kds-served-text)',
+    bg: 'bg-(--kds-served-tint)',
   },
   voided: {
     labelKey: 'statusVoided',
@@ -94,10 +94,10 @@ export function normalizeKitchenStatus(status: unknown): KitchenStatus {
 }
 
 export const ORDER_TYPE_BADGE_STYLES: Record<string, string> = {
-  dine_in: 'bg-blue-50 text-blue-700 border-blue-200',
-  takeaway: 'bg-orange-50 text-orange-700 border-orange-200',
-  delivery: 'bg-purple-50 text-purple-700 border-purple-200',
-  online: 'bg-teal-50 text-teal-700 border-teal-200',
+  dine_in: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
+  takeaway: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800',
+  delivery: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800',
+  online: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800',
 };
 
 export interface KdsOrderItemAddon {

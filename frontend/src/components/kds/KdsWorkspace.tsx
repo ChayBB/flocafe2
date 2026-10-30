@@ -66,6 +66,10 @@ function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<numbe
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
+  useEffect(() => {
+    document.documentElement.classList.add('theme-kds');
+    return () => document.documentElement.classList.remove('theme-kds');
+  }, []);
 
   // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
   // so it disappearing on that tap never shifts the board under the finger.
