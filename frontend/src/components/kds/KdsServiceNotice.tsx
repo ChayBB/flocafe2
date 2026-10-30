@@ -1,15 +1,38 @@
 'use client';
 
-import { AlertTriangle, CheckCheck } from 'lucide-react';
+import { AlertTriangle, CheckCheck, CircleCheckBig } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { KdsOrderItem } from '@/hooks/useKdsConnection';
 import { parseDbTimestamp } from '@/lib/utils';
 
-/** Orange strip for an item service staff changed after sending; null when it has no change. */
+/**
+ * Orange strip for an item service staff changed after sending, green for one they confirmed at
+ * the table; null for an ordinary item.
+ */
 export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
-  return item.service_change
-    ? 'border-orange-400 bg-orange-100 dark:border-orange-600 dark:bg-orange-950/60 border-s-4'
-    : null;
+  if (item.service_change) {
+    return 'border-orange-400 bg-orange-100 dark:border-orange-600 dark:bg-orange-950/60 border-s-4';
+  }
+  if (item.served_confirmed_at) {
+    return 'border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50 border-s-4';
+  }
+  return null;
+}
+
+/** Tick on the start edge of a menu line service staff confirmed at the table; the row must be `relative`. */
+export function KdsServedCheck({ item }: { item: KdsOrderItem }) {
+  const t = useTranslations('kds');
+  if (!item.served_confirmed_at || item.service_change) return null;
+  return (
+    <CircleCheckBig
+      data-testid="kds-served-check"
+      size={22}
+      strokeWidth={2.5}
+      role="img"
+      aria-label={t('servedConfirmedMark')}
+      className="absolute -start-2.5 top-1/2 -translate-y-1/2 rounded-full bg-card text-emerald-600 dark:text-emerald-400"
+    />
+  );
 }
 
 function confirmedTime(item: KdsOrderItem): string {

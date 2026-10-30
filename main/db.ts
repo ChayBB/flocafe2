@@ -9045,6 +9045,8 @@ export function projectKdsItem(item: any, restricted: boolean): any {
     'service_change',
     'service_change_at',
     'served_confirmed_at',
+    'served_confirmed_by_name',
+    'store_timezone',
     'created_at',
     'updated_at',
     'order_number',

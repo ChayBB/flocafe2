@@ -545,6 +545,7 @@
     "markAs": "ทำเครื่องหมายเป็น {status}",
     "advanceTo": "เปลี่ยนเป็น {status}",
     "servedConfirmedBy": "ถึงโต๊ะแล้ว · {name} {time}",
+    "servedConfirmedMark": "ยืนยันเสิร์ฟถึงโต๊ะแล้ว",
     "enableAlertSound": "แตะเพื่อเปิดเสียงแจ้งเตือน",
     "noticeTakeaway": "เปลี่ยนเป็นสั่งกลับบ้าน",
     "noticeCancelled": "ยกเลิก",
