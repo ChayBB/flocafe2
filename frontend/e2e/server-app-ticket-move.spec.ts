@@ -57,9 +57,14 @@ test('the current ticket lists sent items without customer fields, and its menu 
   // The ticket menu moves the order to a free table and follows it there.
   await page.getByTestId('server-app-ticket-menu').click();
   await page.getByRole('menuitem', { name: 'Move table' }).click();
-  const sheet = page.getByTestId('server-app-move-table');
-  await expect(sheet).toContainText(`Move the order from table ${from} to:`);
-  await sheet.getByRole('button', { name: to, exact: true }).click();
+  const dialog = page.getByTestId('server-app-table-transfer');
+  await expect(dialog).toContainText(`Move the order from table ${from} to:`);
+  // A typed table that is in use is refused; the free one is accepted.
+  await dialog.getByTestId('server-app-table-transfer-input').fill(from);
+  await dialog.getByTestId('server-app-table-transfer-confirm').click();
+  await expect(dialog.getByTestId('server-app-table-transfer-error')).toHaveText('That is this table');
+  await dialog.getByTestId('server-app-table-transfer-input').fill(to);
+  await dialog.getByTestId('server-app-table-transfer-confirm').click();
   await expect(page.getByText(`Moved to table ${to}`).first()).toBeVisible();
   await expect(page.locator('header')).toContainText(to);
   await expect(rows).toHaveCount(2);

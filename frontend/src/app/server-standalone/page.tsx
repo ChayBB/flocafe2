@@ -16,6 +16,7 @@ import {
   UtensilsCrossed,
   MoreVertical,
   ArrowLeftRight,
+  Merge,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -30,7 +31,11 @@ import {
   TableKitchenSummary,
   type OrderedItem,
 } from '@/components/server-app/OrderedItems';
-import { MoveTableSheet, type MoveTarget } from '@/components/server-app/MoveTableSheet';
+import {
+  TableTransferDialog,
+  type TransferMode,
+  type TransferTable,
+} from '@/components/server-app/TableTransferDialog';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -199,8 +204,8 @@ export default function ServerStandalonePage() {
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [orderedItemsOpen, setOrderedItemsOpen] = useState(false);
   const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
-  const [moveTableOpen, setMoveTableOpen] = useState(false);
-  const [movingTable, setMovingTable] = useState(false);
+  const [transferMode, setTransferMode] = useState<TransferMode | null>(null);
+  const [transferring, setTransferring] = useState(false);
   const isWide = useSyncExternalStore(
     subscribeToWide,
     () => window.matchMedia(WIDE_QUERY).matches,
@@ -554,22 +559,35 @@ export default function ServerStandalonePage() {
   }
 
   /** Moves the table's open order to a free table and follows it there. */
-  async function moveOrderTo(target: MoveTarget) {
+  /** Moves the open order to a free table, or merges all its items into another table's order. */
+  async function transferOrderTo(mode: TransferMode, target: TransferTable) {
     if (!api || !currentOrder || !selectedTableId) return;
-    setMovingTable(true);
+    setTransferring(true);
     try {
-      await api.post(`/api/tables/${selectedTableId}/move-order`, {
-        target_table_id: target.id,
-        order_id: currentOrder.id,
-      });
-      toast.success(t('tableMoved', { name: target.name }));
-      setMoveTableOpen(false);
+      if (mode === 'move') {
+        await api.post(`/api/tables/${selectedTableId}/move-order`, {
+          target_table_id: target.id,
+          order_id: currentOrder.id,
+        });
+      } else {
+        await api.post(`/api/orders/${currentOrder.id}/merge-table`, { target_table_id: target.id });
+      }
+      toast.success(mode === 'move' ? t('tableMoved', { name: target.name }) : t('tablesMerged', { name: target.name }));
+      setTransferMode(null);
+      const listWasOpen = orderedItemsOpen;
       await loadAll({ allowWhileSending: true }).catch(() => {});
       selectTable(target.id);
+      // Started from the ordered-items list: show it again for the table the items went to.
+      if (listWasOpen) setOrderedItemsOpen(true);
     } catch (error: unknown) {
-      toastApiError(error, t('moveTableFailed'), apiErrorT);
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'source_billed') toast.error(t('mergeBlockedBilled'));
+      else if (code === 'source_discount') toast.error(t('mergeBlockedDiscount'));
+      else if (code === 'target_paying') toast.error(t('mergeBlockedPaying'));
+      else if (code === 'target_empty') toast.error(t('tableHasNoOrder', { name: target.name }));
+      else toastApiError(error, mode === 'move' ? t('moveTableFailed') : t('mergeTableFailed'), apiErrorT);
     } finally {
-      setMovingTable(false);
+      setTransferring(false);
     }
   }
 
@@ -1244,19 +1262,22 @@ export default function ServerStandalonePage() {
                 role="menu"
                 className="absolute end-0 top-full z-20 min-w-44 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setTicketMenuOpen(false);
-                    setMobileCartOpen(false);
-                    setMoveTableOpen(true);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
-                >
-                  <ArrowLeftRight size={16} />
-                  {t('moveTable')}
-                </button>
+                {(['move', 'merge'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setTicketMenuOpen(false);
+                      setMobileCartOpen(false);
+                      setTransferMode(mode);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                  >
+                    {mode === 'move' ? <ArrowLeftRight size={16} /> : <Merge size={16} />}
+                    {mode === 'move' ? t('moveTable') : t('mergeTable')}
+                  </button>
+                ))}
               </div>
             )}
           </>
@@ -1605,21 +1626,20 @@ export default function ServerStandalonePage() {
         </main>
       )}
 
-      {moveTableOpen && activeTable && (
-        <MoveTableSheet
+      {transferMode && activeTable && (
+        <TableTransferDialog
+          mode={transferMode}
           fromName={activeTable.name ?? String(activeTable.number)}
-          moving={movingTable}
-          targets={tables
-            .filter(
-              (table) =>
-                table.id !== activeTable.id &&
-                !table.activeOrder &&
-                !table.current_order &&
-                table.status !== 'reserved',
-            )
-            .map((table) => ({ id: table.id, name: table.name ?? String(table.number) }))}
-          onPick={(target) => void moveOrderTo(target)}
-          onClose={() => setMoveTableOpen(false)}
+          fromId={activeTable.id}
+          busy={transferring}
+          tables={tables.map((table) => ({
+            id: table.id,
+            name: table.name ?? String(table.number),
+            occupied: Boolean(table.activeOrder || table.current_order),
+            reserved: table.status === 'reserved',
+          }))}
+          onConfirm={(target) => void transferOrderTo(transferMode, target)}
+          onClose={() => setTransferMode(null)}
         />
       )}
 
@@ -1638,6 +1658,8 @@ export default function ServerStandalonePage() {
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
           onPrintBill={requestBill}
+          onMoveTable={() => setTransferMode('move')}
+          onMergeTable={() => setTransferMode('merge')}
         />
       )}
 

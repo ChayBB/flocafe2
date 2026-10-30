@@ -5802,6 +5802,120 @@ router.post(
   },
 );
 
+// POST /api/orders/:id/merge-table — fold a table's open order into another table's open order.
+router.post(
+  '/:id/merge-table',
+  orderWriteRateLimit,
+  requirePermission('tables.orders.move'),
+  (req: Request, res: Response) => {
+    try {
+      const sourceOrderId = String(req.params.id);
+      const targetTableId = typeof req.body?.target_table_id === 'string' ? req.body.target_table_id : '';
+      const actorId = String((req as Request & { user?: { userId?: string } }).user?.userId || '');
+      if (!targetTableId) return res.status(400).json({ error: 'target_table_id is required' });
+      const db = getDatabase();
+      const fail = (message: string, statusCode: number, code?: string) =>
+        Object.assign(new Error(message), { statusCode, code });
+
+      const result = withTxn(() => {
+        const source = db.prepare('SELECT * FROM orders WHERE id = ?').get(sourceOrderId) as
+          | (EditableOrderRow & { id: number; order_number: string; table_id: string | null; type: string })
+          | undefined;
+        if (!source) throw fail('Order not found', 404);
+        if (['completed', 'cancelled'].includes(source.status)) throw fail('This order is already closed', 409);
+        if (source.type !== 'dine_in' || !source.table_id) throw fail('Only a table order can be merged', 400);
+        if (source.table_id === targetTableId) throw fail('The order is already on this table', 400);
+        if (Number(source.discount_amount || 0) > 0) {
+          throw fail('Remove the order discount before merging tables', 409, 'source_discount');
+        }
+        if (db.prepare('SELECT 1 FROM bills WHERE order_id = ? LIMIT 1').get(source.id)) {
+          throw fail('This order already has a bill; take payment before merging', 409, 'source_billed');
+        }
+
+        const targetTable = db.prepare('SELECT * FROM tables WHERE id = ?').get(targetTableId) as
+          | { id: string; number: string; is_active: number }
+          | undefined;
+        if (!targetTable || !targetTable.is_active) throw fail('Target table not found', 404);
+        const target = db
+          .prepare(
+            `SELECT * FROM orders WHERE table_id = ? AND status NOT IN ('completed', 'cancelled')
+             ORDER BY created_at DESC LIMIT 1`,
+          )
+          .get(targetTableId) as (EditableOrderRow & { id: number; order_number: string }) | undefined;
+        if (!target) throw fail('The target table has no open order; move the order instead', 409, 'target_empty');
+        const targetBills = db.prepare('SELECT * FROM bills WHERE order_id = ?').all(target.id) as {
+          split_group_id: string | null;
+          payment_status: string;
+          paid_amount: number | null;
+        }[];
+        if (
+          targetBills.some(
+            (bill) => bill.split_group_id || bill.payment_status !== 'unpaid' || Number(bill.paid_amount || 0) > 0,
+          )
+        ) {
+          throw fail('The target table has started paying; finish its payment first', 409, 'target_paying');
+        }
+
+        const tenantInfo = {
+          country: getSettingValue('country') || '',
+          business_type: getSettingValue('business_type') || 'restaurant',
+          state_code: getSettingValue('state_code') || '',
+          currency: getTenantCurrency(),
+          taxes_enabled: getSettingValue('taxes_enabled') === 'true',
+        };
+        const decimals = getCurrencyFractionDigits(tenantInfo.currency);
+        const customer = target.customer_id
+          ? (db.prepare('SELECT * FROM customers WHERE id = ?').get(target.customer_id) as TaxCustomerRow)
+          : null;
+
+        const movedItems = db
+          .prepare('UPDATE order_items SET order_id = ?, updated_at = ? WHERE order_id = ?')
+          .run(target.id, now(), source.id).changes;
+        persistRecomputedOrderTotals(db, String(target.id), target, {
+          tenantInfo,
+          customer,
+          bills: targetBills,
+          decimals,
+        });
+        db.prepare(
+          `UPDATE orders SET status = 'cancelled', subtotal = 0, tax_amount = 0, tax_breakdown = NULL, tax_snapshot = NULL,
+             total = 0, service_charge = 0, packaging_charge = 0, charges_breakdown = NULL, round_off = 0,
+             cancelled_at = ?, cancellation_reason = ?, updated_at = ? WHERE id = ?`,
+        ).run(now(), `Merged into ${target.order_number}`, now(), source.id);
+        db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?").run(now(), source.table_id);
+        db.prepare("UPDATE tables SET status = 'occupied', updated_at = ? WHERE id = ?").run(now(), targetTableId);
+        const details = {
+          from_order: source.order_number,
+          to_order: target.order_number,
+          to_table: targetTable.number,
+          items: movedItems,
+        };
+        recordOrderAudit(db, { orderId: String(source.id), actorUserId: actorId, action: 'order_merged', details });
+        recordOrderAudit(db, { orderId: String(target.id), actorUserId: actorId, action: 'order_merged', details });
+        return {
+          sourceId: source.id,
+          order: parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(target.id) as any),
+          items: db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(target.id),
+        };
+      });
+
+      cloudSync.recordOrderChanged(String(result.sourceId), 'order.cancelled');
+      cloudSync.recordOrderChanged(String(result.order.id), 'order.updated');
+      notifyKdsUpdate();
+      notifyOrderUpdated();
+      res.json({ order: { ...result.order, items: result.items } });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string; code?: string };
+      if (!error.statusCode) console.error('[Orders] Merge table error:', error);
+      res.status(error.statusCode || 500).json(
+        error.statusCode
+          ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
+          : { error: 'Internal server error' },
+      );
+    }
+  },
+);
+
 // Restore cancelled order item (frontend calls this)
 router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) => {
   try {

@@ -632,6 +632,9 @@ export function startServerApp(): Promise<void> {
     app.post('/api/tables/:id/move-order', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/tables/${encodeURIComponent(String(req.params.id))}/move-order`),
     );
+    app.post('/api/orders/:id/merge-table', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
+      forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/merge-table`),
+    );
     app.post('/api/orders/:id/bill-request', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/bill-request`),
     );

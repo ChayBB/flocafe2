@@ -1,7 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, CheckCheck, ClipboardList, LogOut, MoreVertical, Plus, Printer, ShoppingBag, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  CheckCheck,
+  ClipboardList,
+  LogOut,
+  Merge,
+  MoreVertical,
+  Plus,
+  Printer,
+  ShoppingBag,
+  XCircle,
+} from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -256,6 +268,8 @@ export function OrderedItemsScreen({
   onCancel,
   onConfirmServed,
   onPrintBill,
+  onMoveTable,
+  onMergeTable,
 }: {
   tableName: string;
   orderNumber?: string;
@@ -268,11 +282,18 @@ export function OrderedItemsScreen({
   onConfirmServed: (item: OrderedItem) => Promise<void>;
   /** Prints the table's bill and tells the POS the table is waiting to pay. */
   onPrintBill: () => Promise<void>;
+  onMoveTable?: () => void;
+  onMergeTable?: () => void;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
   const [filter, setFilter] = useState<KitchenStage | 'all'>('all');
   const [printing, setPrinting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const tableActions = [
+    onMoveTable && { key: 'move', label: t('moveTable'), icon: ArrowLeftRight, run: onMoveTable },
+    onMergeTable && { key: 'merge', label: t('mergeTable'), icon: Merge, run: onMergeTable },
+  ].filter((action) => Boolean(action)) as { key: string; label: string; icon: typeof Merge; run: () => void }[];
 
   const live = items.filter((item) => !isCancelledItem(item.status));
   // The bill is printed once every live item is priced and confirmed at the table.
@@ -327,6 +348,43 @@ export function OrderedItemsScreen({
           >
             <Printer size={20} />
           </button>
+        )}
+        {orderNumber && tableActions.length > 0 && (
+          <div className={`relative ${billReady ? '' : 'ms-auto'}`}>
+            <button
+              type="button"
+              data-testid="server-app-ordered-menu"
+              aria-label={t('ticketActions')}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground"
+            >
+              <MoreVertical size={20} />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute end-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+              >
+                {tableActions.map(({ key, label, icon: Icon, run }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      run();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </header>
 

@@ -382,6 +382,12 @@ nothing. It returns `{ order: { ...order, items } }` and `409` for an item that 
 status change away from `served` clears the confirmation. The KDS shows confirmed items, and the
 Server App forwards all three routes.
 
+`POST /:id/merge-table` (`tables.orders.move`) folds a dine-in order into the open order on
+`target_table_id`: every item moves, the target's totals and unpaid bills are recomputed, the source
+order is cancelled with reason `Merged into <order>`, its table becomes available, and both orders
+record an `order_merged` audit entry. It answers `409` with `code` `target_empty` (use move-order),
+`source_billed`, `source_discount`, or `target_paying` (a payment or split on the target).
+
 `POST /:id/bill-request` (`orders.create`, item cancel limiter) records that a table asked for its
 bill: the Server App calls it from the print button, shown once every live item is priced and confirmed
 served, then prints the bill. It sets `bill_requested_at`, `bill_requested_by` and
