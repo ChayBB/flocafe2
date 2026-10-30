@@ -86,7 +86,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
-  test('keeps the table list hidden until Select Table is pressed, and Add food items closes it after a pick', async ({
+  test('keeps the table list hidden until Select Table is pressed, and open beside the menu after a pick', async ({
     page,
   }) => {
     const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -108,10 +108,10 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
 
-    // The list stays open with the table's actions until staff choose to add food.
+    // On a computer the list stays beside the menu; Select Table toggles it closed.
     await expect(page.locator('header')).toContainText(tableName);
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
-    await page.getByTestId('server-app-add-food').click();
+    await picker.click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
     await expect(page.locator('header')).toContainText(tableName);
   });

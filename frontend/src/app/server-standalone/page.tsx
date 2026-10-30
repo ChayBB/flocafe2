@@ -99,6 +99,14 @@ const LIVE_REFRESH_MS = 5000;
 
 const subscribeToNothing = () => () => {};
 
+// Tablets and computers: the current ticket sits beside the menu.
+const WIDE_QUERY = '(min-width: 768px)';
+function subscribeToWide(onChange: () => void) {
+  const media = window.matchMedia(WIDE_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
 function createApi(): AxiosInstance {
   const api = axios.create({ baseURL: window.location.origin, timeout: 10000 });
   api.interceptors.request.use((config) => {
@@ -193,6 +201,11 @@ export default function ServerStandalonePage() {
   const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
   const [moveTableOpen, setMoveTableOpen] = useState(false);
   const [movingTable, setMovingTable] = useState(false);
+  const isWide = useSyncExternalStore(
+    subscribeToWide,
+    () => window.matchMedia(WIDE_QUERY).matches,
+    () => false,
+  );
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
     return () => document.documentElement.classList.remove('theme-server-app');
@@ -1250,24 +1263,11 @@ export default function ServerStandalonePage() {
         )}
       </div>
 
-      {currentOrder?.items && currentOrder.items.length > 0 && (
-        <div className="mt-3 border-t border-border pt-3">
-          <p
-            data-testid="server-app-sent-heading"
-            className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground"
-          >
-            <span>{t('sentToKitchen')}</span>
-            <Ltr as="span" className="rounded bg-muted px-1.5 py-0.5 font-mono normal-case text-foreground">
-              #{currentOrder.order_number}
-            </Ltr>
-          </p>
-          <OrderedItemList
-            itemTestId="server-app-ticket-item"
-            items={currentOrder.items as OrderedItem[]}
-            timezone={regional?.timezone}
-            onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
-            onCancel={(item) => changeSentItem(item.id, 'cancel')}
-            onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
+      {isWide && user && currentOrder && selectedTableId && (
+        <div className="mt-2">
+          <TableKitchenSummary
+            items={(currentOrder.items ?? []) as OrderedItem[]}
+            onOpenDetails={() => setOrderedItemsOpen(true)}
           />
         </div>
       )}
@@ -1366,7 +1366,31 @@ export default function ServerStandalonePage() {
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+      {currentOrder?.items && currentOrder.items.length > 0 && (
+        <div className="mt-4 border-t border-border pt-3">
+          <p
+            data-testid="server-app-sent-heading"
+            className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground"
+          >
+            <span>{t('sentToKitchen')}</span>
+            <Ltr as="span" className="rounded bg-muted px-1.5 py-0.5 font-mono normal-case text-foreground">
+              #{currentOrder.order_number}
+            </Ltr>
+          </p>
+          <OrderedItemList
+            itemTestId="server-app-ticket-item"
+            items={currentOrder.items as OrderedItem[]}
+            timezone={regional?.timezone}
+            onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
+            onCancel={(item) => changeSentItem(item.id, 'cancel')}
+            onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
+          />
+        </div>
+      )}
+
+      {/* The total and send button stay in view however long the sent list grows. */}
+      <div className="sticky bottom-0 z-10 -mx-3 mt-4 bg-card px-3 pb-3">
+      <div className="flex items-center justify-between border-t border-border pt-3">
         <span className="text-sm text-muted-foreground">{t('draftTotal')}</span>
         <span className="text-lg font-bold">
           <Ltr>{money(draftTotal, regional)}</Ltr>
@@ -1400,6 +1424,7 @@ export default function ServerStandalonePage() {
           {sending ? t('sending') : currentOrder ? t('addToOrder') : t('sendToKitchen')}
         </button>
       )}
+      </div>
     </>
   );
 
@@ -1520,7 +1545,7 @@ export default function ServerStandalonePage() {
           )}
 
           <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
-            {user && tablePickerOpen && activeTable && (
+            {user && tablePickerOpen && activeTable && !isWide && (
               <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
                 <button
                   type="button"
@@ -1571,7 +1596,10 @@ export default function ServerStandalonePage() {
             />
           </section>
 
-          <section className="hidden min-w-0 rounded-lg border border-border bg-card p-3 md:block md:sticky md:top-16 md:self-start">
+          <section
+            data-testid="server-app-ticket-panel"
+            className="hidden min-w-0 rounded-lg border border-border bg-card p-3 pb-0 md:block md:sticky md:top-16 md:max-h-[calc(100dvh-5rem)] md:self-start md:overflow-y-auto"
+          >
             {ticketPanelBody}
           </section>
         </main>
