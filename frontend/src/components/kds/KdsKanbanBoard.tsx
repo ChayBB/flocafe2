@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
+import { KdsServiceNotice, noticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor, skipsActiveStage, type BoardStatus } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -223,7 +223,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
         isDragging ? 'opacity-40' : ''
       } ${busy ? 'pointer-events-none opacity-60' : ''}`}
     >
-      <div className={`rounded-xl border-2 ${config.border} bg-card p-3 flex flex-col shadow-sm`}>
+      <div className="rounded-xl border border-border bg-card p-3 flex flex-col">
         <div className="flex justify-between items-center mb-2 gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
             <Ltr as="span" className="font-bold text-sm shrink-0">
@@ -257,13 +257,13 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
           </p>
         )}
 
-        <div className="space-y-1">
+        <div className="divide-y divide-border">
           {items.map((item) => (
             <div
               key={item.id}
               data-testid="kds-item-row"
               data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
-              className={`flex items-center gap-1 rounded-lg border ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1`}
+              className={`flex items-center gap-1 pe-1 ${noticeRowClass(item)}`}
             >
             {/* Only the toggle changes status; tapping the row does nothing. */}
             <div className="flex-1 min-w-0 px-2 py-1.5">
@@ -322,7 +322,7 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
   return (
     <div className="flex-1 min-w-[260px] flex flex-col">
       <div
-        className={`flex items-center gap-2 px-3 py-2 ${config.bg} rounded-t-lg border-2 ${config.border} border-b-0`}
+        className={`flex items-center gap-2 px-3 py-2 ${config.bg} rounded-t-lg border border-border border-b-0`}
       >
         <div className={`w-2 h-2 rounded-full ${config.color}`} />
         <span className={`text-base font-semibold ${config.text}`}>{t(config.labelKey)}</span>
@@ -331,13 +331,13 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
         </span>
       </div>
       <div
-        className={`flex-1 border-2 ${config.border} border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40`}
+        className="flex-1 border border-border border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40"
         style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 220px)' }}
       >
         {groups.map(({ order, items }) => (
           <div
             key={order.id}
-            className={`rounded-xl border-2 ${config.border} bg-card p-3 flex flex-col shadow-sm opacity-80`}
+            className="rounded-xl border border-border bg-card p-3 flex flex-col opacity-80"
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap mb-2">
               <Ltr as="span" className="font-bold text-sm shrink-0">
@@ -351,7 +351,7 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className={`w-full text-start rounded-lg border ${config.border} ${config.bg} px-2 py-1.5`}
+                  className="w-full text-start px-2 py-1.5"
                 >
                   <div className="flex items-center gap-2">
                     <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>

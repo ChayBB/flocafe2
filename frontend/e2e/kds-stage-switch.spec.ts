@@ -66,7 +66,7 @@ test('KDS settings switch columns off so the remaining ones sit together and ite
   const served = (await page.getByTestId('kds-column-served').boundingBox())!;
   expect(served.x - (waiting.x + waiting.width)).toBeLessThan(40);
 
-  const row = page.getByText(productName).locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
+  const row = page.getByText(productName).locator('xpath=ancestor::div[@data-testid="kds-item-row"][1]');
   await row.getByRole('button', { name: 'Move to Delivered' }).click();
   await expect
     .poll(async () => {

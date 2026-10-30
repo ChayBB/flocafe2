@@ -4,7 +4,7 @@ import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
+import { KdsServiceNotice, noticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -85,7 +85,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
           {filteredOrders.map((order) => (
             <div
               key={order.id}
-              className={`bg-card rounded-xl border-2 ${STATUS_CONFIG[activeTab].border} p-4 flex flex-col`}
+              className="bg-card rounded-xl border border-border p-4 flex flex-col"
             >
               <div className="flex justify-between items-center mb-3 gap-2">
                 <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
@@ -116,7 +116,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                 </div>
               )}
 
-              <div className="space-y-2 flex-1">
+              <div className="divide-y divide-border flex-1">
                 {order.items?.map((item) => {
                   const itemStatus = normalizeKitchenStatus(item.status);
                   const config = STATUS_CONFIG[itemStatus];
@@ -127,7 +127,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                       key={item.id}
                       data-testid="kds-item-row"
                       data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
-                      className={`flex items-center gap-1 rounded-xl border-2 ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1.5`}
+                      className={`flex items-center gap-1 pe-1.5 ${noticeRowClass(item)}`}
                     >
                     {/* Only the toggle changes status; tapping the row does nothing. */}
                     <div className="flex-1 min-w-0 px-3 py-2.5">

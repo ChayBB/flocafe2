@@ -71,7 +71,7 @@ test('KDS station picker shows one menu category and the item toggle advances it
   await expect(page.getByText(grill.name)).toBeVisible();
   await expect(page.getByText(bar.name)).toHaveCount(0);
 
-  const grillRow = page.getByText(grill.name).locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
+  const grillRow = page.getByText(grill.name).locator('xpath=ancestor::div[@data-testid="kds-item-row"][1]');
   // Tapping the item itself opens nothing; only the toggle changes status.
   await page.getByText(grill.name).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

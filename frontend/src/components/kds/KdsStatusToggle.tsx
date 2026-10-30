@@ -38,7 +38,7 @@ export function KdsStatusToggle({
       className="shrink-0 min-w-11 min-h-11 flex items-center justify-center disabled:opacity-50"
     >
       <span
-        className={`flex items-center gap-1 h-8 ps-1 pe-1.5 rounded-full border-2 ${nextConfig.border} bg-card shadow-sm active:scale-95 transition`}
+        className="flex items-center gap-1 h-8 ps-1 pe-1.5 rounded-full border border-border bg-card active:scale-95 transition"
       >
         <span className={`w-5 h-5 rounded-full ${nextConfig.color}`} />
         <ChevronRight size={16} className={`${nextConfig.text} rtl-flip`} />

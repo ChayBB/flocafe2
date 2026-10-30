@@ -19,6 +19,12 @@ export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
   return null;
 }
 
+/** Row styling for the KDS boards: plain rows, with a coloured box only for a service notice. */
+export function noticeRowClass(item: KdsOrderItem): string {
+  const notice = serviceNoticeRowClass(item);
+  return notice ? `my-1 rounded-lg border ${notice}` : '';
+}
+
 function confirmedTime(item: KdsOrderItem): string {
   if (!item.served_confirmed_at) return '';
   try {
