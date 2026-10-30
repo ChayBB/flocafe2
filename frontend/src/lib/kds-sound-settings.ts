@@ -113,13 +113,15 @@ function speakOnDevice(text: string, lang: string, voice: SpeechSynthesisVoice):
   });
 }
 
-/** The POS computer's own voice for the language (offline Windows voices), played on this display. */
-async function speakFromServer(text: string, lang: string): Promise<boolean> {
-  if (serverVoiceMissing.has(lang)) return false;
+/** The POS computer's voice for the language (a local voice service or Windows), played on this display. */
+async function speakFromServer(text: string, lang: string, voice = ''): Promise<boolean> {
+  const missingKey = `${voice}\n${lang}`;
+  if (serverVoiceMissing.has(missingKey)) return false;
   try {
-    const response = await api.post('/kds/speech', { text, lang }, { responseType: 'arraybuffer' });
+    const body = voice ? { text, lang, voice } : { text, lang };
+    const response = await api.post('/kds/speech', body, { responseType: 'arraybuffer' });
     if (response.status === 204) {
-      serverVoiceMissing.add(lang);
+      serverVoiceMissing.add(missingKey);
       return false;
     }
     return await playKdsAudio(response.data as ArrayBuffer);
@@ -128,25 +130,44 @@ async function speakFromServer(text: string, lang: string): Promise<boolean> {
   }
 }
 
-/**
- * The POS computer's own voice service when it runs one, else the chosen voice, else an Edge
- * natural voice, else the POS computer's offline voice, else any voice this device has. An online voice that fails (no internet) falls through to the next.
- */
-let serverEngine: Promise<string> | null = null;
-
-/** 'local' when the POS computer runs its own voice service (such as F5-TTS-THAI). */
-function kdsServerEngine(): Promise<string> {
-  serverEngine ??= api
-    .get('/kds/speech')
-    .then((response) => String(response.data?.engine || 'system'))
-    .catch(() => 'system');
-  return serverEngine;
+/** A voice on the POS computer: a local voice service (such as F5-TTS-THAI or PyThaiTTS), or `system` for Windows. */
+export interface KdsServerVoice {
+  id: string;
+  name: string;
 }
 
+/** Stored voice choices with this prefix name a POS-computer voice rather than a device voice. */
+export const KDS_SERVER_VOICE_PREFIX = 'server:';
+
+let serverInfo: Promise<{ engine: string; voices: KdsServerVoice[] }> | null = null;
+
+/** Whether the POS computer runs local voice services ('local') and which ones answer. */
+export function kdsServerVoices(refresh = false): Promise<{ engine: string; voices: KdsServerVoice[] }> {
+  if (refresh || !serverInfo) {
+    serverInfo = api
+      .get('/kds/speech')
+      .then((response) => ({
+        engine: String(response.data?.engine || 'system'),
+        voices: Array.isArray(response.data?.voices) ? (response.data.voices as KdsServerVoice[]) : [],
+      }))
+      .catch(() => ({ engine: 'system', voices: [] }));
+  }
+  return serverInfo;
+}
+
+/**
+ * A POS-computer voice picked on this display; else, unpicked, the POS computer's local voice
+ * service when it runs one; else the picked or an Edge natural device voice, else the POS
+ * computer's Windows voice, else any voice this device has. A voice that fails falls through.
+ */
 async function speakNow(text: string, lang: string): Promise<void> {
-  if ((await kdsServerEngine()) === 'local' && !readKdsVoiceName() && (await speakFromServer(text, lang))) return;
-  const voices = await kdsVoicesFor(lang);
   const chosenName = readKdsVoiceName();
+  if (chosenName.startsWith(KDS_SERVER_VOICE_PREFIX)) {
+    if (await speakFromServer(text, lang, chosenName.slice(KDS_SERVER_VOICE_PREFIX.length))) return;
+  } else if (!chosenName && (await kdsServerVoices()).engine === 'local' && (await speakFromServer(text, lang))) {
+    return;
+  }
+  const voices = await kdsVoicesFor(lang);
   const preferred = voices.find((voice) => voice.name === chosenName) ?? voices.find(isNaturalVoice);
   if (preferred && (await speakOnDevice(text, lang, preferred))) return;
   if (await speakFromServer(text, lang)) return;

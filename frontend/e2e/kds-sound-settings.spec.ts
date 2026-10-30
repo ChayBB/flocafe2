@@ -125,9 +125,11 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const voiceSelect = dialog.getByTestId('kds-voice-select');
   await expect(voiceSelect.locator('option')).toHaveText([
     'Automatic (Edge natural voice when available)',
+    'Windows voice on the POS computer',
     'Microsoft Fake Online (Natural) - English · natural, online',
     'Fake Local English',
   ]);
+  await expect(voiceSelect.locator('optgroup')).toHaveCount(2);
   await voiceSelect.selectOption('Fake Local English');
   await expect.poll(async () => (await sounds(page)).__voices.at(-1)).toBe('Fake Local English');
   expect((await sounds(page)).__spoken.at(-1)).toBe('Table 5, fried rice, 2');

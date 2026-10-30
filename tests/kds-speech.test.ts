@@ -37,38 +37,52 @@ async function main() {
       assertEqualOrThrow(thai.status, 204, 'a computer without a Thai voice answers 204');
       console.log('  (no Thai voice on this computer; audio checks skipped)');
     }
-    // A local voice service (such as F5-TTS-THAI) speaks Thai first when FloCafe is started with it.
+    // Local voice services (such as F5-TTS-THAI and PyThaiTTS) speak Thai first when FloCafe is started with them.
     const asked: string[] = [];
     let localFails = false;
-    const local = http.createServer((req: any, res: any) => {
-      let body = '';
-      req.on('data', (chunk: string) => (body += chunk));
-      req.on('end', () => {
-        asked.push(JSON.parse(body).text);
-        if (localFails) {
-          res.writeHead(500).end();
+    const fakeVoice = (engine: string, name: string) =>
+      http.createServer((req: any, res: any) => {
+        if (req.method === 'GET' && req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, engine, name }));
           return;
         }
-        res.writeHead(200, { 'Content-Type': 'audio/wav' }).end('RIFF-local-voice');
+        let body = '';
+        req.on('data', (chunk: string) => (body += chunk));
+        req.on('end', () => {
+          asked.push(`${engine}:${JSON.parse(body).text}`);
+          if (localFails) {
+            res.writeHead(500).end();
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'audio/wav' }).end(`RIFF-${engine}`);
+        });
       });
-    });
-    await new Promise<void>((resolve) => local.listen(0, '127.0.0.1', resolve));
-    const engine = async () => (await (await fetch(`${baseUrl}/speech`)).json()).engine;
-    assertEqualOrThrow(await engine(), 'system', 'without a local voice the computer voice is used');
-    process.env.FLO_KDS_TTS_URL = `http://127.0.0.1:${local.address().port}/`;
+    const first = fakeVoice('f5-tts-thai', 'F5-TTS-THAI');
+    const second = fakeVoice('pythaitts', 'PyThaiTTS');
+    for (const local of [first, second]) await new Promise<void>((resolve) => local.listen(0, '127.0.0.1', resolve));
+    const info = async () => (await fetch(`${baseUrl}/speech`)).json();
+    assertEqualOrThrow((await info()).engine, 'system', 'without a local voice the computer voice is used');
+    // The second address has nothing listening: it is configured but not offered to displays.
+    process.env.FLO_KDS_TTS_URL = `http://127.0.0.1:${first.address().port}/, http://127.0.0.1:1, http://127.0.0.1:${second.address().port}`;
+    const heard = async (body: Record<string, string>) => Buffer.from(await (await speak(body)).arrayBuffer()).toString();
     try {
-      assertEqualOrThrow(await engine(), 'local', 'displays learn the POS computer has its own voice');
-      const spoken = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH' });
-      assertEqualOrThrow(Buffer.from(await spoken.arrayBuffer()).toString(), 'RIFF-local-voice', 'Thai is read by the local voice');
-      assertEqualOrThrow(asked.join('|'), 'โต๊ะ 9 พร้อมเสิร์ฟ', 'the local voice gets the text');
+      const listed = await info();
+      assertEqualOrThrow(listed.engine, 'local', 'displays learn the POS computer has its own voice');
+      assertEqualOrThrow(JSON.stringify(listed.voices), JSON.stringify([{ id: 'f5-tts-thai', name: 'F5-TTS-THAI' }, { id: 'pythaitts', name: 'PyThaiTTS' }]), 'displays see each answering voice by name');
+      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH' }), 'RIFF-f5-tts-thai', 'Thai is read by the first local voice');
+      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts' }), 'RIFF-pythaitts', 'a display can pick another local voice');
+      assertEqualOrThrow(asked.join('|'), 'f5-tts-thai:โต๊ะ 9 พร้อมเสิร์ฟ|pythaitts:โต๊ะ 9 พร้อมเสิร์ฟ', 'each local voice gets the text');
+      const system = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'system' });
+      assertOrThrow(system.status === 204 || Buffer.from(await system.arrayBuffer()).subarray(0, 4).toString() === 'RIFF', 'the Windows voice can be picked');
       await speak({ text: 'hello', lang: 'en-US' });
-      assertEqualOrThrow(asked.length, 1, 'other languages skip the Thai-only local voice');
+      assertEqualOrThrow(asked.length, 2, 'the Windows voice and other languages skip the Thai-only local voices');
       localFails = true;
-      const fallback = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH' });
+      const fallback = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts' });
       assertOrThrow(fallback.status === 204 || Buffer.from(await fallback.arrayBuffer()).subarray(0, 4).toString() === 'RIFF', 'a failing local voice falls back to the computer voice');
     } finally {
       delete process.env.FLO_KDS_TTS_URL;
-      local.close();
+      first.close();
+      second.close();
     }
     console.log('\nAll KDS speech checks passed');
   } finally {

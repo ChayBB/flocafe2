@@ -8,7 +8,10 @@ import { activeStages } from '@/lib/kds-stages';
 import {
   isNaturalVoice,
   kdsSpeechLang,
+  kdsServerVoices,
   kdsVoicesFor,
+  KDS_SERVER_VOICE_PREFIX,
+  type KdsServerVoice,
   readKdsVoiceName,
   speakKds,
   writeKdsVoiceName,
@@ -82,13 +85,21 @@ export function KdsSettingsDialog({
   const t = useTranslations('kds');
   const active = activeStages(inactiveStatuses);
   const [voices, setVoices] = useState<{ name: string; natural: boolean }[]>([]);
+  const [serverVoices, setServerVoices] = useState<KdsServerVoice[]>([]);
   const [voiceName, setVoiceName] = useState(readKdsVoiceName);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void kdsVoicesFor(kdsSpeechLang()).then((list) => {
+    const lang = kdsSpeechLang();
+    void kdsVoicesFor(lang).then((list) => {
       if (!cancelled) setVoices(list.map((voice) => ({ name: voice.name, natural: isNaturalVoice(voice) })));
+    });
+    void kdsServerVoices(true).then(({ voices: local }) => {
+      if (cancelled) return;
+      // Local voice services read Thai only; the Windows voice reads whatever the POS computer has.
+      const thai = lang.toLowerCase().startsWith('th');
+      setServerVoices([...(thai ? local : []), { id: 'system', name: '' }]);
     });
     return () => {
       cancelled = true;
@@ -163,19 +174,41 @@ export function KdsSettingsDialog({
           <select
             id="kds-voice-select"
             data-testid="kds-voice-select"
-            value={voices.some((voice) => voice.name === voiceName) ? voiceName : ''}
+            value={
+              voices.some((voice) => voice.name === voiceName) ||
+              serverVoices.some((voice) => KDS_SERVER_VOICE_PREFIX + voice.id === voiceName)
+                ? voiceName
+                : ''
+            }
             onChange={(event) => chooseVoice(event.target.value)}
             className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
           >
             <option value="">{t('voiceAuto')}</option>
-            {voices.map((voice) => (
-              <option key={voice.name} value={voice.name}>
-                {voice.natural ? t('voiceNatural', { name: voice.name }) : voice.name}
-              </option>
-            ))}
+            {serverVoices.length > 0 && (
+              <optgroup label={t('voiceGroupServer')}>
+                {serverVoices.map((voice) => (
+                  <option key={voice.id} value={KDS_SERVER_VOICE_PREFIX + voice.id}>
+                    {voice.id === 'system' ? t('voiceServerSystem') : voice.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {voices.length > 0 && (
+              <optgroup label={t('voiceGroupDevice')}>
+                {voices.map((voice) => (
+                  <option key={voice.name} value={voice.name}>
+                    {voice.natural ? t('voiceNatural', { name: voice.name }) : voice.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <p className="text-xs text-muted-foreground">
-            {voices.some((voice) => voice.natural) ? t('voiceHintNatural') : t('voiceHintEdge')}
+            {voiceName.startsWith(KDS_SERVER_VOICE_PREFIX)
+              ? t('voiceHintServer')
+              : voices.some((voice) => voice.natural)
+                ? t('voiceHintNatural')
+                : t('voiceHintEdge')}
           </p>
         </div>
       </DialogContent>

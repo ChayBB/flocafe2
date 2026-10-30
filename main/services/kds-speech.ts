@@ -34,16 +34,47 @@ $reader.ReadBytes($bytes)
 `;
 
 const LOCAL_VOICE_TIMEOUT_MS = 30000;
+const VOICE_LIST_TTL_MS = 30000;
 
-/** A local voice service (such as F5-TTS-THAI) for Thai, when FloCafe is started with FLO_KDS_TTS_URL. */
-export function kdsLocalVoiceUrl(): string | null {
-  const url = (process.env.FLO_KDS_TTS_URL || '').trim().replace(/\/+$/, '');
-  return /^https?:\/\//.test(url) ? url : null;
+export interface KdsServerVoice {
+  id: string;
+  name: string;
 }
 
-async function synthesizeWithLocalVoice(text: string, lang: string): Promise<Buffer | null> {
-  const url = kdsLocalVoiceUrl();
-  if (!url || !lang.toLowerCase().startsWith('th')) return null;
+/** Local voice services for Thai (such as F5-TTS-THAI or PyThaiTTS), from a comma-separated FLO_KDS_TTS_URL. */
+export function kdsLocalVoiceUrls(): string[] {
+  return (process.env.FLO_KDS_TTS_URL || '')
+    .split(',')
+    .map((url) => url.trim().replace(/\/+$/, ''))
+    .filter((url) => /^https?:\/\//.test(url));
+}
+
+let voiceList: { key: string; at: number; voices: (KdsServerVoice & { url: string })[] } | null = null;
+
+/** The local voice services that answer GET /health, named by their `engine` and `name`. */
+async function kdsLocalVoices(): Promise<(KdsServerVoice & { url: string })[]> {
+  const urls = kdsLocalVoiceUrls();
+  const key = urls.join(',');
+  if (voiceList && voiceList.key === key && Date.now() - voiceList.at < VOICE_LIST_TTL_MS) return voiceList.voices;
+  const found = await Promise.all(
+    urls.map(async (url, index) => {
+      try {
+        const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+        if (!response.ok) return null;
+        const health = (await response.json()) as { engine?: unknown; name?: unknown };
+        const id = typeof health.engine === 'string' && health.engine ? health.engine : `local-${index + 1}`;
+        return { id, name: typeof health.name === 'string' && health.name ? health.name : id, url };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const voices = found.filter((voice): voice is KdsServerVoice & { url: string } => voice !== null);
+  voiceList = { key, at: Date.now(), voices };
+  return voices;
+}
+
+async function synthesizeWithLocalVoice(url: string, text: string): Promise<Buffer | null> {
   try {
     const response = await fetch(`${url}/tts`, {
       method: 'POST',
@@ -55,15 +86,24 @@ async function synthesizeWithLocalVoice(text: string, lang: string): Promise<Buf
     const audio = Buffer.from(await response.arrayBuffer());
     return audio.length > 0 ? audio : null;
   } catch (error) {
-    console.warn('[KDS] Local voice unavailable, using the Windows voice:', (error as Error).message);
+    console.warn('[KDS] Local voice unavailable at %s:', url, (error as Error).message);
     return null;
   }
 }
 
-/** WAV audio of the text: the local voice service when set up, else this computer's own voice; null when neither speaks the language. */
-export async function synthesizeKdsSpeech(text: string, lang: string): Promise<Buffer | null> {
-  const local = await synthesizeWithLocalVoice(text, lang);
-  if (local) return local;
+/**
+ * WAV audio of the text, or null when no voice speaks the language. Thai goes to the chosen local
+ * voice service (or each one in order), then this computer's own voice; `voice: 'system'` skips them.
+ */
+export async function synthesizeKdsSpeech(text: string, lang: string, voice = ''): Promise<Buffer | null> {
+  if (voice !== 'system' && lang.toLowerCase().startsWith('th')) {
+    const urls = kdsLocalVoiceUrls();
+    const chosen = voice ? (await kdsLocalVoices()).find((local) => local.id === voice)?.url : undefined;
+    for (const url of chosen ? [chosen] : urls) {
+      const local = await synthesizeWithLocalVoice(url, text);
+      if (local) return local;
+    }
+  }
   return synthesizeSystemSpeech(text, lang);
 }
 
@@ -94,19 +134,21 @@ async function synthesizeSystemSpeech(text: string, lang: string): Promise<Buffe
   }
 }
 
-/** GET: which voice the POS computer reads with, so displays know to prefer it over their own. */
-export function handleKdsSpeechEngine(_req: Request, res: Response) {
-  res.json({ engine: kdsLocalVoiceUrl() ? 'local' : 'system' });
+/** GET: which voices the POS computer reads with, so displays can prefer or pick one. */
+export async function handleKdsSpeechEngine(_req: Request, res: Response) {
+  const voices = (await kdsLocalVoices()).map(({ id, name }) => ({ id, name }));
+  res.json({ engine: kdsLocalVoiceUrls().length > 0 ? 'local' : 'system', voices });
 }
 
-/** POST { text, lang }: WAV audio, or 204 when this computer cannot speak that language. */
+/** POST { text, lang, voice? }: WAV audio, or 204 when this computer cannot speak that language. */
 export async function handleKdsSpeech(req: Request, res: Response) {
   const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
   const lang = typeof req.body?.lang === 'string' ? req.body.lang : '';
+  const voice = typeof req.body?.voice === 'string' ? req.body.voice.slice(0, 64) : '';
   if (!text || text.length > KDS_SPEECH_MAX_TEXT || !SUPPORTED_LANG.test(lang)) {
     return res.status(400).json({ error: 'text and lang are required' });
   }
-  const audio = await synthesizeKdsSpeech(text, lang);
+  const audio = await synthesizeKdsSpeech(text, lang, voice);
   if (!audio) return res.status(204).end();
   res.set('Content-Type', 'audio/wav').set('Cache-Control', 'no-store').send(audio);
 }
