@@ -137,17 +137,15 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await expect(card(1)).toHaveClass(/bg-orange-100/);
   await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
   await expect(card(2)).toContainText('Changed to takeaway');
-  // The confirmation sits on the menu line and names who confirmed it, and when.
-  const confirmedPill = card(3).getByTestId('kds-served-confirmed');
-  await expect(confirmedPill).toHaveText(/^At the table · .+ \d{2}:\d{2}$/);
-  // The whole line turns green with a tick, so the kitchen sees it reached the table at a glance.
+  // A confirmed line turns green and says plainly, under the menu name, when and by whom.
+  const confirmed = card(3).getByTestId('kds-served-confirmed');
+  await expect(confirmed).toHaveText(/^Served \d{2}:\d{2} · .+$/);
+  const confirmedBox = (await confirmed.boundingBox())!;
+  const nameBox = (await card(3).getByText('E2E Coffee').first().boundingBox())!;
+  expect(confirmedBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 2);
   await expect(card(3)).toHaveAttribute('data-served-confirmed', 'true');
   await expect(card(3)).toHaveClass(/bg-emerald-50/);
-  await expect(card(3).getByTestId('kds-served-check')).toBeVisible();
-  await expect(card(2).getByTestId('kds-served-check')).toHaveCount(0);
-  const pillBox = (await confirmedPill.boundingBox())!;
-  const nameBox = (await card(3).getByText('E2E Coffee').first().boundingBox())!;
-  expect(Math.abs(pillBox.y + pillBox.height / 2 - (nameBox.y + nameBox.height / 2))).toBeLessThan(12);
+  await expect(card(2).getByTestId('kds-served-confirmed')).toHaveCount(0);
   const takeawayPill = card(2).getByTestId('kds-service-notice');
   await expect(takeawayPill).toHaveText('Changed to takeaway');
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);

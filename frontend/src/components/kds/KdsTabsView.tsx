@@ -4,7 +4,7 @@ import { Clock } from 'lucide-react';
 import { useState } from 'react';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsServedCheck, KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
+import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -127,9 +127,8 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                       key={item.id}
                       data-testid="kds-item-row"
                       data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
-                      className={`relative flex items-center gap-1 rounded-xl border-2 ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1.5`}
+                      className={`flex items-center gap-1 rounded-xl border-2 ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1.5`}
                     >
-                    <KdsServedCheck item={item} />
                     {/* Only the toggle changes status; tapping the row does nothing. */}
                     <div className="flex-1 min-w-0 px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

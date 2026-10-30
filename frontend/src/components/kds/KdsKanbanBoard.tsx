@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
 import { KdsSetPrice } from '@/components/kds/KdsSetPrice';
-import { KdsServedCheck, KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
+import { KdsServiceNotice, serviceNoticeRowClass } from '@/components/kds/KdsServiceNotice';
 import { KdsStatusToggle } from '@/components/kds/KdsStatusToggle';
 import { activeStages, boardColumnFor, skipsActiveStage, type BoardStatus } from '@/lib/kds-stages';
 import { Badge } from '@/components/ui/badge';
@@ -263,9 +263,8 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
               key={item.id}
               data-testid="kds-item-row"
               data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
-              className={`relative flex items-center gap-1 rounded-lg border ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1`}
+              className={`flex items-center gap-1 rounded-lg border ${serviceNoticeRowClass(item) ?? `${config.border} ${config.bg}`} pe-1`}
             >
-            <KdsServedCheck item={item} />
             {/* Only the toggle changes status; tapping the row does nothing. */}
             <div className="flex-1 min-w-0 px-2 py-1.5">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

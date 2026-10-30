@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, CheckCheck, CircleCheckBig } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { KdsOrderItem } from '@/hooks/useKdsConnection';
 import { parseDbTimestamp } from '@/lib/utils';
@@ -19,22 +19,6 @@ export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
   return null;
 }
 
-/** Tick on the start edge of a menu line service staff confirmed at the table; the row must be `relative`. */
-export function KdsServedCheck({ item }: { item: KdsOrderItem }) {
-  const t = useTranslations('kds');
-  if (!item.served_confirmed_at || item.service_change) return null;
-  return (
-    <CircleCheckBig
-      data-testid="kds-served-check"
-      size={22}
-      strokeWidth={2.5}
-      role="img"
-      aria-label={t('servedConfirmedMark')}
-      className="absolute -start-2.5 top-1/2 -translate-y-1/2 rounded-full bg-card text-emerald-600 dark:text-emerald-400"
-    />
-  );
-}
-
 function confirmedTime(item: KdsOrderItem): string {
   if (!item.served_confirmed_at) return '';
   try {
@@ -50,8 +34,8 @@ function confirmedTime(item: KdsOrderItem): string {
 }
 
 /**
- * Service staff notes that sit on the menu line itself: a change made after sending (takeaway or
- * cancelled), and who confirmed a served item reached the table, and when.
+ * Service staff notes on the menu line itself: a change made after sending (takeaway or
+ * cancelled), and, on its own line, when a served item was confirmed at the table and by whom.
  */
 export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
   const t = useTranslations('kds');
@@ -69,13 +53,12 @@ export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
       {item.served_confirmed_at && (
         <span
           data-testid="kds-served-confirmed"
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+          className="basis-full flex items-center gap-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
         >
-          <CheckCheck size={12} aria-hidden="true" />
-          {t('servedConfirmedBy', {
-            name: item.served_confirmed_by_name || '—',
-            time: confirmedTime(item),
-          })}
+          <Check size={16} strokeWidth={3} aria-hidden="true" />
+          {item.served_confirmed_by_name
+            ? t('servedConfirmedBy', { name: item.served_confirmed_by_name, time: confirmedTime(item) })
+            : t('servedConfirmedAt', { time: confirmedTime(item) })}
         </span>
       )}
     </>
