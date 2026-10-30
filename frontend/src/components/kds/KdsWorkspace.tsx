@@ -8,6 +8,7 @@ import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
 import { KdsSettingsDialog } from '@/components/kds/KdsSettingsDialog';
 import { KdsTabsView } from '@/components/kds/KdsTabsView';
 import { useKdsView } from '@/hooks/useKdsView';
+import { useKdsScreenMode } from '@/lib/kds-screen-mode';
 import type { KitchenStatus, UseKdsConnectionResult } from '@/hooks/useKdsConnection';
 import {
   isKdsAlertSoundLocked,
@@ -66,10 +67,7 @@ function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<numbe
 export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
-  useEffect(() => {
-    document.documentElement.classList.add('theme-kds');
-    return () => document.documentElement.classList.remove('theme-kds');
-  }, []);
+  const [screenMode, setScreenMode] = useKdsScreenMode();
 
   // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
   // so it disappearing on that tap never shifts the board under the finger.
@@ -243,6 +241,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         onToggleStatus={toggleStage}
         soundSettings={soundSettings}
         onToggleSound={toggleSound}
+        screenMode={screenMode}
+        onScreenMode={setScreenMode}
         onClose={() => setSettingsOpen(false)}
       />
       {conn.ConfirmDialog}

@@ -5,6 +5,7 @@ import { useTranslations } from 'use-intl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
+import { KDS_SCREEN_MODES, type KdsScreenMode } from '@/lib/kds-screen-mode';
 import {
   isNaturalVoice,
   kdsSpeechLang,
@@ -18,6 +19,20 @@ import {
   type KdsSoundSetting,
   type KdsSoundSettings,
 } from '@/lib/kds-sound-settings';
+
+const SCREEN_MODE_LABELS = {
+  auto: 'screenModeAuto',
+  day: 'screenModeDay',
+  night: 'screenModeNight',
+  lowlight: 'screenModeLowLight',
+} as const satisfies Record<KdsScreenMode, string>;
+
+const SCREEN_MODE_HINTS = {
+  auto: 'screenModeAutoHint',
+  day: 'screenModeDayHint',
+  night: 'screenModeNightHint',
+  lowlight: 'screenModeLowLightHint',
+} as const satisfies Record<KdsScreenMode, string>;
 
 const SOUND_ROWS = [
   { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
@@ -64,7 +79,7 @@ function Switch({
   );
 }
 
-/** Display settings: which Kanban columns this station uses, and which sounds it plays. */
+/** Display settings: screen brightness, which Kanban columns this station uses, and which sounds it plays. */
 export function KdsSettingsDialog({
   open,
   stationName,
@@ -72,6 +87,8 @@ export function KdsSettingsDialog({
   onToggleStatus,
   soundSettings,
   onToggleSound,
+  screenMode,
+  onScreenMode,
   onClose,
 }: {
   open: boolean;
@@ -80,6 +97,8 @@ export function KdsSettingsDialog({
   onToggleStatus: (status: KitchenStatus) => void;
   soundSettings: KdsSoundSettings;
   onToggleSound: (setting: KdsSoundSetting) => void;
+  screenMode: KdsScreenMode;
+  onScreenMode: (mode: KdsScreenMode) => void;
   onClose: () => void;
 }) {
   const t = useTranslations('kds');
@@ -114,7 +133,7 @@ export function KdsSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent data-testid="kds-settings-dialog" className="sm:max-w-md">
+      <DialogContent data-testid="kds-settings-dialog" className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('settingsTitle')}</DialogTitle>
           <DialogDescription>{t('settingsColumnsHint', { station: stationName })}</DialogDescription>
@@ -145,6 +164,27 @@ export function KdsSettingsDialog({
               </div>
             );
           })}
+        </div>
+        <div className="space-y-1.5 pt-2">
+          <h3 className="text-sm font-semibold text-foreground">{t('screenModeTitle')}</h3>
+          <div role="radiogroup" aria-label={t('screenModeTitle')} className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
+            {KDS_SCREEN_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={screenMode === mode}
+                data-testid={`kds-screen-mode-${mode}`}
+                onClick={() => onScreenMode(mode)}
+                className={`min-h-11 rounded-md px-1 text-sm font-medium ${
+                  screenMode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                {t(SCREEN_MODE_LABELS[mode])}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t(SCREEN_MODE_HINTS[screenMode])}</p>
         </div>
         <h3 className="pt-2 text-sm font-semibold text-foreground">{t('soundSettingsTitle')}</h3>
         <div className="divide-y divide-border">

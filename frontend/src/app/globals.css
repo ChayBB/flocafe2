@@ -436,7 +436,7 @@ div:hover > .flo-toast-drain,
   --color-brand-ring: #ea580c80;
 }
 
-/* KDS day and night palettes; set on <html> while a KDS screen is open so its dialogs match. */
+/* KDS day, night, and low-light palettes; set on <html> while a KDS screen is open so its dialogs match. */
 .theme-kds {
   --background: #f3f5f7;
   --foreground: #202936;
@@ -531,6 +531,36 @@ div:hover > .flo-toast-drain,
   --kds-served-text: #bd92e8;
   --kds-served-tint: #38394d;
   --kds-served-line: #584e73;
+}
+
+.theme-kds.dark.kds-lowlight {
+  --background: #0e0f11;
+  --foreground: #c9c5bd;
+  --card: #16181c;
+  --card-foreground: #c9c5bd;
+  --popover: #16181c;
+  --popover-foreground: #c9c5bd;
+  --panel: #16181c;
+  --muted: #1c1f24;
+  --muted-foreground: #8e8a83;
+  --border: #2a2d33;
+  --input: #2a2d33;
+  --kds-pending: #c4964f;
+  --kds-pending-text: #c4964f;
+  --kds-pending-tint: #2b2722;
+  --kds-pending-line: #4a3e2b;
+  --kds-preparing: #7f9bc2;
+  --kds-preparing-text: #7f9bc2;
+  --kds-preparing-tint: #232830;
+  --kds-preparing-line: #363f4e;
+  --kds-ready: #69a88c;
+  --kds-ready-text: #69a88c;
+  --kds-ready-tint: #202929;
+  --kds-ready-line: #2f433e;
+  --kds-served: #a58fc2;
+  --kds-served-text: #a58fc2;
+  --kds-served-tint: #272630;
+  --kds-served-line: #413c4e;
 }
 
 html.dark::-webkit-scrollbar-thumb,
