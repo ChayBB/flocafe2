@@ -99,7 +99,7 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                       : order.type}
                   </Badge>
                   {order.table?.name && (
-                    <Badge variant="secondary">{t('tableLabel', { name: order.table.name })}</Badge>
+                    <Badge variant="secondary" className="bg-muted text-foreground">{t('tableLabel', { name: order.table.name })}</Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-sm text-gray-400 font-mono shrink-0">

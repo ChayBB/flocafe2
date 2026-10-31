@@ -438,35 +438,35 @@ div:hover > .flo-toast-drain,
 
 /* KDS day and night palettes; set on <html> while a KDS screen is open so its dialogs match. */
 .theme-kds {
-  --background: #f4f4f2;
-  --foreground: #25282c;
-  --card: #ffffff;
-  --card-foreground: #25282c;
-  --popover: #ffffff;
-  --popover-foreground: #25282c;
-  --panel: #ffffff;
-  --secondary: #eeeeeb;
-  --secondary-foreground: #3a3e44;
-  --muted: #efefec;
-  --muted-foreground: #6b7078;
-  --border: #e2e2de;
-  --input: #e2e2de;
-  --kds-pending: #c99a3e;
-  --kds-pending-text: #84621d;
-  --kds-pending-tint: #f8f1e3;
-  --kds-pending-line: #ecdcb8;
-  --kds-preparing: #c97b5d;
-  --kds-preparing-text: #95503a;
-  --kds-preparing-tint: #f9ede8;
-  --kds-preparing-line: #eed2c6;
-  --kds-ready: #6f9e66;
-  --kds-ready-text: #4a7342;
-  --kds-ready-tint: #edf4eb;
-  --kds-ready-line: #cfe0ca;
-  --kds-served: #8f7fb5;
-  --kds-served-text: #645689;
-  --kds-served-tint: #f2eff7;
-  --kds-served-line: #dcd5ea;
+  --background: #dcd9d2;
+  --foreground: #2a2c2f;
+  --card: #e9e6e0;
+  --card-foreground: #2a2c2f;
+  --popover: #e9e6e0;
+  --popover-foreground: #2a2c2f;
+  --panel: #e9e6e0;
+  --secondary: #dedad3;
+  --secondary-foreground: #3a3d42;
+  --muted: #dedad3;
+  --muted-foreground: #63676e;
+  --border: #cfcbc3;
+  --input: #cfcbc3;
+  --kds-pending: #b88a32;
+  --kds-pending-text: #775616;
+  --kds-pending-tint: #e6dcc8;
+  --kds-pending-line: #d6c49e;
+  --kds-preparing: #b96d50;
+  --kds-preparing-text: #874632;
+  --kds-preparing-tint: #e6d6ce;
+  --kds-preparing-line: #d8b9ab;
+  --kds-ready: #62905a;
+  --kds-ready-text: #42683b;
+  --kds-ready-tint: #d6dfd2;
+  --kds-ready-line: #b9cbb3;
+  --kds-served: #8172a6;
+  --kds-served-text: #5b4e7e;
+  --kds-served-tint: #dcd8e2;
+  --kds-served-line: #c4bcd5;
 }
 
 .dark {

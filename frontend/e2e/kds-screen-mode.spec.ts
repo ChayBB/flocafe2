@@ -38,7 +38,7 @@ test('each KDS display picks day or night and a brightness, and keeps both over 
   await expect(dialog.getByTestId('kds-brightness-value')).toHaveText('100%');
 
   await dialog.getByTestId('kds-screen-mode-day').click();
-  await expect.poll(() => screen(page)).toEqual({ dark: false, background: 'rgb(244, 244, 242)' });
+  await expect.poll(() => screen(page)).toEqual({ dark: false, background: 'rgb(220, 217, 210)' });
 
   // Any whole percent from 20% to 100%; lower brightness dims the board.
   const slider = dialog.getByTestId('kds-brightness');
