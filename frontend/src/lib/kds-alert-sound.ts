@@ -65,6 +65,34 @@ export function playKdsAlert(beeps = 3): boolean {
   return true;
 }
 
+const READY_BELL_URL = '/sounds/kds-ready-bell.wav';
+const READY_BELL_LEAD_MS = 1200;
+let readyBell: Promise<AudioBuffer | null> | null = null;
+
+/**
+ * Rings the ready-to-serve bell and resolves once its strike has sounded, so an announcement can
+ * follow; two beeps stand in when the bell cannot be loaded. Resolves at once when sound is blocked.
+ */
+export async function playKdsReadyBell(): Promise<void> {
+  const audio = getContext();
+  if (!audio || audio.state !== 'running') return;
+  readyBell ??= fetch(READY_BELL_URL)
+    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+    .then((data) => audio.decodeAudioData(data))
+    .catch(() => null);
+  const buffer = await readyBell;
+  if (!buffer) {
+    readyBell = null;
+    playKdsAlert(2);
+    return;
+  }
+  const source = audio.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.destination);
+  source.start();
+  await new Promise((resolve) => setTimeout(resolve, Math.min(buffer.duration * 1000, READY_BELL_LEAD_MS)));
+}
+
 /** Plays encoded audio (such as a spoken announcement) and resolves when it ends. False when sound is blocked. */
 export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
   const audio = getContext();

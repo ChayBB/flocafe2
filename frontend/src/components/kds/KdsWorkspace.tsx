@@ -13,6 +13,7 @@ import type { KitchenStatus, UseKdsConnectionResult } from '@/hooks/useKdsConnec
 import {
   isKdsAlertSoundLocked,
   playKdsAlert,
+  playKdsReadyBell,
   subscribeKdsAlertSound,
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
@@ -179,8 +180,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     }
     if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
       for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
-      playKdsAlert(2);
-      speakKds([...readyPhrases.values()].join('. '), kdsSpeechLang());
+      const announcement = [...readyPhrases.values()].join('. ');
+      void playKdsReadyBell().then(() => speakKds(announcement, kdsSpeechLang()));
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
     knownStatusesRef.current = new Map(

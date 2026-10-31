@@ -2,12 +2,13 @@ import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-type SoundLog = { __beeps: number; __spoken: string[]; __voices: string[] };
+type SoundLog = { __beeps: number; __bells: number; __spoken: string[]; __voices: string[] };
 
 async function recordSounds(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as SoundLog & Record<string, unknown>;
     w.__beeps = 0;
+    w.__bells = 0;
     w.__spoken = [];
     w.__voices = [];
     class FakeAudioContext {
@@ -24,6 +25,19 @@ async function recordSounds(page: Page) {
       }
       createGain() {
         return { gain: { value: 0 }, connect: (node: unknown) => node };
+      }
+      decodeAudioData(data: ArrayBuffer) {
+        return Promise.resolve({ duration: data.byteLength > 0 ? 0.05 : 0 });
+      }
+      createBufferSource() {
+        return {
+          buffer: null,
+          onended: null,
+          connect: (node: unknown) => node,
+          start() {
+            w.__bells += 1;
+          },
+        };
       }
     }
     class FakeUtterance {
@@ -96,6 +110,11 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
     expect(ready.ok(), await ready.text()).toBeTruthy();
   };
 
+  // The KDS server hands out the ready bell sound.
+  const bell = await page.request.get(`${E2E_KDS_BASE_URL}/sounds/kds-ready-bell.wav`);
+  expect(bell.ok()).toBeTruthy();
+  expect((await bell.body()).subarray(0, 4).toString()).toBe('RIFF');
+
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
   await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
@@ -120,9 +139,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
   expect((await sounds(page)).__spoken.join(' | ')).toContain(`Order ${first.order_number}: 2 ${productName}`);
-  const beepsBefore = (await sounds(page)).__beeps;
+  const bellsBefore = (await sounds(page)).__bells;
   await markReady(first.items[0].id);
-  await expect.poll(async () => (await sounds(page)).__beeps, { timeout: 15000 }).toBe(beepsBefore + 2);
+  await expect.poll(async () => (await sounds(page)).__bells, { timeout: 15000 }).toBe(bellsBefore + 1);
   await expect
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
     .toContain(`Order ${first.order_number} is ready to serve`);
@@ -131,7 +150,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await markReady(first.items[1].id);
   await expect(page.getByTestId('kds-column-ready').or(page.getByTestId('kds-workspace')).first()).toBeVisible();
   await page.waitForTimeout(1500);
-  expect((await sounds(page)).__beeps).toBe(afterFirst.__beeps);
+  expect((await sounds(page)).__bells).toBe(afterFirst.__bells);
   expect((await sounds(page)).__spoken).toEqual(afterFirst.__spoken);
 
   // The display can pick another voice; the choice is read out as a sample.
@@ -169,7 +188,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const after = await sounds(page);
   expect(after.__spoken).toEqual(quiet.__spoken);
   expect(after.__spoken.join(' | ')).not.toContain(second.order_number);
-  expect(after.__beeps).toBe(quiet.__beeps);
+  expect(after.__bells).toBe(quiet.__bells);
 });
 
 test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({ page }) => {
@@ -226,18 +245,18 @@ test('a table with several items turning ready is announced once, and not again 
   await expect.poll(announced, { timeout: 15000 }).toBe(1);
   await page.waitForTimeout(1500);
   expect(await announced()).toBe(1);
-  expect((await sounds(page)).__beeps).toBe(start.__beeps + 2);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 
   // More items for the same table within 10 seconds stay quiet.
   await page.clock.fastForward(5000);
   await markReady(tickets[0].items[1].id);
   await page.waitForTimeout(1500);
   expect(await announced()).toBe(1);
-  expect((await sounds(page)).__beeps).toBe(start.__beeps + 2);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 
   // Once 10 seconds have passed the table is announced again.
   await page.clock.fastForward(6000);
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
-  expect((await sounds(page)).__beeps).toBe(start.__beeps + 4);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
 });
