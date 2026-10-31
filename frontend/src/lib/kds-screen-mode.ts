@@ -5,8 +5,9 @@ export type KdsScreenMode = 'day' | 'night';
 
 export const KDS_SCREEN_MODES: readonly KdsScreenMode[] = ['day', 'night'];
 
-/** Screen brightness steps in percent; below 100 the whole display is dimmed. */
-export const KDS_BRIGHTNESS_LEVELS = [20, 40, 60, 80, 100] as const;
+/** Screen brightness in whole percent; below 100 the whole display is dimmed. */
+export const KDS_BRIGHTNESS_MIN = 20;
+export const KDS_BRIGHTNESS_MAX = 100;
 
 const MODE_KEY = 'flocafe:kds-screen-mode';
 const BRIGHTNESS_KEY = 'flocafe:kds-brightness';
@@ -23,12 +24,13 @@ export function readKdsScreenMode(): KdsScreenMode {
 }
 
 export function readKdsBrightness(): number {
-  if (typeof window === 'undefined') return 100;
+  if (typeof window === 'undefined') return KDS_BRIGHTNESS_MAX;
   try {
-    const stored = Number(window.localStorage.getItem(BRIGHTNESS_KEY));
-    return (KDS_BRIGHTNESS_LEVELS as readonly number[]).includes(stored) ? stored : 100;
+    const stored = Number(window.localStorage.getItem(BRIGHTNESS_KEY) || KDS_BRIGHTNESS_MAX);
+    if (!Number.isFinite(stored)) return KDS_BRIGHTNESS_MAX;
+    return Math.min(KDS_BRIGHTNESS_MAX, Math.max(KDS_BRIGHTNESS_MIN, Math.round(stored)));
   } catch {
-    return 100;
+    return KDS_BRIGHTNESS_MAX;
   }
 }
 

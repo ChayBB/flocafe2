@@ -6,7 +6,7 @@ import { useTranslations } from 'use-intl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
-import { KDS_BRIGHTNESS_LEVELS, KDS_SCREEN_MODES, type KdsScreenMode } from '@/lib/kds-screen-mode';
+import { KDS_BRIGHTNESS_MAX, KDS_BRIGHTNESS_MIN, KDS_SCREEN_MODES, type KdsScreenMode } from '@/lib/kds-screen-mode';
 import {
   isNaturalVoice,
   kdsSpeechLang,
@@ -189,9 +189,9 @@ export function KdsSettingsDialog({
               id="kds-brightness"
               data-testid="kds-brightness"
               type="range"
-              min={KDS_BRIGHTNESS_LEVELS[0]}
-              max={KDS_BRIGHTNESS_LEVELS[KDS_BRIGHTNESS_LEVELS.length - 1]}
-              step={KDS_BRIGHTNESS_LEVELS[1] - KDS_BRIGHTNESS_LEVELS[0]}
+              min={KDS_BRIGHTNESS_MIN}
+              max={KDS_BRIGHTNESS_MAX}
+              step={1}
               value={brightness}
               onChange={(event) => onBrightness(Number(event.target.value))}
               className="h-11 min-w-0 flex-1 accent-brand"

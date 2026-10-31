@@ -40,13 +40,17 @@ test('each KDS display picks day or night and a brightness, and keeps both over 
   await dialog.getByTestId('kds-screen-mode-day').click();
   await expect.poll(() => screen(page)).toEqual({ dark: false, background: 'rgb(243, 245, 247)' });
 
-  // Five steps from 20% to 100%; lower brightness dims the board.
+  // Any whole percent from 20% to 100%; lower brightness dims the board.
   const slider = dialog.getByTestId('kds-brightness');
   await expect(slider).toHaveAttribute('min', '20');
-  await expect(slider).toHaveAttribute('step', '20');
-  await slider.fill('40');
-  await expect(dialog.getByTestId('kds-brightness-value')).toHaveText('40%');
-  await expect.poll(() => dimming(page)).toBeCloseTo(0.6);
+  await expect(slider).toHaveAttribute('max', '100');
+  await expect(slider).toHaveAttribute('step', '1');
+  await slider.fill('43');
+  await expect(dialog.getByTestId('kds-brightness-value')).toHaveText('43%');
+  await expect.poll(() => dimming(page)).toBeCloseTo(0.57);
+  await slider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(dialog.getByTestId('kds-brightness-value')).toHaveText('44%');
 
   // Both choices belong to this display and survive a reload, even with the app theme now light.
   await page.emulateMedia({ colorScheme: 'light' });
@@ -54,7 +58,7 @@ test('each KDS display picks day or night and a brightness, and keeps both over 
   await page.reload();
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(23, 28, 35)' });
-  await expect.poll(() => dimming(page)).toBeCloseTo(0.6);
+  await expect.poll(() => dimming(page)).toBeCloseTo(0.56);
 
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-brightness').fill('100');
