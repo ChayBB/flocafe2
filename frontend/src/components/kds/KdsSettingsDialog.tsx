@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react';
 import { Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import {
-  clampKdsReadyRepeat,
+  clampKdsReadyDelay,
   KDS_READY_BELLS,
-  KDS_READY_REPEAT_MAX,
+  KDS_READY_DELAY_MAX,
   playKdsReadyBell,
   readKdsReadyBell,
-  readKdsReadyRepeat,
+  readKdsReadyDelay,
   writeKdsReadyBell,
-  writeKdsReadyRepeat,
+  writeKdsReadyDelay,
   type KdsReadyBell,
+  type KdsReadyDelay,
 } from '@/lib/kds-alert-sound';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -88,6 +89,59 @@ function Switch({
   );
 }
 
+/** A seconds box for one ready bell delay, saved when it loses focus or Enter is pressed. */
+function ReadyDelayField({
+  delay,
+  label,
+  hint,
+  unit,
+  disabled,
+}: {
+  delay: KdsReadyDelay;
+  label: string;
+  hint: string;
+  unit: string;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState(() => String(readKdsReadyDelay(delay)));
+  const id = `kds-ready-${delay}`;
+  const commit = () => {
+    const seconds = value.trim() === '' ? readKdsReadyDelay(delay) : clampKdsReadyDelay(delay, Number(value));
+    writeKdsReadyDelay(delay, seconds);
+    setValue(String(seconds));
+  };
+  const tone = disabled ? 'text-muted-foreground' : 'text-foreground';
+  return (
+    <div className="space-y-1.5 pt-1">
+      <label htmlFor={id} className={`block text-sm font-medium ${tone}`}>
+        {label}
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          id={id}
+          data-testid={id}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={KDS_READY_DELAY_MAX}
+          step={1}
+          disabled={disabled}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => event.key === 'Enter' && commit()}
+          aria-describedby={`${id}-hint`}
+          className="h-11 w-24 rounded-lg border border-border bg-background px-3 text-sm tabular-nums disabled:opacity-50"
+        />
+        <span className={`text-sm ${tone}`}>{unit}</span>
+      </div>
+      <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+        {hint}
+      </p>
+    </div>
+  );
+}
+
 /** Display settings in two tabs: the screen (columns, day/night, brightness) and the sounds this display plays. */
 export function KdsSettingsDialog({
   open,
@@ -120,7 +174,6 @@ export function KdsSettingsDialog({
   const [serverVoices, setServerVoices] = useState<KdsServerVoice[]>([]);
   const [voiceName, setVoiceName] = useState(readKdsVoiceName);
   const [readyBell, setReadyBell] = useState<KdsReadyBell>(readKdsReadyBell);
-  const [readyRepeat, setReadyRepeat] = useState(() => String(readKdsReadyRepeat()));
   const readyOn = soundSettings.orderReady;
   const [tab, setTab] = useState('display');
 
@@ -146,12 +199,6 @@ export function KdsSettingsDialog({
     setReadyBell(bell);
     writeKdsReadyBell(bell);
     void playKdsReadyBell(bell);
-  };
-
-  const commitReadyRepeat = () => {
-    const seconds = readyRepeat.trim() === '' ? readKdsReadyRepeat() : clampKdsReadyRepeat(Number(readyRepeat));
-    writeKdsReadyRepeat(seconds);
-    setReadyRepeat(String(seconds));
   };
 
   const chooseVoice = (name: string) => {
@@ -292,38 +339,20 @@ export function KdsSettingsDialog({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5 pt-1">
-              <label
-                htmlFor="kds-ready-repeat"
-                className={`block text-sm font-medium ${readyOn ? 'text-foreground' : 'text-muted-foreground'}`}
-              >
-                {t('readyRepeatLabel')}
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="kds-ready-repeat"
-                  data-testid="kds-ready-repeat"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={KDS_READY_REPEAT_MAX}
-                  step={1}
-                  disabled={!readyOn}
-                  value={readyRepeat}
-                  onChange={(event) => setReadyRepeat(event.target.value)}
-                  onBlur={commitReadyRepeat}
-                  onKeyDown={(event) => event.key === 'Enter' && commitReadyRepeat()}
-                  aria-describedby="kds-ready-repeat-hint"
-                  className="h-11 w-24 rounded-lg border border-border bg-background px-3 text-sm tabular-nums disabled:opacity-50"
-                />
-                <span className={`text-sm ${readyOn ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {t('readyRepeatUnit')}
-                </span>
-              </div>
-              <p id="kds-ready-repeat-hint" className="text-xs text-muted-foreground">
-                {t('readyRepeatHint')}
-              </p>
-            </div>
+            <ReadyDelayField
+              delay="repeat"
+              label={t('readyRepeatLabel')}
+              hint={t('readyRepeatHint')}
+              unit={t('readyRepeatUnit')}
+              disabled={!readyOn}
+            />
+            <ReadyDelayField
+              delay="gap"
+              label={t('readyGapLabel')}
+              hint={t('readyGapHint')}
+              unit={t('readyRepeatUnit')}
+              disabled={!readyOn}
+            />
             <div className="space-y-1.5 pt-1">
               <label htmlFor="kds-voice-select" className="block text-sm font-medium text-foreground">
                 {t('voiceLabel')}

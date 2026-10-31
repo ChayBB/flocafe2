@@ -192,6 +192,8 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-ready-repeat'))).toBe('25');
   await repeat.fill('10');
   await repeat.blur();
+  // The delay between tables starts at 0 seconds.
+  await expect(dialog.getByTestId('kds-ready-gap')).toHaveValue('0');
   await page.keyboard.press('Escape');
 
   // The display can pick another voice; the choice is read out as a sample.
@@ -215,6 +217,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // With the ready sound off, its bell and repeat delay settings are dimmed.
   await expect(dialog.getByTestId('kds-ready-bell-select')).toBeDisabled();
   await expect(dialog.getByTestId('kds-ready-repeat')).toBeDisabled();
+  await expect(dialog.getByTestId('kds-ready-gap')).toBeDisabled();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
   await page.reload();
@@ -308,27 +311,33 @@ test('a table with several items turning ready is announced once, and not again 
   await page.waitForTimeout(1500);
   expect(await announced()).toBe(1);
 
-  // After the 10 seconds the next item for the table is announced again, but the bell rests for 20.
+  // After the 10 seconds the next item for the table rings and is announced again.
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
-  expect((await sounds(page)).__bells).toBe(start.__bells + 1);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
 
-  // A display with no repeat delay announces the table again straight away, still without the bell.
+  // A display with no repeat delay rings for the table again straight away.
   await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-repeat', '0'));
   await markReady(tickets[0].items[2].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(3);
-  expect((await sounds(page)).__bells).toBe(start.__bells + 1);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 3);
 
-  // Once the bell has rested 20 seconds it rings again.
-  await page.clock.fastForward(12000);
+  // With a delay between alerts the next one waits its turn rather than being skipped.
+  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-gap', '30'));
   await markReady(tickets[1].items[2].id);
+  await expect(readyColumn.getByText('second round c')).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect(await announced()).toBe(3);
+  await page.clock.fastForward(30000);
   await expect.poll(announced, { timeout: 15000 }).toBe(4);
-  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 4);
 
   // A display set to no bell only reads the table.
-  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-bell', 'none'));
-  await page.clock.fastForward(21000);
+  await page.evaluate(() => {
+    localStorage.setItem('flocafe:kds-ready-gap', '0');
+    localStorage.setItem('flocafe:kds-ready-bell', 'none');
+  });
   await markReady(tickets[0].items[3].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(5);
-  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 4);
 });
