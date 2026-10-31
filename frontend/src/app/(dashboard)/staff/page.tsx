@@ -5,7 +5,7 @@ import axios from 'axios';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
-import { Plus, X, Edit, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Edit, RotateCcw, Eye, EyeOff, UserRound } from 'lucide-react';
 import type { Staff } from '@/lib/types';
 import { useTranslations, type AppConfig } from 'use-intl';
 import { useAuthStore } from '@/store/auth';
@@ -13,6 +13,7 @@ import { PermissionMatrix } from '@/components/settings/PermissionMatrix';
 import { PermissionAuditLog } from '@/components/settings/PermissionAuditLog';
 import { AttendancePanel } from '@/components/staff/AttendancePanel';
 import { ZoneResponsibilityPanel } from '@/components/staff/ZoneResponsibilityPanel';
+import { StaffProfileDialog } from '@/components/staff/StaffProfileDialog';
 import { OPERATIONAL_ROLES, ROLE_ACCESS, ROLE_KEYS, hasRole } from '@shared/role-permissions';
 import { ROLE_LABEL_KEYS } from '@/lib/i18n-enums';
 import { tenantCan } from '@/lib/permissions';
@@ -44,11 +45,12 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 
 const isOperationalRole = (role: string) => hasRole(role, OPERATIONAL_ROLES);
 
-type StaffTab = 'staff' | 'attendance' | 'zones';
+type StaffTab = 'staff' | 'attendance' | 'zones' | 'permissions';
 const STAFF_TABS = [
   { tab: 'staff', labelKey: 'tabStaff' },
   { tab: 'attendance', labelKey: 'tabAttendance' },
   { tab: 'zones', labelKey: 'tabZones' },
+  { tab: 'permissions', labelKey: 'tabPermissions' },
 ] as const satisfies readonly { tab: StaffTab; labelKey: StaffKey }[];
 const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 4);
 
@@ -65,9 +67,14 @@ export default function StaffPage() {
   const canViewTables = tenantCan(currentTenant, 'tables.view');
   const canManageTables = tenantCan(currentTenant, 'tables.manage');
   const [tab, setTab] = useState<StaffTab>('staff');
-  const tabs = STAFF_TABS.filter(
-    ({ tab: entry }) => entry === 'staff' || (entry === 'attendance' ? canViewStaff : canViewTables),
-  );
+  const [profileStaff, setProfileStaff] = useState<Staff | null>(null);
+  const tabAllowed: Record<StaffTab, boolean> = {
+    staff: true,
+    attendance: canViewStaff,
+    zones: canViewTables,
+    permissions: canManagePermissions,
+  };
+  const tabs = STAFF_TABS.filter(({ tab: entry }) => tabAllowed[entry]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [kitchenStations, setKitchenStations] = useState<{ id: string; name: string }[]>([]);
   const [kdsEnabled, setKdsEnabled] = useState(true);
@@ -311,9 +318,18 @@ export default function StaffPage() {
                     {roleLabel(s.role, t)}
                   </span>
                 </div>
-                {canManageStaff &&
-                  (canManagePrivilegedStaff || !hasRole(s.role, ROLE_ACCESS.ownerManager)) && (
-                    <div className="flex flex-wrap gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="staff-profile-button"
+                    onClick={() => setProfileStaff(s)}
+                  >
+                    <UserRound size={14} className="me-1" /> {t('profileButton')}
+                  </Button>
+                  {canManageStaff &&
+                    (canManagePrivilegedStaff || !hasRole(s.role, ROLE_ACCESS.ownerManager)) && (
+                    <>
                       <Button
                         ref={(el) => {
                           editTriggerRefs.current[s.id] = el;
@@ -346,8 +362,9 @@ export default function StaffPage() {
                       >
                         {s.is_active ? t('deactivate') : t('reactivate')}
                       </Button>
-                    </div>
+                    </>
                   )}
+                </div>
               </div>
             ))}
           </div>
@@ -355,13 +372,24 @@ export default function StaffPage() {
           {staff.length === 0 && (
             <p className="text-center text-muted-foreground py-12">{t('empty')}</p>
           )}
-
-          {canManagePermissions && <PermissionMatrix staff={staff} />}
-          {canManagePermissions && <PermissionAuditLog staff={staff} />}
         </>
       )}
       {tab === 'attendance' && canViewStaff && <AttendancePanel canManage={canManageStaff} />}
       {tab === 'zones' && canViewTables && <ZoneResponsibilityPanel staff={staff} canManageTables={canManageTables} />}
+      {tab === 'permissions' && canManagePermissions && (
+        <div className="[&>section:first-child]:mt-0">
+          <PermissionMatrix staff={staff} />
+          <PermissionAuditLog staff={staff} />
+        </div>
+      )}
+      {profileStaff && (
+        <StaffProfileDialog
+          member={profileStaff}
+          roleLabel={roleLabel(profileStaff.role, t)}
+          canViewTables={canViewTables}
+          onClose={() => setProfileStaff(null)}
+        />
+      )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

@@ -29,6 +29,7 @@ async function login(page: Page): Promise<void> {
 
 async function openStaff(page: Page): Promise<void> {
   await page.goto(`${BASE}/staff`);
+  await page.getByRole('tab', { name: 'Role permissions' }).click();
   await expect(page.getByRole('heading', { name: 'Role permissions', exact: true })).toBeVisible({ timeout: 30_000 });
   await page.waitForLoadState('networkidle');
 }

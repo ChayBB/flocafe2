@@ -179,6 +179,7 @@ async function startOwnerSession(page: Page, options: { putResponder?: PutRespon
   await page.waitForURL(/\/pos(?:\/|$)/, { timeout: 20000 });
   await page.getByRole('link', { name: 'Staff', exact: true }).click();
   await expect(page).toHaveURL(/\/staff\/?$/);
+  await page.getByRole('tab', { name: 'Role permissions' }).click();
 
   return { putRequests };
 }

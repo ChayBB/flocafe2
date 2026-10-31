@@ -34,18 +34,35 @@ test('the staff page keeps staff, time and wages, and zone responsibility behind
 
   // The staff tab opens first; the other sections wait behind their tabs.
   const tabs = page.getByRole('tab');
-  await expect(tabs).toHaveText(['Staff', 'Time and wages', 'Zone responsibility']);
+  await expect(tabs).toHaveText(['Staff', 'Time and wages', 'Zone responsibility', 'Role permissions']);
   await expect(page.getByTestId('staff-tab-staff')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText(name).first()).toBeVisible();
   await expect(page.getByTestId('attendance-panel')).toHaveCount(0);
   await expect(page.getByTestId('zone-panel')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Role permissions', exact: true })).toHaveCount(0);
+
+  // Profile sits before Edit on each card and opens a read-only summary with the member's zone.
+  const card = page.locator('div.rounded-xl').filter({ hasText: name }).filter({ has: page.getByTestId('staff-profile-button') }).last();
+  const buttons = card.getByRole('button');
+  await expect(buttons.nth(0)).toHaveText('Profile');
+  await expect(buttons.nth(1)).toHaveText('Edit');
+  await card.getByTestId('staff-profile-button').click();
+  const profile = page.getByTestId('staff-profile-dialog');
+  await expect(profile.getByRole('heading', { name })).toBeVisible();
+  await expect(profile).toContainText('Server');
+  await expect(profile.getByTestId('staff-profile-zones')).toHaveText(`${zone} · T ${run}`);
+  await page.keyboard.press('Escape');
+  await expect(profile).toHaveCount(0);
 
   await page.getByTestId('staff-tab-attendance').click();
   await expect(page.getByTestId('attendance-panel')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Staff' })).toHaveCount(0);
 
   await page.getByTestId('staff-tab-zones').click();
-  const card = page.getByTestId('zone-card').filter({ hasText: zone });
-  await expect(card.getByTestId('zone-owner')).toHaveText(`${name} · T ${run}`);
+  const zoneCard = page.getByTestId('zone-card').filter({ hasText: zone });
+  await expect(zoneCard.getByTestId('zone-owner')).toHaveText(`${name} · T ${run}`);
   await expect(page.getByRole('link', { name: 'Manage on the floor plan' })).toHaveAttribute('href', /^\/tables\/?$/);
+
+  await page.getByTestId('staff-tab-permissions').click();
+  await expect(page.getByRole('heading', { name: 'Role permissions', exact: true })).toBeVisible();
 });
