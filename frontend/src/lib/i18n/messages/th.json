@@ -561,6 +561,7 @@
     "messageMove": "ย้าย{from} ไป{to}",
     "messageMerge": "รวม{from} เข้ากับ{to}",
     "messageTakeaway": "{place}: {item} เปลี่ยนเป็นสั่งกลับบ้าน",
+    "messageCancelled": "{place}: {item} ยกเลิกแล้ว",
     "messageEmergency": "เหตุฉุกเฉิน",
     "messageFrom": "จาก {name}",
     "readAloudTable": "โต๊ะ {table} {items}",

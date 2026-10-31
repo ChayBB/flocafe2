@@ -21,7 +21,10 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
       data: {
         type: 'dine_in',
         table_id: tableId,
-        items: [{ product_id: 'e2e-product', quantity: 1, special_instructions: note }],
+        items: [
+          { product_id: 'e2e-product', quantity: 1, special_instructions: note },
+          { product_id: 'e2e-product', quantity: 1, special_instructions: `${note} extra` },
+        ],
       },
     });
     expect(res.status()).toBe(201);
@@ -120,4 +123,16 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
   await page.waitForTimeout(1500);
   await expect(moveNotice).toHaveCount(0);
   await expect(emergencyNotice).toHaveCount(0);
+
+  // Cancelling the take-away item turns its notice into a cancelled one in the same place.
+  const cancel = await page.request.patch(
+    `${E2E_SERVER_APP_BASE_URL}/api/orders/${moving.id}/items/${moving.items[0].id}/cancel`,
+    { headers: { Authorization: `Bearer ${serverToken}` }, data: {} },
+  );
+  expect(cancel.status(), await cancel.text()).toBe(200);
+  const cancelledNotice = bar.locator('[data-testid="kds-message"][data-kind="cancelled"]', { hasText: moveTo });
+  await expect(cancelledNotice).toContainText(`Table ${moveTo}:`, { timeout: 15000 });
+  await expect(cancelledNotice).toContainText('cancelled');
+  await expect(takeawayNotice).toHaveCount(0);
+  await expect(notices).toHaveCount(startCount + 2);
 });

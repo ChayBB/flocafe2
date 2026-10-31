@@ -1,6 +1,6 @@
 import type { KdsOrder } from '@/hooks/useKdsConnection';
 
-export type KdsMessageKind = 'move' | 'merge' | 'takeaway' | 'emergency';
+export type KdsMessageKind = 'move' | 'merge' | 'takeaway' | 'cancelled' | 'emergency';
 
 /** A notice in the KDS message bar, kept until someone acknowledges it. */
 export interface KdsMessage {
@@ -21,7 +21,7 @@ export interface KdsItemPlace {
 export type KdsBoardChange =
   | { kind: 'move'; key: string; from: string; to: string }
   | { kind: 'merge'; key: string; from: string; to: string }
-  | { kind: 'takeaway'; key: string; place: string; item: string };
+  | { kind: 'takeaway' | 'cancelled'; key: string; place: string; item: string };
 
 export function kdsItemPlaces(orders: KdsOrder[], placeOf: (order: KdsOrder) => string): Map<number, KdsItemPlace> {
   const places = new Map<number, KdsItemPlace>();
@@ -36,7 +36,8 @@ export function kdsItemPlaces(orders: KdsOrder[], placeOf: (order: KdsOrder) => 
 
 /**
  * Compares two board snapshots item by item: an order that changed table was moved, items that
- * joined another table's order were merged into it, and an item newly packed to go turned take-away.
+ * joined another table's order were merged into it, and an item newly packed to go turned take-away
+ * (or was cancelled).
  */
 export function detectKdsBoardChanges(
   before: Map<number, KdsItemPlace>,
@@ -56,6 +57,10 @@ export function detectKdsBoardChanges(
     if (now.change === 'takeaway' && was.change !== 'takeaway') {
       const key = `takeaway:${itemId}`;
       changes.set(key, { kind: 'takeaway', key, place: now.place, item: now.name });
+    }
+    if (now.change === 'cancelled' && was.change !== 'cancelled') {
+      const key = `cancelled:${itemId}`;
+      changes.set(key, { kind: 'cancelled', key, place: now.place, item: now.name });
     }
   }
   return [...changes.values()];
@@ -111,6 +116,19 @@ function setKdsMessages(next: KdsMessage[]): void {
 
 export function addKdsMessages(fresh: KdsMessage[]): void {
   if (fresh.length > 0) setKdsMessages([...getKdsMessages(), ...fresh]);
+}
+
+/** Turns an item's take-away notice into a cancelled one in place; returns the notices it changed. */
+export function cancelKdsTakeawayMessages(cancelled: KdsMessage[]): KdsMessage[] {
+  const changed: KdsMessage[] = [];
+  const next = getKdsMessages().map((message) => {
+    const replacement = cancelled.find((notice) => message.id.startsWith(`takeaway:${notice.id.split(':')[1]}:`));
+    if (!replacement) return message;
+    changed.push(replacement);
+    return replacement;
+  });
+  if (changed.length > 0) setKdsMessages(next);
+  return changed;
 }
 
 export function dismissKdsMessage(id: string): void {

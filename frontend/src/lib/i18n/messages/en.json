@@ -561,6 +561,7 @@
     "messageMove": "Moved {from} to {to}",
     "messageMerge": "Merged {from} into {to}",
     "messageTakeaway": "{place}: {item} changed to take-away",
+    "messageCancelled": "{place}: {item} cancelled",
     "messageEmergency": "Emergency",
     "messageFrom": "from {name}",
     "readAloudTable": "Table {table}: {items}",

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftRight, Check, Merge, ShoppingBag, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, Ban, Check, Merge, ShoppingBag, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { KdsBellButton } from '@/components/kds/KdsBellButton';
 import type { KdsMessage } from '@/lib/kds-messages';
@@ -9,6 +9,7 @@ const ICONS = {
   move: ArrowLeftRight,
   merge: Merge,
   takeaway: ShoppingBag,
+  cancelled: Ban,
   emergency: TriangleAlert,
 } as const;
 

@@ -32,6 +32,7 @@ import {
 } from '@/lib/kds-sound-settings';
 import {
   addKdsMessages,
+  cancelKdsTakeawayMessages,
   detectKdsBoardChanges,
   dismissKdsMessage,
   getKdsMessages,
@@ -143,17 +144,22 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     knownPlacesRef.current = places;
     if (!known) return;
     const at = new Date().toISOString();
-    announceKdsMessages(
-      detectKdsBoardChanges(known, places).map((change) => ({
-        id: `${change.key}:${at}`,
-        kind: change.kind,
-        at,
-        text:
-          change.kind === 'takeaway'
-            ? t('messageTakeaway', { place: change.place, item: change.item })
-            : t(change.kind === 'move' ? 'messageMove' : 'messageMerge', { from: change.from, to: change.to }),
-      })),
-    );
+    const notices = detectKdsBoardChanges(known, places).map((change) => ({
+      id: `${change.key}:${at}`,
+      kind: change.kind,
+      at,
+      text:
+        'place' in change
+          ? t(change.kind === 'takeaway' ? 'messageTakeaway' : 'messageCancelled', {
+              place: change.place,
+              item: change.item,
+            })
+          : t(change.kind === 'move' ? 'messageMove' : 'messageMerge', { from: change.from, to: change.to }),
+    }));
+    announceKdsMessages(notices.filter((notice) => notice.kind !== 'cancelled'));
+    // A cancellation only updates an item's take-away notice; the card already beeps for it.
+    const cancelled = cancelKdsTakeawayMessages(notices.filter((notice) => notice.kind === 'cancelled'));
+    if (cancelled.length > 0) speakKds(cancelled.map((notice) => notice.text).join('. '), kdsSpeechLang());
   }, [conn.orders, t]);
   useEffect(() => {
     const seen = readSeenKdsAlerts();
