@@ -110,10 +110,12 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
     expect(ready.ok(), await ready.text()).toBeTruthy();
   };
 
-  // The KDS server hands out the ready bell sound.
-  const bell = await page.request.get(`${E2E_KDS_BASE_URL}/sounds/kds-ready-bell.wav`);
-  expect(bell.ok()).toBeTruthy();
-  expect((await bell.body()).subarray(0, 4).toString()).toBe('RIFF');
+  // The KDS server hands out both ready bell sounds.
+  for (const file of ['kds-ready-bell.wav', 'kds-ready-ding.wav']) {
+    const bell = await page.request.get(`${E2E_KDS_BASE_URL}/sounds/${file}`);
+    expect(bell.ok()).toBeTruthy();
+    expect((await bell.body()).subarray(0, 4).toString()).toBe('RIFF');
+  }
 
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
@@ -152,6 +154,17 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await page.waitForTimeout(1500);
   expect((await sounds(page)).__bells).toBe(afterFirst.__bells);
   expect((await sounds(page)).__spoken).toEqual(afterFirst.__spoken);
+
+  // The display can pick its ready bell; the choice rings as a sample and is kept.
+  await page.getByTestId('kds-settings-button').click();
+  const bellSelect = dialog.getByTestId('kds-ready-bell-select');
+  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding']);
+  await expect(bellSelect).toHaveValue('hotel');
+  const bellsBeforeSample = (await sounds(page)).__bells;
+  await bellSelect.selectOption('ding');
+  await expect.poll(async () => (await sounds(page)).__bells).toBe(bellsBeforeSample + 1);
+  expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-ready-bell'))).toBe('ding');
+  await page.keyboard.press('Escape');
 
   // The display can pick another voice; the choice is read out as a sample.
   await page.getByTestId('kds-settings-button').click();

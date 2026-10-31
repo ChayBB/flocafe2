@@ -65,24 +65,52 @@ export function playKdsAlert(beeps = 3): boolean {
   return true;
 }
 
-const READY_BELL_URL = '/sounds/kds-ready-bell.wav';
+/** The ready-to-serve bells a KDS display can pick from. */
+export const KDS_READY_BELLS = {
+  hotel: '/sounds/kds-ready-bell.wav',
+  ding: '/sounds/kds-ready-ding.wav',
+} as const;
+export type KdsReadyBell = keyof typeof KDS_READY_BELLS;
+
+const READY_BELL_KEY = 'flocafe:kds-ready-bell';
 const READY_BELL_LEAD_MS = 1200;
-let readyBell: Promise<AudioBuffer | null> | null = null;
+const readyBells = new Map<KdsReadyBell, Promise<AudioBuffer | null>>();
+
+export function readKdsReadyBell(): KdsReadyBell {
+  if (typeof window === 'undefined') return 'hotel';
+  try {
+    const stored = window.localStorage.getItem(READY_BELL_KEY);
+    return stored && stored in KDS_READY_BELLS ? (stored as KdsReadyBell) : 'hotel';
+  } catch {
+    return 'hotel';
+  }
+}
+
+export function writeKdsReadyBell(bell: KdsReadyBell): void {
+  try {
+    window.localStorage.setItem(READY_BELL_KEY, bell);
+  } catch {}
+}
 
 /**
- * Rings the ready-to-serve bell and resolves once its strike has sounded, so an announcement can
- * follow; two beeps stand in when the bell cannot be loaded. Resolves at once when sound is blocked.
+ * Rings this display's ready-to-serve bell and resolves once its strike has sounded, so an
+ * announcement can follow; two beeps stand in when the bell cannot be loaded. Resolves at once
+ * when sound is blocked.
  */
-export async function playKdsReadyBell(): Promise<void> {
+export async function playKdsReadyBell(bell: KdsReadyBell = readKdsReadyBell()): Promise<void> {
   const audio = getContext();
   if (!audio || audio.state !== 'running') return;
-  readyBell ??= fetch(READY_BELL_URL)
-    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
-    .then((data) => audio.decodeAudioData(data))
-    .catch(() => null);
-  const buffer = await readyBell;
+  let loading = readyBells.get(bell);
+  if (!loading) {
+    loading = fetch(KDS_READY_BELLS[bell])
+      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+      .then((data) => audio.decodeAudioData(data))
+      .catch(() => null);
+    readyBells.set(bell, loading);
+  }
+  const buffer = await loading;
   if (!buffer) {
-    readyBell = null;
+    readyBells.delete(bell);
     playKdsAlert(2);
     return;
   }

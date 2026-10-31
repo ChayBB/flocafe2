@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
+import { KDS_READY_BELLS, playKdsReadyBell, readKdsReadyBell, writeKdsReadyBell, type KdsReadyBell } from '@/lib/kds-alert-sound';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
 import { activeStages } from '@/lib/kds-stages';
@@ -25,6 +26,11 @@ const SCREEN_MODE_LABELS = {
   day: 'screenModeDay',
   night: 'screenModeNight',
 } as const satisfies Record<KdsScreenMode, string>;
+
+const READY_BELL_LABELS = {
+  hotel: 'readyBellHotel',
+  ding: 'readyBellDing',
+} as const satisfies Record<KdsReadyBell, string>;
 
 const SOUND_ROWS = [
   { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
@@ -102,6 +108,7 @@ export function KdsSettingsDialog({
   const [voices, setVoices] = useState<{ name: string; natural: boolean }[]>([]);
   const [serverVoices, setServerVoices] = useState<KdsServerVoice[]>([]);
   const [voiceName, setVoiceName] = useState(readKdsVoiceName);
+  const [readyBell, setReadyBell] = useState<KdsReadyBell>(readKdsReadyBell);
 
   useEffect(() => {
     if (!open) return;
@@ -120,6 +127,12 @@ export function KdsSettingsDialog({
       cancelled = true;
     };
   }, [open]);
+
+  const chooseReadyBell = (bell: KdsReadyBell) => {
+    setReadyBell(bell);
+    writeKdsReadyBell(bell);
+    void playKdsReadyBell(bell);
+  };
 
   const chooseVoice = (name: string) => {
     setVoiceName(name);
@@ -221,6 +234,24 @@ export function KdsSettingsDialog({
               </div>
             );
           })}
+        </div>
+        <div className="space-y-1.5 pt-1">
+          <label htmlFor="kds-ready-bell-select" className="block text-sm font-medium text-foreground">
+            {t('readyBellLabel')}
+          </label>
+          <select
+            id="kds-ready-bell-select"
+            data-testid="kds-ready-bell-select"
+            value={readyBell}
+            onChange={(event) => chooseReadyBell(event.target.value as KdsReadyBell)}
+            className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            {(Object.keys(KDS_READY_BELLS) as KdsReadyBell[]).map((bell) => (
+              <option key={bell} value={bell}>
+                {t(READY_BELL_LABELS[bell])}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1.5 pt-1">
           <label htmlFor="kds-voice-select" className="block text-sm font-medium text-foreground">
