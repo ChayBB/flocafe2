@@ -355,6 +355,44 @@ Issuing a pairing code is the endpoint that returns the stale claim message desc
 its failure is reported as HTTP 409 for an unregistered store and HTTP 502 for any other cloud
 failure, so a connectivity problem is distinguishable from a registration problem.
 
+## QR ordering relay
+
+A QR ordering relay lets customers order from a table QR over mobile data without the shop
+installing a VPN. [`main/services/qr-relay.ts`](../../main/services/qr-relay.ts) is the POS side;
+the relay server is a separate project.
+
+Pairing (`POST /api/qr-relay/pair`) generates a new Ed25519 key pair and keeps the private key in
+the `qr_relay_private_key` setting, which the wildcard settings read refuses. It sends only the
+public key (SPKI DER, base64) and the device name to `{server}/api/pos/pair/start`. The relay
+answers with `pairing_id`, a 6-digit `code` and `expires_at`. Settings shows the code and a QR of
+`{server}/admin/pair?code=`, and checks `{server}/api/pos/pair/status` about every 3 seconds with
+the signature of `pair:{pairing_id}`. When the relay admin approves the code, the status carries
+`store_id` and `public_base_url`. The POS stores both (`qr_relay_store_id` and
+`guest_qr_public_base_url`), so new table QR links use the relay address. An `expired` or
+`rejected` status ends the pairing.
+
+Once paired, the Server App opens a WebSocket to `{server}/api/pos/tunnel` with an `X-Flo-Store`
+header. The tunnel works like this:
+
+- **Sign-in:** the relay sends a `challenge` nonce. The POS answers `auth` with the signature of
+  `tunnel:{nonce}`, and the relay replies `ready`.
+- **Requests:** customer requests arrive as `request` messages. The POS replays each one on loopback
+  against the Server App, sending the customer address from `client_ip` as `X-Forwarded-For`.
+- **Answers:** each answer goes back as a `response` message without cookies.
+- **Trust:** while the tunnel runs, loopback counts as a trusted proxy, so rate limits key on the
+  customer.
+
+The tunnel forwards only the guest routes, `GET /api/server-app/info` and the static guest page.
+Anything else, including paths with `..` or `//`, answers `404` without reaching the Server App.
+
+The POS caps each request body at 64 KB, each response at 10 MB, and the requests in flight at 20.
+It pings every 25 seconds and reconnects with backoff from 1 to 60 seconds. An `unknown_store`
+error stops the tunnel until the POS is paired again.
+
+`DELETE /api/qr-relay` stops the tunnel and tells `{server}/api/pos/unpair` with the signature of
+`unpair:{store_id}` (best effort). It then clears the key, the store id and the public QR address.
+The relay is never awaited at startup; without it, ordering on the shop network is unchanged.
+
 ## Support ticket outbox
 
 A support request is written to the `support_ticket_outbox` table with a `status` of `pending`,
@@ -434,6 +472,7 @@ For support-ticket correlation, see
 npm run test:google-drive
 npm run test:telemetry
 npm run test:support-ticket
+npm run test:qr-relay
 npm run test:cloud-account-status
 npm run test:cloud-live-orders-batching
 npm run test:recovery-cloud   # includes tests/cloud-deletion-recovery.test.ts

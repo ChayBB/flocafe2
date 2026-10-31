@@ -1044,7 +1044,8 @@ under the `guest_qr_secret` setting; without a matching token they answer `404` 
 table. `POST /api/tables/order-qr` puts that token in each link as `t`, builds the links on
 `guest_qr_public_base_url` when it is set (otherwise the shop-network address), and reports
 `public`. The Server App's `trust proxy` accepts `X-Forwarded-For` only from the address in
-`guest_qr_trusted_proxy`, so behind a QR-ordering proxy every rate limit keys on the customer.
+`guest_qr_trusted_proxy`, and from loopback while the built-in relay tunnel runs, so behind a
+QR-ordering proxy every rate limit keys on the customer.
 
 The main API manages those settings under `/api/settings/guest-qr`: `GET` (`settings.view`) returns
 `{ public_base_url, trusted_proxy }`; `PUT` (`settings.manage`) takes the same fields, `''` to
@@ -1052,6 +1053,23 @@ clear, and answers `400` `public_base_url_invalid` for anything but an https add
 or `trusted_proxy_invalid` for anything but one IP address; `POST /api/settings/guest-qr/rotate`
 (`settings.manage`) replaces `guest_qr_secret`, which retires every printed table QR. The secret is
 in the sensitive set the wildcard settings read refuses.
+
+`/api/qr-relay` pairs the POS with a QR ordering relay (see
+[Cloud integrations](../architecture/cloud-integrations.md#qr-ordering-relay)). Every route answers
+`{ server_url, state, connected, store_id, public_base_url, pairing, last_error }`:
+
+- `state` is `unpaired`, `pairing` or `paired`.
+- `pairing` is `{ code, qr_data_url, expires_at }` while pairing, otherwise `null`.
+
+`GET /` needs `settings.view`. These need `settings.manage`:
+
+- `POST /pair`, body `server_url`, starts pairing.
+- `POST /pair/check` asks the relay whether the code was approved.
+- `DELETE /pair` cancels pairing.
+- `DELETE /` unpairs.
+
+Failures answer `400` with `code` `server_url_invalid` (an https address, or http only on this
+machine) or `not_pairing`. They answer `502` with `relay_unreachable` or `relay_bad_response`.
 
 `requireServerAppAuth` is applied to every route except `/api/health`, `/api/server-app/info`, the three `/api/guest/*` routes and the login route, and
 it runs the feature check **before** the token check. Behaviour by condition:

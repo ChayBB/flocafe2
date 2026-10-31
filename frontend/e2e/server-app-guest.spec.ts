@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createFakeQrRelay } = require('../../tests/helpers/fake-qr-relay.cjs');
 
 const manager = () => ({
   Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
@@ -261,6 +263,7 @@ test('a public QR address and proxy are saved from OrderFlow settings, and cance
     await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
     await page.goto(`${E2E_BASE_URL}/settings?tab=orderflow`);
     const network = page.getByTestId('settings-qr-network');
+    await network.getByText('Manual setup (your own VPS)').click();
     const publicUrl = network.getByLabel('Public address for QR codes');
     await expect(publicUrl).toBeEnabled();
 
@@ -293,5 +296,57 @@ test('a public QR address and proxy are saved from OrderFlow settings, and cance
     expect(old.status()).toBe(404);
   } finally {
     await reset();
+  }
+});
+
+test('pairing with a QR ordering server by code opens a tunnel that serves guests only', async ({ page }) => {
+  const table = await createTable(page);
+  const owner = { Authorization: `Bearer ${getE2eToken('e2e-owner', 'owner@flo.local', 'owner')}` };
+  const relay = await createFakeQrRelay();
+  try {
+    await page.goto(`${E2E_BASE_URL}/auth/login`);
+    await page.getByLabel('Email').fill('owner@flo.local');
+    await page.getByLabel('Password').fill(E2E_PASSWORD);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
+    await page.goto(`${E2E_BASE_URL}/settings?tab=orderflow`);
+    const pairing = page.getByTestId('settings-qr-relay');
+    await pairing.getByLabel('QR ordering server address').fill(relay.url);
+    await pairing.getByRole('button', { name: 'Create pairing code' }).click();
+    const code = pairing.getByTestId('qr-relay-code');
+    await expect(code).toHaveText(/^\d{6}$/);
+    await expect(pairing.getByRole('img', { name: 'Pairing code' })).toBeVisible();
+    await expect(pairing.getByText('Waiting for approval…')).toBeVisible();
+
+    relay.approve((await code.textContent())!.trim(), { storeId: 'e2e-store', publicBaseUrl: 'https://e2e.order.example.com' });
+    await expect(page.getByText('POS paired. Reprint the table QR codes.')).toBeVisible({ timeout: 10000 });
+    await relay.waitForTunnel();
+    await expect(pairing.getByTestId('qr-relay-state')).toHaveText('Connected to the QR ordering server', {
+      timeout: 15000,
+    });
+    await expect(pairing.getByText('Customers order at https://e2e.order.example.com')).toBeVisible();
+
+    const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/order-qr`, {
+      headers: owner,
+      data: { table_ids: [table.id] },
+    });
+    expect((await qr.json()).qrs[0].url).toBe(`https://e2e.order.example.com/server-standalone/?${table.query}`);
+
+    const guestTable = await relay.request('GET', `/api/guest/table?table_id=${encodeURIComponent(table.id)}&t=${table.token}`);
+    expect(guestTable.status).toBe(200);
+    expect(JSON.parse(guestTable.body.toString()).table.id).toBe(table.id);
+    const page_ = await relay.request('GET', '/server-standalone/');
+    expect(page_.status).toBe(200);
+    expect((await relay.request('GET', '/api/orders')).status).toBe(404);
+    expect((await relay.request('POST', '/api/auth/login', { body: { email: 'owner@flo.local' } })).status).toBe(404);
+
+    await pairing.getByRole('button', { name: 'Disconnect' }).click();
+    await page.getByRole('button', { name: 'Disconnect' }).last().click();
+    await expect(page.getByText('Disconnected from the QR ordering server')).toBeVisible();
+    expect(relay.unpaired).toContain('e2e-store');
+    await expect(pairing.getByLabel('QR ordering server address')).toBeVisible();
+  } finally {
+    await page.request.delete(`${E2E_BASE_URL}/api/qr-relay`, { headers: owner });
+    await relay.close();
   }
 });

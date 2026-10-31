@@ -11,6 +11,7 @@ import {
   readGuestQrNetwork,
   rotateGuestQrSecret,
 } from '../lib/guest-qr';
+import { QR_RELAY_PRIVATE_KEY } from '../services/qr-relay';
 import {
   CloudRequestError,
   cloudSync,
@@ -153,6 +154,7 @@ const SENSITIVE_SETTING_KEYS = new Set([
   'posthog_project_token',
   'posthog_host',
   GUEST_QR_SECRET_KEY,
+  QR_RELAY_PRIVATE_KEY,
 ]);
 
 function isGoogleDriveSettingKey(key: string): boolean {

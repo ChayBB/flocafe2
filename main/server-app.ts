@@ -62,6 +62,7 @@ import {
 import { clockNow } from './lib/clock';
 import { recordClockIn, recordClockOut } from './services/attendance';
 import { isTrustedGuestProxy, verifyGuestTableToken } from './lib/guest-qr';
+import { startQrRelay, stopQrRelay } from './services/qr-relay';
 
 let serverApp: http.Server | null = null;
 let stopPromise: Promise<void> | null = null;
@@ -760,6 +761,8 @@ export function startServerApp(): Promise<void> {
           `[Server App] HTTP server running on http://localhost:${getActiveServerAppPort()}`,
         );
         resolve();
+        // Optional: the QR-ordering tunnel opens only on a paired POS and retries on its own.
+        startQrRelay();
       };
       const onError = (err: NodeJS.ErrnoException) => {
         if (stopping) return;
@@ -795,6 +798,7 @@ export function stopServerApp(): Promise<void> {
   if (stopPromise) return stopPromise;
 
   stopping = true;
+  stopQrRelay();
   const rejectStart = startReject;
   startReject = null;
   rejectStart?.(createShutdownCancellationError('Server App'));

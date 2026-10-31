@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'use-intl';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/hooks/use-confirm';
+import { QrRelayPairing } from '@/components/settings/QrRelayPairing';
 
 /** Where table QR codes point when customers order over mobile data, and the proxy in front of the POS. */
 export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
@@ -17,23 +18,18 @@ export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(() => {
     api
       .get('/settings/guest-qr')
       .then(({ data }) => {
-        if (cancelled) return;
         setPublicBaseUrl(data.public_base_url || '');
         setTrustedProxy(data.trusted_proxy || '');
       })
       .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .finally(() => setLoaded(true));
   }, []);
+
+  useEffect(load, [load]);
 
   const save = async () => {
     setSaving(true);
@@ -79,7 +75,10 @@ export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
   const off = disabled || !loaded;
   return (
     <div data-testid="settings-qr-network" className="space-y-3 ps-7">
-      <div className="space-y-1">
+      <QrRelayPairing disabled={disabled} onChanged={load} />
+      <details className="space-y-3 rounded-lg border border-border p-3">
+        <summary className="cursor-pointer text-sm font-medium text-foreground">{t('qrRelayManual')}</summary>
+      <div className="mt-3 space-y-1">
         <label htmlFor="qr-public-url" className="block text-sm font-medium text-foreground">
           {t('qrPublicUrlLabel')}
         </label>
@@ -113,10 +112,11 @@ export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
         <Button type="button" size="sm" disabled={off || saving} onClick={() => void save()}>
           {t('qrNetworkSave')}
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={off} onClick={() => void rotate()}>
-          {t('qrRotate')}
-        </Button>
       </div>
+      </details>
+      <Button type="button" size="sm" variant="outline" disabled={off} onClick={() => void rotate()}>
+        {t('qrRotate')}
+      </Button>
       {ConfirmDialog}
     </div>
   );

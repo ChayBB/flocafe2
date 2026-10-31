@@ -44,12 +44,19 @@ export function readGuestQrNetwork(): { publicBaseUrl: string; trustedProxy: str
   };
 }
 
+let relayLoopbackTrusted = false;
+
+/** While the built-in relay tunnel runs, it reaches the Server App over loopback with the customer's address. */
+export function setRelayLoopbackTrusted(trusted: boolean): void {
+  relayLoopbackTrusted = trusted;
+}
+
 /** Express `trust proxy` test: only the configured proxy, so nobody else can choose their rate-limit key. */
 export function isTrustedGuestProxy(address: string): boolean {
-  const proxy = readGuestQrNetwork().trustedProxy;
-  if (!proxy) return false;
   const bare = address.toLowerCase().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, '');
-  return bare === proxy;
+  if (relayLoopbackTrusted && (bare === '127.0.0.1' || bare === '::1')) return true;
+  const proxy = readGuestQrNetwork().trustedProxy;
+  return Boolean(proxy) && bare === proxy;
 }
 
 function guestQrSecret(): string {
