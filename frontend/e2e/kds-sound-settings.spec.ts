@@ -237,8 +237,10 @@ test('a table with several items turning ready is announced once, and not again 
     await page.getByTestId('kds-login-submit').click();
   }
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Kanban' }).click();
   await expect(page.getByText(`first round a`).first()).toBeVisible({ timeout: 15000 });
   const start = await sounds(page);
+  const readyColumn = page.getByTestId('kds-column-ready');
 
   // Items from both tickets turn ready together: one bell, one announcement for the table.
   await Promise.all([markReady(tickets[0].items[0].id), markReady(tickets[1].items[0].id)]);
@@ -247,15 +249,20 @@ test('a table with several items turning ready is announced once, and not again 
   expect(await announced()).toBe(1);
   expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 
-  // More items for the same table within 10 seconds stay quiet.
+  // More items for the same table within 10 seconds stay quiet, but still move on the screen.
   await page.clock.fastForward(5000);
   await markReady(tickets[0].items[1].id);
+  await expect(readyColumn.getByText('first round b')).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(1500);
   expect(await announced()).toBe(1);
   expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 
-  // Once 10 seconds have passed the table is announced again.
+  // A skipped item is not announced later when the 10 seconds run out.
   await page.clock.fastForward(6000);
+  await page.waitForTimeout(1500);
+  expect(await announced()).toBe(1);
+
+  // After the 10 seconds the next item for the table is announced again.
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
   expect((await sounds(page)).__bells).toBe(start.__bells + 2);
