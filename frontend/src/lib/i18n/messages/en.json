@@ -567,6 +567,7 @@
     "readyBellLabel": "Ready bell sound",
     "readyBellHotel": "Hotel bell",
     "readyBellDing": "Double ding",
+    "readyBellNone": "No bell (read the table only)",
     "voiceLabel": "Reading voice",
     "voiceAuto": "Automatic (Edge natural voice when available)",
     "voiceNatural": "{name} · natural, online",

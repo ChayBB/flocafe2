@@ -158,7 +158,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // The display can pick its ready bell; the choice rings as a sample and is kept.
   await page.getByTestId('kds-settings-button').click();
   const bellSelect = dialog.getByTestId('kds-ready-bell-select');
-  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding']);
+  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding', 'No bell (read the table only)']);
   await expect(bellSelect).toHaveValue('hotel');
   const bellsBeforeSample = (await sounds(page)).__bells;
   await bellSelect.selectOption('ding');
@@ -278,5 +278,12 @@ test('a table with several items turning ready is announced once, and not again 
   // After the 10 seconds the next item for the table is announced again.
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
+
+  // A display set to no bell still reads the table, just without ringing.
+  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-bell', 'none'));
+  await page.clock.fastForward(11000);
+  await markReady(tickets[0].items[2].id);
+  await expect.poll(announced, { timeout: 15000 }).toBe(3);
   expect((await sounds(page)).__bells).toBe(start.__bells + 2);
 });

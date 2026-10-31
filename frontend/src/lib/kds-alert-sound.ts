@@ -65,10 +65,11 @@ export function playKdsAlert(beeps = 3): boolean {
   return true;
 }
 
-/** The ready-to-serve bells a KDS display can pick from. */
+/** The ready-to-serve bells a KDS display can pick from; `none` reads the table without a bell. */
 export const KDS_READY_BELLS = {
   hotel: '/sounds/kds-ready-bell.wav',
   ding: '/sounds/kds-ready-ding.wav',
+  none: null,
 } as const;
 export type KdsReadyBell = keyof typeof KDS_READY_BELLS;
 
@@ -99,10 +100,11 @@ export function writeKdsReadyBell(bell: KdsReadyBell): void {
  */
 export async function playKdsReadyBell(bell: KdsReadyBell = readKdsReadyBell()): Promise<void> {
   const audio = getContext();
-  if (!audio || audio.state !== 'running') return;
+  const url = KDS_READY_BELLS[bell];
+  if (!url || !audio || audio.state !== 'running') return;
   let loading = readyBells.get(bell);
   if (!loading) {
-    loading = fetch(KDS_READY_BELLS[bell])
+    loading = fetch(url)
       .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
       .then((data) => audio.decodeAudioData(data))
       .catch(() => null);

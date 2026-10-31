@@ -567,6 +567,7 @@
     "readyBellLabel": "เสียงกระดิ่งพร้อมเสิร์ฟ",
     "readyBellHotel": "กระดิ่งโรงแรม",
     "readyBellDing": "ติ๊งต่อง 2 ครั้ง",
+    "readyBellNone": "ไม่มีกระดิ่ง (อ่านชื่อโต๊ะอย่างเดียว)",
     "voiceLabel": "เสียงผู้อ่าน",
     "voiceAuto": "อัตโนมัติ (ใช้เสียงธรรมชาติของ Edge ถ้ามี)",
     "voiceNatural": "{name} · เสียงธรรมชาติ ออนไลน์",
