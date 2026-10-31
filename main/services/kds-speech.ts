@@ -41,7 +41,7 @@ export interface KdsServerVoice {
   name: string;
 }
 
-/** Local voice services for Thai (such as F5-TTS-THAI or PyThaiTTS), from a comma-separated FLO_KDS_TTS_URL. */
+/** Local voice services for Thai (such as PyThaiTTS voices), from a comma-separated FLO_KDS_TTS_URL. */
 export function kdsLocalVoiceUrls(): string[] {
   return (process.env.FLO_KDS_TTS_URL || '')
     .split(',')

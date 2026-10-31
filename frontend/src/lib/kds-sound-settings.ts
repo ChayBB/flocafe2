@@ -130,7 +130,7 @@ async function speakFromServer(text: string, lang: string, voice = ''): Promise<
   }
 }
 
-/** A voice on the POS computer: a local voice service (such as F5-TTS-THAI or PyThaiTTS), or `system` for Windows. */
+/** A voice on the POS computer: a local voice service (such as PyThaiTTS), or `system` for Windows. */
 export interface KdsServerVoice {
   id: string;
   name: string;

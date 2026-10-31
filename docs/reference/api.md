@@ -970,7 +970,7 @@ Plus three static handlers: `express.static` over the frontend export, `GET /` r
 `/kds-standalone`, and a `GET /*splat` fallback that serves the standalone KDS page.
 
 `POST /api/kds/speech` reads text aloud for KDS displays on the POS computer. `FLO_KDS_TTS_URL` lists
-local voice services, comma-separated (for example `http://127.0.0.1:5005,http://127.0.0.1:5006`).
+local voice services, comma-separated (for example `http://127.0.0.1:5006,http://127.0.0.1:5007`).
 Each answers `GET {url}/health` with `{ engine, name }`, which become the voice's `id` and label, and
 `POST {url}/tts` with `{ text }` by returning WAV within 30 seconds. Thai text goes to the service
 whose `id` matches `voice`, or to each service in order when `voice` is empty; `voice: system`, other

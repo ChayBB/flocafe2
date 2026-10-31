@@ -37,7 +37,7 @@ async function main() {
       assertEqualOrThrow(thai.status, 204, 'a computer without a Thai voice answers 204');
       console.log('  (no Thai voice on this computer; audio checks skipped)');
     }
-    // Local voice services (such as F5-TTS-THAI and PyThaiTTS) speak Thai first when FloCafe is started with them.
+    // Local voice services (such as PyThaiTTS voices) speak Thai first when FloCafe is started with them.
     const asked: string[] = [];
     let localFails = false;
     const fakeVoice = (engine: string, name: string) =>
@@ -57,8 +57,8 @@ async function main() {
           res.writeHead(200, { 'Content-Type': 'audio/wav' }).end(`RIFF-${engine}`);
         });
       });
-    const first = fakeVoice('f5-tts-thai', 'F5-TTS-THAI');
-    const second = fakeVoice('pythaitts', 'PyThaiTTS');
+    const first = fakeVoice('pythaitts-fastthaig2p', 'PyThaiTTS fastthaig2p');
+    const second = fakeVoice('pythaitts-vachana', 'PyThaiTTS vachana');
     for (const local of [first, second]) await new Promise<void>((resolve) => local.listen(0, '127.0.0.1', resolve));
     const info = async () => (await fetch(`${baseUrl}/speech`)).json();
     assertEqualOrThrow((await info()).engine, 'system', 'without a local voice the computer voice is used');
@@ -68,16 +68,16 @@ async function main() {
     try {
       const listed = await info();
       assertEqualOrThrow(listed.engine, 'local', 'displays learn the POS computer has its own voice');
-      assertEqualOrThrow(JSON.stringify(listed.voices), JSON.stringify([{ id: 'f5-tts-thai', name: 'F5-TTS-THAI' }, { id: 'pythaitts', name: 'PyThaiTTS' }]), 'displays see each answering voice by name');
-      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH' }), 'RIFF-f5-tts-thai', 'Thai is read by the first local voice');
-      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts' }), 'RIFF-pythaitts', 'a display can pick another local voice');
-      assertEqualOrThrow(asked.join('|'), 'f5-tts-thai:โต๊ะ 9 พร้อมเสิร์ฟ|pythaitts:โต๊ะ 9 พร้อมเสิร์ฟ', 'each local voice gets the text');
+      assertEqualOrThrow(JSON.stringify(listed.voices), JSON.stringify([{ id: 'pythaitts-fastthaig2p', name: 'PyThaiTTS fastthaig2p' }, { id: 'pythaitts-vachana', name: 'PyThaiTTS vachana' }]), 'displays see each answering voice by name');
+      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH' }), 'RIFF-pythaitts-fastthaig2p', 'Thai is read by the first local voice');
+      assertEqualOrThrow(await heard({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts-vachana' }), 'RIFF-pythaitts-vachana', 'a display can pick another local voice');
+      assertEqualOrThrow(asked.join('|'), 'pythaitts-fastthaig2p:โต๊ะ 9 พร้อมเสิร์ฟ|pythaitts-vachana:โต๊ะ 9 พร้อมเสิร์ฟ', 'each local voice gets the text');
       const system = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'system' });
       assertOrThrow(system.status === 204 || Buffer.from(await system.arrayBuffer()).subarray(0, 4).toString() === 'RIFF', 'the Windows voice can be picked');
       await speak({ text: 'hello', lang: 'en-US' });
       assertEqualOrThrow(asked.length, 2, 'the Windows voice and other languages skip the Thai-only local voices');
       localFails = true;
-      const fallback = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts' });
+      const fallback = await speak({ text: 'โต๊ะ 9 พร้อมเสิร์ฟ', lang: 'th-TH', voice: 'pythaitts-vachana' });
       assertOrThrow(fallback.status === 204 || Buffer.from(await fallback.arrayBuffer()).subarray(0, 4).toString() === 'RIFF', 'a failing local voice falls back to the computer voice');
     } finally {
       delete process.env.FLO_KDS_TTS_URL;
