@@ -14,6 +14,7 @@ import {
   isKdsAlertSoundLocked,
   playKdsAlert,
   playKdsReadyBell,
+  readKdsReadyBell,
   readKdsReadyRepeat,
   subscribeKdsAlertSound,
   unlockKdsAlertSound,
@@ -21,7 +22,8 @@ import {
 import {
   kdsSpeechLang,
   readKdsSoundSettings,
-  speakKds,
+  queueKdsSound,
+  speakKdsNow,
   writeKdsSoundSettings,
   type KdsSoundSetting,
   type KdsSoundSettings,
@@ -43,6 +45,10 @@ function readInactiveStages(): InactiveStages {
 }
 
 const NONE_INACTIVE: KitchenStatus[] = [];
+// A ready announcement waits this long after new items have been read out.
+const AFTER_READ_ALOUD_MS = 3000;
+// Once the bell rings it rests this long; other tables turning ready meanwhile are only read out.
+const BELL_REST_MS = 20_000;
 
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
@@ -139,6 +145,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   const knownItemIdsRef = useRef<Set<number> | null>(null);
   const knownStatusesRef = useRef<Map<number, string>>(new Map());
   const lastReadyAtRef = useRef<Map<string, number>>(new Map());
+  const readAloudEndedAtRef = useRef(-Infinity);
+  const bellRangAtRef = useRef(-Infinity);
   useEffect(() => {
     const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
     const knownItems = knownItemIdsRef.current;
@@ -156,7 +164,14 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
             : t('readAloudOrder', { number: order.order_number, items });
         })
         .filter(Boolean);
-      if (phrases.length > 0) speakKds(phrases.join('. '), kdsSpeechLang());
+      if (phrases.length > 0) {
+        const text = phrases.join('. ');
+        const lang = kdsSpeechLang();
+        queueKdsSound(async () => {
+          await speakKdsNow(text, lang);
+          readAloudEndedAtRef.current = Date.now();
+        });
+      }
     }
     // Any menu item that turns ready rings the bell and names its table, even while the rest of the
     // order is still cooking. A table is announced once however many items turn ready together, and
@@ -182,7 +197,17 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
       for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
       const announcement = [...readyPhrases.values()].join('. ');
-      void playKdsReadyBell().then(() => speakKds(announcement, kdsSpeechLang()));
+      const lang = kdsSpeechLang();
+      queueKdsSound(async () => {
+        const gap = readAloudEndedAtRef.current + AFTER_READ_ALOUD_MS - Date.now();
+        if (gap > 0) await new Promise((resolve) => setTimeout(resolve, gap));
+        const bell = readKdsReadyBell();
+        if (bell !== 'none' && Date.now() - bellRangAtRef.current >= BELL_REST_MS) {
+          bellRangAtRef.current = Date.now();
+          await playKdsReadyBell(bell);
+        }
+        await speakKdsNow(announcement, lang);
+      });
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
     knownStatusesRef.current = new Map(

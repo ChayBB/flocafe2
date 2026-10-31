@@ -567,6 +567,7 @@
     "readyBellLabel": "Bell sound",
     "readyBellHotel": "Hotel bell",
     "readyBellDing": "Double ding",
+    "readyBellNone": "No bell (read the table only)",
     "readyRepeatLabel": "Repeat ready alert delay",
     "readyRepeatUnit": "seconds",
     "readyRepeatHint": "After a table is announced, its sound does not play again until this time has passed (the screen still updates as usual).",

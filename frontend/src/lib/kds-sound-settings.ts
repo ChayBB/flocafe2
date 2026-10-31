@@ -173,7 +173,15 @@ async function speakNow(text: string, lang: string): Promise<void> {
   if (local) await speakOnDevice(text, lang, local);
 }
 
+/** Runs a sound task after every announcement queued before it. */
+export function queueKdsSound(task: () => Promise<void>): void {
+  speechQueue = speechQueue.then(task).catch(() => {});
+}
+
+/** Reads text aloud now, resolving when it has been read; use inside a queued task. */
+export const speakKdsNow = speakNow;
+
 /** Reads text aloud in the given language, one announcement after another. */
 export function speakKds(text: string, lang: string): void {
-  speechQueue = speechQueue.then(() => speakNow(text, lang)).catch(() => {});
+  queueKdsSound(() => speakNow(text, lang));
 }
