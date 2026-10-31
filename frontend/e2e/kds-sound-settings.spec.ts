@@ -173,6 +173,18 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await bellSelect.selectOption('ding');
   await expect.poll(async () => (await sounds(page)).__bells).toBe(bellsBeforeSample + 1);
   expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-ready-bell'))).toBe('ding');
+
+  // The repeat delay starts at 10 seconds and is kept per display, within 0 to 300 seconds.
+  const repeat = dialog.getByTestId('kds-ready-repeat');
+  await expect(repeat).toHaveValue('10');
+  await repeat.fill('999');
+  await repeat.press('Enter');
+  await expect(repeat).toHaveValue('300');
+  await repeat.fill('25');
+  await repeat.blur();
+  expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-ready-repeat'))).toBe('25');
+  await repeat.fill('10');
+  await repeat.blur();
   await page.keyboard.press('Escape');
 
   // The display can pick another voice; the choice is read out as a sample.
@@ -193,6 +205,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // Switched off, and still off after a reload: new orders and ready orders stay silent.
   await dialog.getByTestId('kds-sound-switch-readAloud').click();
   await dialog.getByTestId('kds-sound-switch-orderReady').click();
+  // With the ready sound off, its bell and repeat delay settings are dimmed.
+  await expect(dialog.getByTestId('kds-ready-bell-select')).toBeDisabled();
+  await expect(dialog.getByTestId('kds-ready-repeat')).toBeDisabled();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
   await page.reload();
@@ -289,4 +304,10 @@ test('a table with several items turning ready is announced once, and not again 
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
   expect((await sounds(page)).__bells).toBe(start.__bells + 2);
+
+  // A display with no repeat delay rings for the table again straight away.
+  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-repeat', '0'));
+  await markReady(tickets[0].items[2].id);
+  await expect.poll(announced, { timeout: 15000 }).toBe(3);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 3);
 });

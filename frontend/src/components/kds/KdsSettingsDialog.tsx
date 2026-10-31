@@ -3,7 +3,17 @@
 import { useEffect, useState } from 'react';
 import { Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
-import { KDS_READY_BELLS, playKdsReadyBell, readKdsReadyBell, writeKdsReadyBell, type KdsReadyBell } from '@/lib/kds-alert-sound';
+import {
+  clampKdsReadyRepeat,
+  KDS_READY_BELLS,
+  KDS_READY_REPEAT_MAX,
+  playKdsReadyBell,
+  readKdsReadyBell,
+  readKdsReadyRepeat,
+  writeKdsReadyBell,
+  writeKdsReadyRepeat,
+  type KdsReadyBell,
+} from '@/lib/kds-alert-sound';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { STATUS_CONFIG, STATUS_ORDER, type KitchenStatus } from '@/hooks/useKdsConnection';
@@ -109,6 +119,8 @@ export function KdsSettingsDialog({
   const [serverVoices, setServerVoices] = useState<KdsServerVoice[]>([]);
   const [voiceName, setVoiceName] = useState(readKdsVoiceName);
   const [readyBell, setReadyBell] = useState<KdsReadyBell>(readKdsReadyBell);
+  const [readyRepeat, setReadyRepeat] = useState(() => String(readKdsReadyRepeat()));
+  const readyOn = soundSettings.orderReady;
   const [tab, setTab] = useState('display');
 
   useEffect(() => {
@@ -133,6 +145,12 @@ export function KdsSettingsDialog({
     setReadyBell(bell);
     writeKdsReadyBell(bell);
     void playKdsReadyBell(bell);
+  };
+
+  const commitReadyRepeat = () => {
+    const seconds = readyRepeat.trim() === '' ? readKdsReadyRepeat() : clampKdsReadyRepeat(Number(readyRepeat));
+    writeKdsReadyRepeat(seconds);
+    setReadyRepeat(String(seconds));
   };
 
   const chooseVoice = (name: string) => {
@@ -252,15 +270,19 @@ export function KdsSettingsDialog({
               })}
             </div>
             <div className="space-y-1.5 pt-1">
-              <label htmlFor="kds-ready-bell-select" className="block text-sm font-medium text-foreground">
+              <label
+                htmlFor="kds-ready-bell-select"
+                className={`block text-sm font-medium ${readyOn ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
                 {t('readyBellLabel')}
               </label>
               <select
                 id="kds-ready-bell-select"
                 data-testid="kds-ready-bell-select"
+                disabled={!readyOn}
                 value={readyBell}
                 onChange={(event) => chooseReadyBell(event.target.value as KdsReadyBell)}
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-50"
               >
                 {(Object.keys(KDS_READY_BELLS) as KdsReadyBell[]).map((bell) => (
                   <option key={bell} value={bell}>
@@ -268,6 +290,38 @@ export function KdsSettingsDialog({
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="space-y-1.5 pt-1">
+              <label
+                htmlFor="kds-ready-repeat"
+                className={`block text-sm font-medium ${readyOn ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
+                {t('readyRepeatLabel')}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="kds-ready-repeat"
+                  data-testid="kds-ready-repeat"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={KDS_READY_REPEAT_MAX}
+                  step={1}
+                  disabled={!readyOn}
+                  value={readyRepeat}
+                  onChange={(event) => setReadyRepeat(event.target.value)}
+                  onBlur={commitReadyRepeat}
+                  onKeyDown={(event) => event.key === 'Enter' && commitReadyRepeat()}
+                  aria-describedby="kds-ready-repeat-hint"
+                  className="h-11 w-24 rounded-lg border border-border bg-background px-3 text-sm tabular-nums disabled:opacity-50"
+                />
+                <span className={`text-sm ${readyOn ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {t('readyRepeatUnit')}
+                </span>
+              </div>
+              <p id="kds-ready-repeat-hint" className="text-xs text-muted-foreground">
+                {t('readyRepeatHint')}
+              </p>
             </div>
             <div className="space-y-1.5 pt-1">
               <label htmlFor="kds-voice-select" className="block text-sm font-medium text-foreground">

@@ -14,6 +14,7 @@ import {
   isKdsAlertSoundLocked,
   playKdsAlert,
   playKdsReadyBell,
+  readKdsReadyRepeat,
   subscribeKdsAlertSound,
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
@@ -42,7 +43,6 @@ function readInactiveStages(): InactiveStages {
 }
 
 const NONE_INACTIVE: KitchenStatus[] = [];
-const READY_REPEAT_MS = 10_000;
 
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
@@ -160,8 +160,9 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     }
     // Any menu item that turns ready rings the bell and names its table, even while the rest of the
     // order is still cooking. A table is announced once however many items turn ready together, and
-    // not again for 10 seconds.
+    // not again until this display's repeat delay has passed.
     const now = Date.now();
+    const repeatMs = readKdsReadyRepeat() * 1000;
     const lastReadyAt = lastReadyAtRef.current;
     const readyPhrases = new Map<string, string>();
     for (const order of orders) {
@@ -170,7 +171,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       );
       if (!turnedReady) continue;
       const key = order.table?.name ? `table:${order.table.name}` : `order:${order.id}`;
-      if (readyPhrases.has(key) || now - (lastReadyAt.get(key) ?? -Infinity) < READY_REPEAT_MS) continue;
+      if (readyPhrases.has(key) || now - (lastReadyAt.get(key) ?? -Infinity) < repeatMs) continue;
       readyPhrases.set(
         key,
         order.table?.name

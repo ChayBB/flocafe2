@@ -92,6 +92,32 @@ export function writeKdsReadyBell(bell: KdsReadyBell): void {
   } catch {}
 }
 
+const READY_REPEAT_KEY = 'flocafe:kds-ready-repeat';
+export const KDS_READY_REPEAT_DEFAULT = 10;
+export const KDS_READY_REPEAT_MAX = 300;
+
+export function clampKdsReadyRepeat(seconds: number): number {
+  if (!Number.isFinite(seconds)) return KDS_READY_REPEAT_DEFAULT;
+  return Math.min(KDS_READY_REPEAT_MAX, Math.max(0, Math.round(seconds)));
+}
+
+/** Seconds this display waits before ringing for the same table again. */
+export function readKdsReadyRepeat(): number {
+  if (typeof window === 'undefined') return KDS_READY_REPEAT_DEFAULT;
+  try {
+    const stored = window.localStorage.getItem(READY_REPEAT_KEY);
+    return stored === null ? KDS_READY_REPEAT_DEFAULT : clampKdsReadyRepeat(Number(stored));
+  } catch {
+    return KDS_READY_REPEAT_DEFAULT;
+  }
+}
+
+export function writeKdsReadyRepeat(seconds: number): void {
+  try {
+    window.localStorage.setItem(READY_REPEAT_KEY, String(clampKdsReadyRepeat(seconds)));
+  } catch {}
+}
+
 /**
  * Rings this display's ready-to-serve bell and resolves once its strike has sounded, so an
  * announcement can follow; two beeps stand in when the bell cannot be loaded. Resolves at once
