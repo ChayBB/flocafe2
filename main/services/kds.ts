@@ -25,6 +25,7 @@ import { parseCategoryIds } from '../routes/auth';
 import { getUserAuthStatus, isTokenRevoked, isTokenStale } from '../middleware/security';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
 import { hasPermission } from './authorization';
+import { recentKdsAlerts } from './kds-alerts';
 
 interface KdsClient {
   ws: WebSocket;
@@ -789,6 +790,7 @@ function buildActiveOrdersSnapshot(
     type: 'initial_data',
     orders: annotateKdsItems(db, ordersWithItems),
     counts: countMap,
+    alerts: recentKdsAlerts(),
   });
 }
 

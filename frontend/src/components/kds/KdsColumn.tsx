@@ -9,11 +9,9 @@ export interface KdsColumnProps {
   status: KitchenStatus;
   count: number;
   children: ReactNode;
-  /** Shown under the column, outside its scrolling list. */
-  footer?: ReactNode;
 }
 
-export function KdsColumn({ status, count, children, footer }: KdsColumnProps) {
+export function KdsColumn({ status, count, children }: KdsColumnProps) {
   const t = useTranslations('kds');
   const config = STATUS_CONFIG[status];
   const statusLabel = t(config.labelKey);
@@ -37,7 +35,7 @@ export function KdsColumn({ status, count, children, footer }: KdsColumnProps) {
         className={`flex-1 border border-border border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40 transition-colors ${
           isDropTarget ? 'bg-muted ring-2 ring-border ring-inset' : ''
         }`}
-        style={{ minHeight: '60vh', maxHeight: footer ? 'calc(100vh - 284px)' : 'calc(100vh - 220px)' }}
+        style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 300px)' }}
       >
         {children}
         {count === 0 && (
@@ -46,7 +44,6 @@ export function KdsColumn({ status, count, children, footer }: KdsColumnProps) {
           </div>
         )}
       </div>
-      {footer}
     </div>
   );
 }

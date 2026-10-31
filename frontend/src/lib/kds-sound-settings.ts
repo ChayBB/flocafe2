@@ -7,7 +7,7 @@ export interface KdsSoundSettings {
   readAloud: boolean;
   /** Ring and announce a table as its menu items turn ready to serve. */
   orderReady: boolean;
-  /** Show a bell button under the last Kanban column that rings the ready bell on demand. */
+  /** Show a bell button in the message bar that rings the ready bell on demand. */
   showBell: boolean;
 }
 

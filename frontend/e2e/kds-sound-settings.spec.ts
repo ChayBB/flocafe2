@@ -360,7 +360,7 @@ test('a table with several items turning ready is announced once, and not again 
   expect((await sounds(page)).__bells).toBe(start.__bells + 4);
 });
 
-test('the show-bell switch puts a bell button under the Served column that rings the ready bell', async ({ page }) => {
+test('the show-bell switch puts a bell button at the right end of the message bar that rings the ready bell', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
@@ -380,8 +380,12 @@ test('the show-bell switch puts a bell button under the Served column that rings
   await dialog.getByTestId('kds-sound-switch-showBell').click();
   await page.keyboard.press('Escape');
 
-  const bell = page.getByTestId('kds-column-served').getByTestId('kds-bell-button');
+  const bar = page.getByTestId('kds-message-bar');
+  const bell = bar.getByTestId('kds-bell-button');
   await expect(bell).toBeVisible();
+  const barBox = (await bar.boundingBox())!;
+  const bellBox = (await bell.boundingBox())!;
+  expect(Math.abs(barBox.x + barBox.width - (bellBox.x + bellBox.width))).toBeLessThan(2);
   await expect(bell).toHaveText('Ring bell');
   const before = (await sounds(page)).__bells;
   await bell.click();
@@ -389,5 +393,5 @@ test('the show-bell switch puts a bell button under the Served column that rings
 
   // The choice is kept after a reload.
   await page.reload();
-  await expect(page.getByTestId('kds-column-served').getByTestId('kds-bell-button')).toBeVisible();
+  await expect(page.getByTestId('kds-message-bar').getByTestId('kds-bell-button')).toBeVisible();
 });

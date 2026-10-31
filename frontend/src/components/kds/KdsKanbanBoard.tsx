@@ -3,7 +3,7 @@
 import { PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
 import { DragDropProvider, useDraggable, type DragEndEvent } from '@dnd-kit/react';
 import { Clock } from 'lucide-react';
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { ElapsedTime } from '@/components/kds/ElapsedTime';
 import { KdsColumn } from '@/components/kds/KdsColumn';
@@ -37,8 +37,6 @@ export interface KdsKanbanBoardProps {
     status: KitchenStatus,
     opts?: { silent?: boolean; expectedStatus?: KitchenStatus },
   ) => Promise<boolean>;
-  /** Shown under the last column on the board (Served, unless that stage is off). */
-  lastColumnFooter?: ReactNode;
 }
 
 interface DropData {
@@ -59,7 +57,6 @@ export function KdsKanbanBoard({
   updating,
   inactiveStatuses,
   updateItemStatus,
-  lastColumnFooter,
 }: KdsKanbanBoardProps) {
   const t = useTranslations('kds');
   const { confirm, ConfirmDialog } = useConfirm();
@@ -149,15 +146,10 @@ export function KdsKanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-3 px-1 overflow-x-auto flex-1 min-h-0">
-          {activeStages(inactiveStatuses).map((status, index, stages) => {
+          {activeStages(inactiveStatuses).map((status) => {
             const groups = groupsByStatus[status];
             return (
-              <KdsColumn
-                key={status}
-                status={status}
-                count={groups.length}
-                footer={index === stages.length - 1 ? lastColumnFooter : undefined}
-              >
+              <KdsColumn key={status} status={status} count={groups.length}>
                 {groups.map(({ order, items }) => (
                   <KanbanOrderCard
                     key={`${order.id}-${status}`}
@@ -340,7 +332,7 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
       </div>
       <div
         className="flex-1 border border-border border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40"
-        style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 220px)' }}
+        style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 300px)' }}
       >
         {groups.map(({ order, items }) => (
           <div

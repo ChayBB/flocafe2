@@ -131,14 +131,16 @@ test.describe('Server App tableside ordering', () => {
 
       const header = page.locator('header');
       const tableButton = header.getByTestId('server-app-table-button');
+      const emergencyButton = header.getByTestId('server-app-emergency-button');
       const logoutButton = header.getByRole('button', { name: 'Logout' });
       await expect(tableButton).toBeVisible();
+      await expect(emergencyButton).toBeVisible();
       await expect(logoutButton).toBeVisible();
-      await expect(header.getByRole('button')).toHaveCount(2);
+      await expect(header.getByRole('button')).toHaveCount(3);
       await expect(header.getByRole('img', { name: 'Flo' })).toHaveCount(0);
       await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
 
-      for (const button of [tableButton, logoutButton]) {
+      for (const button of [tableButton, emergencyButton, logoutButton]) {
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         expect(box!.width).toBeGreaterThanOrEqual(44);

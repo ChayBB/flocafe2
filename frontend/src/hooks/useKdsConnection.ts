@@ -171,6 +171,7 @@ interface WsMessage {
   type: string;
   orders?: KdsOrder[];
   counts?: Record<string, number>;
+  alerts?: KdsAlert[];
   user?: { id: string; name: string; role: string };
   message?: string;
 }
@@ -193,9 +194,20 @@ export interface UseKdsConnectionOptions {
   enabled: boolean;
 }
 
+/** An emergency call staff sent to every kitchen display. */
+export interface KdsAlert {
+  id: string;
+  kind: 'emergency';
+  message: string;
+  table: string | null;
+  sent_by: string | null;
+  created_at: string;
+}
+
 export interface UseKdsConnectionResult {
   user: KdsUser | null;
   orders: KdsOrder[];
+  alerts: KdsAlert[];
   stations: KdsStation[];
   counts: Record<string, number>;
   loading: boolean;
@@ -275,6 +287,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [alerts, setAlerts] = useState<KdsAlert[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -347,6 +360,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
           return;
         setOrders((prev) => reconcileKdsOrders(prev, data.orders || []));
         setCounts(data.counts || {});
+        setAlerts(data.alerts || []);
         setConnected(true);
       } catch (error: unknown) {
         if (
@@ -670,6 +684,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
             const incomingOrders = msg.orders;
             setOrders((prev) => reconcileKdsOrders(prev, incomingOrders));
             setCounts(msg.counts || {});
+            setAlerts(msg.alerts || []);
             setConnected(true);
             if (msg.type === 'initial_data') setLoading(false);
           }
@@ -879,6 +894,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   return {
     user,
     orders,
+    alerts,
     stations,
     counts,
     loading,

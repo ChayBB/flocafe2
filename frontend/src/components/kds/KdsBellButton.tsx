@@ -17,7 +17,7 @@ export function KdsBellButton() {
       type="button"
       data-testid="kds-bell-button"
       onClick={ring}
-      className="mt-2 flex min-h-14 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card text-base font-medium text-foreground hover:bg-muted active:scale-[0.98] transition"
+      className="flex min-h-14 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-card px-6 text-base font-medium text-foreground hover:bg-muted active:scale-[0.98] transition"
     >
       <BellRing size={22} className="text-(--kds-pending)" />
       {t('ringBell')}

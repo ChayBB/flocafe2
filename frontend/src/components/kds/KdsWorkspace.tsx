@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BellRing } from 'lucide-react';
 import { useTranslations } from 'use-intl';
-import { KdsBellButton } from '@/components/kds/KdsBellButton';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
+import { KdsMessageBar } from '@/components/kds/KdsMessageBar';
 import { KdsSettingsDialog } from '@/components/kds/KdsSettingsDialog';
 import { KdsTabsView } from '@/components/kds/KdsTabsView';
 import { useKdsView } from '@/hooks/useKdsView';
@@ -24,11 +24,25 @@ import {
   kdsSpeechLang,
   readKdsSoundSettings,
   queueKdsSound,
+  speakKds,
   speakKdsNow,
   writeKdsSoundSettings,
   type KdsSoundSetting,
   type KdsSoundSettings,
 } from '@/lib/kds-sound-settings';
+import {
+  addKdsMessages,
+  detectKdsBoardChanges,
+  dismissKdsMessage,
+  getKdsMessages,
+  getServerKdsMessages,
+  kdsItemPlaces,
+  readSeenKdsAlerts,
+  subscribeKdsMessages,
+  writeSeenKdsAlerts,
+  type KdsItemPlace,
+  type KdsMessage,
+} from '@/lib/kds-messages';
 import { TERMINAL_ITEM_STATUSES } from '@shared/order-item-status';
 
 const INACTIVE_STAGES_KEY = 'flocafe:kds-inactive-stages';
@@ -53,6 +67,15 @@ function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
 }
 
+
+/** Adds new notices to the message bar; each beeps (take-away already beeps on its own) and is read out. */
+function announceKdsMessages(fresh: KdsMessage[]) {
+  if (fresh.length === 0) return;
+  addKdsMessages(fresh);
+  const emergency = fresh.some((message) => message.kind === 'emergency');
+  if (fresh.some((message) => message.kind !== 'takeaway')) playKdsAlert(emergency ? 3 : 1);
+  speakKds(fresh.map((message) => message.text).join('. '), kdsSpeechLang());
+}
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
   return new Map(
@@ -108,6 +131,51 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     }
     knownChangesRef.current = new Map([...known, ...current]);
   }, [conn.orders]);
+  // Table moves, merges, items switched to take-away and emergency calls wait in the message bar
+  // until acknowledged.
+  const messages = useSyncExternalStore(subscribeKdsMessages, getKdsMessages, getServerKdsMessages);
+  const knownPlacesRef = useRef<Map<number, KdsItemPlace> | null>(null);
+  useEffect(() => {
+    const places = kdsItemPlaces(conn.orders, (order) =>
+      order.table?.name ? t('tableLabel', { name: order.table.name }) : t('messageOrder', { number: order.order_number }),
+    );
+    const known = knownPlacesRef.current;
+    knownPlacesRef.current = places;
+    if (!known) return;
+    const at = new Date().toISOString();
+    announceKdsMessages(
+      detectKdsBoardChanges(known, places).map((change) => ({
+        id: `${change.key}:${at}`,
+        kind: change.kind,
+        at,
+        text:
+          change.kind === 'takeaway'
+            ? t('messageTakeaway', { place: change.place, item: change.item })
+            : t(change.kind === 'move' ? 'messageMove' : 'messageMerge', { from: change.from, to: change.to }),
+      })),
+    );
+  }, [conn.orders, t]);
+  useEffect(() => {
+    const seen = readSeenKdsAlerts();
+    const unseen = conn.alerts.filter((alert) => !seen.includes(alert.id));
+    if (unseen.length === 0) return;
+    writeSeenKdsAlerts([...seen, ...unseen.map((alert) => alert.id)]);
+    announceKdsMessages(
+      unseen.map((alert) => ({
+        id: `alert:${alert.id}`,
+        kind: 'emergency' as const,
+        at: alert.created_at,
+        text: [
+          t('messageEmergency'),
+          alert.table ? t('tableLabel', { name: alert.table }) : null,
+          alert.message || null,
+          alert.sent_by ? t('messageFrom', { name: alert.sent_by }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+    );
+  }, [conn.alerts, t]);
   // Every display opens on all stations; picking one narrows the board to that category.
   const [selectedStation, setSelectedStation] = useState('');
   const stationId = conn.stations.some((station) => station.id === selectedStation) ? selectedStation : '';
@@ -230,7 +298,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   }, [orders, t]);
 
   return (
-    <div data-testid="kds-workspace" className="relative h-full flex flex-col">
+    <div data-testid="kds-workspace" className="relative h-full flex-1 flex flex-col">
       {/* Dims the board but not the settings dialog, so brightness can always be turned back up. */}
       {screen.brightness < 100 && (
         <div
@@ -251,7 +319,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           type="button"
           data-testid="kds-sound-banner"
           onClick={unlockKdsAlertSound}
-          className="fixed bottom-4 start-1/2 z-40 flex min-h-11 -translate-x-1/2 rtl:translate-x-1/2 items-center justify-center gap-2 rounded-full border border-amber-400 bg-amber-50 px-4 text-sm font-semibold text-amber-800 shadow-lg"
+          className="fixed bottom-24 start-1/2 z-40 flex min-h-11 -translate-x-1/2 rtl:translate-x-1/2 items-center justify-center gap-2 rounded-full border border-amber-400 bg-amber-50 px-4 text-sm font-semibold text-amber-800 shadow-lg"
         >
           <BellRing size={18} />
           {t('enableAlertSound')}
@@ -279,7 +347,6 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
             updating={conn.updating}
             inactiveStatuses={inactiveStatuses}
             updateItemStatus={conn.updateItemStatus}
-            lastColumnFooter={soundSettings.showBell ? <KdsBellButton /> : undefined}
           />
         ) : (
           <KdsTabsView
@@ -290,6 +357,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           />
         )}
       </div>
+      <KdsMessageBar messages={messages} onDismiss={dismissKdsMessage} showBell={soundSettings.showBell} />
       <KdsSettingsDialog
         open={settingsOpen}
         stationName={stationName ?? t('allStations')}

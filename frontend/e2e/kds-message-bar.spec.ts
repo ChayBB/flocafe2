@@ -1,0 +1,123 @@
+import { test, expect } from '@playwright/test';
+import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { getE2eToken } from './helpers/test-auth';
+
+test('the KDS message bar lists table moves, merges, take-away changes and Server App emergencies until acknowledged', async ({
+  page,
+  browser,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+  const headers = { Authorization: `Bearer ${managerToken}` };
+  const run = Math.random().toString(36).slice(2, 7);
+  const makeTable = async (label: string) => {
+    const res = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: label, capacity: 2 } });
+    expect(res.status()).toBe(201);
+    return (await res.json()).table.id as string;
+  };
+  const makeOrder = async (tableId: string, note: string) => {
+    const res = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+      headers,
+      data: {
+        type: 'dine_in',
+        table_id: tableId,
+        items: [{ product_id: 'e2e-product', quantity: 1, special_instructions: note }],
+      },
+    });
+    expect(res.status()).toBe(201);
+    return (await res.json()).order as { id: number; items: { id: number }[] };
+  };
+  const moveFrom = `MvA ${run}`;
+  const moveTo = `MvB ${run}`;
+  const mergeFrom = `MgA ${run}`;
+  const mergeInto = `MgB ${run}`;
+  const moveFromId = await makeTable(moveFrom);
+  const moveToId = await makeTable(moveTo);
+  const mergeFromId = await makeTable(mergeFrom);
+  const mergeIntoId = await makeTable(mergeInto);
+  const moving = await makeOrder(moveFromId, `move ${run}`);
+  const merging = await makeOrder(mergeFromId, `merge ${run}`);
+  await makeOrder(mergeIntoId, `stay ${run}`);
+
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Kanban' }).click();
+  const bar = page.getByTestId('kds-message-bar');
+  await expect(bar).toBeVisible();
+  // The bar sits at the bottom edge of the screen, below the board.
+  const barBox = (await bar.boundingBox())!;
+  expect(900 - (barBox.y + barBox.height)).toBeLessThanOrEqual(24);
+  for (const note of ['move', 'merge', 'stay']) {
+    await expect(page.getByText(`${note} ${run}`).first()).toBeVisible({ timeout: 15000 });
+  }
+  const notices = bar.getByTestId('kds-message');
+  const startCount = await notices.count();
+
+  // Moving an order to another table.
+  const moved = await page.request.post(`${E2E_BASE_URL}/api/tables/${moveFromId}/move-order`, {
+    headers,
+    data: { target_table_id: moveToId, order_id: moving.id },
+  });
+  expect(moved.ok(), await moved.text()).toBeTruthy();
+  const moveNotice = bar.locator('[data-testid="kds-message"][data-kind="move"]', { hasText: moveFrom });
+  await expect(moveNotice).toContainText(`Moved Table ${moveFrom} to Table ${moveTo}`, { timeout: 15000 });
+
+  // Merging one table's order into another table's order.
+  const merged = await page.request.post(`${E2E_BASE_URL}/api/orders/${merging.id}/merge-table`, {
+    headers,
+    data: { target_table_id: mergeIntoId },
+  });
+  expect(merged.ok(), await merged.text()).toBeTruthy();
+  const mergeNotice = bar.locator('[data-testid="kds-message"][data-kind="merge"]', { hasText: mergeFrom });
+  await expect(mergeNotice).toContainText(`Merged Table ${mergeFrom} into Table ${mergeInto}`, { timeout: 15000 });
+
+  // Switching an item to take-away.
+  const serverToken = getE2eToken('e2e-server', 'server@flo.local', 'server');
+  const takeaway = await page.request.patch(
+    `${E2E_SERVER_APP_BASE_URL}/api/orders/${moving.id}/items/${moving.items[0].id}/takeaway`,
+    { headers: { Authorization: `Bearer ${serverToken}` } },
+  );
+  expect(takeaway.status()).toBe(200);
+  const takeawayNotice = bar.locator('[data-testid="kds-message"][data-kind="takeaway"]', { hasText: moveTo });
+  await expect(takeawayNotice).toContainText('changed to take-away', { timeout: 15000 });
+
+  // An emergency sent from the Server App's header button.
+  const serverApp = await browser.newPage();
+  await serverApp.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+  await serverApp.evaluate((token) => {
+    localStorage.setItem('flocafe:server-app-token', token);
+    const raw = localStorage.getItem('pos-settings');
+    const parsed = raw ? JSON.parse(raw) : { state: {} };
+    parsed.state = { ...parsed.state, language: 'en' };
+    localStorage.setItem('pos-settings', JSON.stringify(parsed));
+  }, managerToken);
+  await serverApp.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${moveToId}`);
+  await serverApp.getByTestId('server-app-emergency-button').click();
+  const dialog = serverApp.getByTestId('server-app-emergency-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId('server-app-emergency-message').fill(`Spill ${run}`);
+  await dialog.getByTestId('server-app-emergency-send').click();
+  await expect(dialog).toHaveCount(0);
+  await serverApp.close();
+  const emergencyNotice = bar.locator('[data-testid="kds-message"][data-kind="emergency"]', { hasText: `Spill ${run}` });
+  await expect(emergencyNotice).toContainText(`Emergency · Table ${moveTo} · Spill ${run}`, { timeout: 15000 });
+  await expect(notices).toHaveCount(startCount + 4);
+
+  // Acknowledged notices stay gone after a reload; the rest stay, and the emergency does not come back.
+  await moveNotice.getByTestId('kds-message-dismiss').click();
+  await emergencyNotice.getByTestId('kds-message-dismiss').click();
+  await expect(notices).toHaveCount(startCount + 2);
+  await page.reload();
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await expect(mergeNotice).toBeVisible();
+  await expect(takeawayNotice).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(moveNotice).toHaveCount(0);
+  await expect(emergencyNotice).toHaveCount(0);
+});

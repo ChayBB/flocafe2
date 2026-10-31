@@ -1,0 +1,127 @@
+import type { KdsOrder } from '@/hooks/useKdsConnection';
+
+export type KdsMessageKind = 'move' | 'merge' | 'takeaway' | 'emergency';
+
+/** A notice in the KDS message bar, kept until someone acknowledges it. */
+export interface KdsMessage {
+  id: string;
+  kind: KdsMessageKind;
+  text: string;
+  at: string;
+}
+
+/** Where a menu item sits on the board: its order, that order's table or number, and any service change. */
+export interface KdsItemPlace {
+  orderId: number;
+  place: string;
+  change: string | null;
+  name: string;
+}
+
+export type KdsBoardChange =
+  | { kind: 'move'; key: string; from: string; to: string }
+  | { kind: 'merge'; key: string; from: string; to: string }
+  | { kind: 'takeaway'; key: string; place: string; item: string };
+
+export function kdsItemPlaces(orders: KdsOrder[], placeOf: (order: KdsOrder) => string): Map<number, KdsItemPlace> {
+  const places = new Map<number, KdsItemPlace>();
+  for (const order of orders) {
+    const place = placeOf(order);
+    for (const item of order.items || []) {
+      places.set(item.id, { orderId: order.id, place, change: item.service_change ?? null, name: item.product_name });
+    }
+  }
+  return places;
+}
+
+/**
+ * Compares two board snapshots item by item: an order that changed table was moved, items that
+ * joined another table's order were merged into it, and an item newly packed to go turned take-away.
+ */
+export function detectKdsBoardChanges(
+  before: Map<number, KdsItemPlace>,
+  after: Map<number, KdsItemPlace>,
+): KdsBoardChange[] {
+  const changes = new Map<string, KdsBoardChange>();
+  for (const [itemId, now] of after) {
+    const was = before.get(itemId);
+    if (!was) continue;
+    if (was.orderId === now.orderId && was.place !== now.place) {
+      const key = `move:${now.orderId}:${now.place}`;
+      changes.set(key, { kind: 'move', key, from: was.place, to: now.place });
+    } else if (was.orderId !== now.orderId && was.place !== now.place) {
+      const key = `merge:${was.place}:${now.place}`;
+      changes.set(key, { kind: 'merge', key, from: was.place, to: now.place });
+    }
+    if (now.change === 'takeaway' && was.change !== 'takeaway') {
+      const key = `takeaway:${itemId}`;
+      changes.set(key, { kind: 'takeaway', key, place: now.place, item: now.name });
+    }
+  }
+  return [...changes.values()];
+}
+
+const MESSAGES_KEY = 'flocafe:kds-messages';
+const SEEN_ALERTS_KEY = 'flocafe:kds-seen-alerts';
+const MESSAGE_LIMIT = 30;
+const SEEN_ALERT_LIMIT = 50;
+
+function readList<T>(key: string): T[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(key) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeList(key: string, list: unknown[]): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(list));
+  } catch {}
+}
+
+// Messages this display has not acknowledged yet, kept across reloads.
+let messages: KdsMessage[] | null = null;
+const listeners = new Set<() => void>();
+const NO_MESSAGES: KdsMessage[] = [];
+
+export function getKdsMessages(): KdsMessage[] {
+  messages ??= readList<KdsMessage>(MESSAGES_KEY).filter(
+    (message) => message && typeof message.id === 'string' && typeof message.text === 'string',
+  );
+  return messages;
+}
+
+export function getServerKdsMessages(): KdsMessage[] {
+  return NO_MESSAGES;
+}
+
+export function subscribeKdsMessages(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function setKdsMessages(next: KdsMessage[]): void {
+  messages = next.slice(-MESSAGE_LIMIT);
+  writeList(MESSAGES_KEY, messages);
+  listeners.forEach((listener) => listener());
+}
+
+export function addKdsMessages(fresh: KdsMessage[]): void {
+  if (fresh.length > 0) setKdsMessages([...getKdsMessages(), ...fresh]);
+}
+
+export function dismissKdsMessage(id: string): void {
+  setKdsMessages(getKdsMessages().filter((message) => message.id !== id));
+}
+
+/** Emergency alerts this display has already shown, so an acknowledged one does not come back. */
+export function readSeenKdsAlerts(): string[] {
+  return readList<string>(SEEN_ALERTS_KEY).filter((id) => typeof id === 'string');
+}
+
+export function writeSeenKdsAlerts(ids: string[]): void {
+  writeList(SEEN_ALERTS_KEY, ids.slice(-SEEN_ALERT_LIMIT));
+}

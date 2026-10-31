@@ -17,6 +17,7 @@ import {
   MoreVertical,
   ArrowLeftRight,
   Merge,
+  TriangleAlert,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -36,6 +37,7 @@ import {
   type TransferMode,
   type TransferTable,
 } from '@/components/server-app/TableTransferDialog';
+import { EmergencyAlertDialog } from '@/components/server-app/EmergencyAlertDialog';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -202,6 +204,7 @@ export default function ServerStandalonePage() {
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [orderedItemsOpen, setOrderedItemsOpen] = useState(false);
   const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<TransferMode | null>(null);
@@ -1494,6 +1497,18 @@ export default function ServerStandalonePage() {
               {t('guestLabel')}
             </span>
           )}
+          {user && (
+            <button
+              type="button"
+              onClick={() => setEmergencyOpen(true)}
+              aria-label={t('emergencyTitle')}
+              title={t('emergencyTitle')}
+              data-testid="server-app-emergency-button"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-500 p-2 text-red-600 hover:bg-red-50"
+            >
+              <TriangleAlert size={17} />
+            </button>
+          )}
           {user ? (
             <button
               onClick={logout}
@@ -1627,6 +1642,15 @@ export default function ServerStandalonePage() {
             {ticketPanelBody}
           </section>
         </main>
+      )}
+
+      {api && user && (
+        <EmergencyAlertDialog
+          api={api}
+          tableName={activeTable ? (activeTable.name ?? String(activeTable.number)) : null}
+          open={emergencyOpen}
+          onClose={() => setEmergencyOpen(false)}
+        />
       )}
 
       {transferMode && activeTable && (

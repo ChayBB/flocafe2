@@ -4,6 +4,7 @@ import { requireKdsEnabled } from '../middleware/security';
 import { requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
 import { parseCategoryIds } from './auth';
+import { recentKdsAlerts } from '../services/kds-alerts';
 
 const router = Router();
 
@@ -139,7 +140,7 @@ router.get('/orders', (req: Request, res: Response) => {
       countMap[item.status] = (countMap[item.status] || 0) + 1;
     }
 
-    res.json({ orders: annotateKdsItems(db, ordersWithItems), counts: countMap });
+    res.json({ orders: annotateKdsItems(db, ordersWithItems), counts: countMap, alerts: recentKdsAlerts() });
   } catch (error: any) {
     console.error('[Kitchen] Orders fetch error:', error);
     res.status(500).json({ error: "Could not fetch kitchen orders" });
