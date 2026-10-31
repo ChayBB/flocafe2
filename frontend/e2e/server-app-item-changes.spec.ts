@@ -183,3 +183,43 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   await expect(card(5)).toContainText('Cancelled', { timeout: 15000 });
   await expect.poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(3);
 });
+
+test('the item menu on the last ticket row opens fully in view, above the ticket footer', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+  const headers = { Authorization: `Bearer ${managerToken}` };
+  const label = `Footer ${Math.random().toString(36).slice(2, 7)}`;
+  const { tableId } = await seedOrder(page, headers, label, Array(12).fill('pending'));
+
+  await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+  await page.evaluate(
+    ([key, token]) => {
+      localStorage.setItem(key, token);
+      const raw = localStorage.getItem('pos-settings');
+      const parsed = raw ? JSON.parse(raw) : { state: {} };
+      parsed.state = { ...parsed.state, language: 'en' };
+      localStorage.setItem('pos-settings', JSON.stringify(parsed));
+    },
+    [TOKEN_KEY, managerToken],
+  );
+  await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${tableId}`);
+  const rows = page.getByTestId('server-app-ticket-item');
+  await expect(rows).toHaveCount(12);
+  const last = rows.last();
+  await last.scrollIntoViewIfNeeded();
+  await last.getByTestId('server-app-item-menu').click();
+  const items = page.getByRole('menuitem');
+  await expect(items).toHaveText(['Change to takeaway', 'Cancel item']);
+  // Each choice is the topmost element at its centre, so nothing covers it.
+  for (const item of await items.all()) {
+    const box = (await item.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+    const onTop = await item.evaluate((element, [x, y]) => element.contains(document.elementFromPoint(x, y)), [
+      box.x + box.width / 2,
+      box.y + box.height / 2,
+    ]);
+    expect(onTop).toBe(true);
+  }
+  await page.getByRole('menuitem', { name: 'Change to takeaway' }).click();
+  await expect(last.getByTestId('server-app-takeaway-tag')).toHaveText('Takeaway');
+});

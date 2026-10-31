@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useConfirm } from '@/hooks/use-confirm';
 import { formatItemHeading } from '@/lib/printer/item-heading';
 import { parseDbTimestamp } from '@/lib/utils';
@@ -195,58 +196,57 @@ export function OrderedItemList({
                   </p>
                 </div>
                 <ItemStatusBadge status={item.status} />
-                <button
-                  type="button"
-                  data-testid="server-app-item-menu"
-                  aria-label={t('itemActions')}
-                  aria-haspopup="menu"
-                  aria-expanded={menuFor === item.id}
-                  disabled={!hasOptions || changing === item.id}
-                  onClick={() => setMenuFor(menuFor === item.id ? null : item.id)}
-                  className="flex min-h-11 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-30"
+                {/* Rendered above the page so the footer never covers it; it opens upward near the bottom. */}
+                <DropdownMenu
+                  modal={false}
+                  open={menuFor === item.id}
+                  onOpenChange={(open) => setMenuFor(open ? item.id : null)}
                 >
-                  <MoreVertical size={18} />
-                </button>
-                {menuFor === item.id && (
-                  <div
-                    role="menu"
-                    className="absolute end-2 top-full z-10 mt-1 min-w-48 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="server-app-item-menu"
+                      aria-label={t('itemActions')}
+                      disabled={!hasOptions || changing === item.id}
+                      className="flex min-h-11 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-30"
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    collisionPadding={8}
+                    className="min-w-48 rounded-lg border-border bg-card p-0 shadow-lg"
                   >
                     {options.takeaway && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void run(item, 'takeaway')}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                      <DropdownMenuItem
+                        onSelect={() => void run(item, 'takeaway')}
+                        className="min-h-11 rounded-none px-3 text-sm"
                       >
                         <ShoppingBag size={16} className="text-orange-600" />
                         {t('changeToTakeaway')}
-                      </button>
+                      </DropdownMenuItem>
                     )}
                     {options.confirmServed && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void run(item, 'confirmServed')}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm text-emerald-700 hover:bg-muted dark:text-emerald-300"
+                      <DropdownMenuItem
+                        onSelect={() => void run(item, 'confirmServed')}
+                        className="min-h-11 rounded-none px-3 text-sm text-emerald-700 dark:text-emerald-300"
                       >
                         <CheckCheck size={16} />
                         {t('confirmServed')}
-                      </button>
+                      </DropdownMenuItem>
                     )}
                     {options.cancel && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void run(item, 'cancel')}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm text-red-600 hover:bg-muted"
+                      <DropdownMenuItem
+                        onSelect={() => void run(item, 'cancel')}
+                        className="min-h-11 rounded-none px-3 text-sm text-red-600 focus:text-red-600"
                       >
                         <XCircle size={16} />
                         {t('cancelItem')}
-                      </button>
+                      </DropdownMenuItem>
                     )}
-                  </div>
-                )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             );
           })}
