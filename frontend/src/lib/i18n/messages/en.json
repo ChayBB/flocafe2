@@ -1997,6 +1997,8 @@
     "enableBillSyncHint": "Allow FloCafe to securely communicate with FloAdmin for cloud features such as RevFlo mobile reporting and device pairing. Information needed for these features may be transmitted through FloAdmin to your authorized devices. Cloud Sync is optional and disabled by default.",
     "enableLoyalty": "Enable Loyalty Program",
     "enableLoyaltyProgram": "Enable Loyalty Program",
+    "qrCreateTables": "Create QR and register tables",
+    "qrNoTables": "No tables yet. Add tables on the Tables page first.",
     "qrRotate": "Cancel all table QR codes",
     "qrRotateConfirm": "Every table QR code printed so far will stop working. Reprint the QR codes afterwards. Continue?",
     "qrRotated": "Old QR codes cancelled. Reprint the table QR codes.",
