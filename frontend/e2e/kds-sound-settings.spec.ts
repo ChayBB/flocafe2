@@ -192,6 +192,8 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-ready-repeat'))).toBe('25');
   await repeat.fill('10');
   await repeat.blur();
+  // The delay between tables starts at 0 seconds.
+  await expect(dialog.getByTestId('kds-ready-gap')).toHaveValue('0');
   await page.keyboard.press('Escape');
 
   // The display can pick another voice; the choice is read out as a sample.
@@ -215,6 +217,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // With the ready sound off, its bell and repeat delay settings are dimmed.
   await expect(dialog.getByTestId('kds-ready-bell-select')).toBeDisabled();
   await expect(dialog.getByTestId('kds-ready-repeat')).toBeDisabled();
+  await expect(dialog.getByTestId('kds-ready-gap')).toBeDisabled();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
   await page.reload();
@@ -319,13 +322,38 @@ test('a table with several items turning ready is announced once, and not again 
   await expect.poll(announced, { timeout: 15000 }).toBe(3);
   expect((await sounds(page)).__bells).toBe(start.__bells + 3);
 
-  // The next item to turn ready rings straight away.
+  // With a delay between alerts the next one waits its turn rather than being skipped.
+  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-gap', '30'));
   await markReady(tickets[1].items[2].id);
+  await expect(readyColumn.getByText('second round c')).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  expect(await announced()).toBe(3);
+  // A new order arriving meanwhile is read out without waiting for the queued alert.
+  const readOut = async () =>
+    (await sounds(page)).__spoken.filter((text) => text.startsWith(`Table ${tableName}:`)).length;
+  const readBefore = await readOut();
+  const late = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+    headers,
+    data: {
+      type: 'dine_in',
+      table_id: tableId,
+      items: [{ product_id: 'e2e-product', quantity: 1, special_instructions: 'late round' }],
+    },
+  });
+  expect(late.status()).toBe(201);
+  const lateNumber = (await late.json()).order.order_number as string;
+  await expect(page.getByText(`#${lateNumber}`).first()).toBeVisible({ timeout: 15000 });
+  await expect.poll(readOut, { timeout: 15000 }).toBe(readBefore + 1);
+  expect(await announced()).toBe(3);
+  await page.clock.fastForward(30000);
   await expect.poll(announced, { timeout: 15000 }).toBe(4);
   expect((await sounds(page)).__bells).toBe(start.__bells + 4);
 
   // A display set to no bell only reads the table.
-  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-bell', 'none'));
+  await page.evaluate(() => {
+    localStorage.setItem('flocafe:kds-ready-gap', '0');
+    localStorage.setItem('flocafe:kds-ready-bell', 'none');
+  });
   await markReady(tickets[0].items[3].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(5);
   expect((await sounds(page)).__bells).toBe(start.__bells + 4);

@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react';
 import { Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import {
-  clampKdsReadyRepeat,
+  clampKdsReadyDelay,
   KDS_READY_BELLS,
-  KDS_READY_REPEAT_MAX,
+  KDS_READY_DELAY_MAX,
   playKdsReadyBell,
   readKdsReadyBell,
-  readKdsReadyRepeat,
+  readKdsReadyDelay,
   writeKdsReadyBell,
-  writeKdsReadyRepeat,
+  writeKdsReadyDelay,
   type KdsReadyBell,
+  type KdsReadyDelay,
 } from '@/lib/kds-alert-sound';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -88,23 +89,25 @@ function Switch({
   );
 }
 
-/** The same-table bell delay in seconds, saved when it loses focus or Enter is pressed. */
-function ReadyRepeatField({
+/** A seconds box for one ready bell delay, saved when it loses focus or Enter is pressed. */
+function ReadyDelayField({
+  delay,
   label,
   hint,
   unit,
   disabled,
 }: {
+  delay: KdsReadyDelay;
   label: string;
   hint: string;
   unit: string;
   disabled: boolean;
 }) {
-  const [value, setValue] = useState(() => String(readKdsReadyRepeat()));
-  const id = 'kds-ready-repeat';
+  const [value, setValue] = useState(() => String(readKdsReadyDelay(delay)));
+  const id = `kds-ready-${delay}`;
   const commit = () => {
-    const seconds = value.trim() === '' ? readKdsReadyRepeat() : clampKdsReadyRepeat(Number(value));
-    writeKdsReadyRepeat(seconds);
+    const seconds = value.trim() === '' ? readKdsReadyDelay(delay) : clampKdsReadyDelay(delay, Number(value));
+    writeKdsReadyDelay(delay, seconds);
     setValue(String(seconds));
   };
   const tone = disabled ? 'text-muted-foreground' : 'text-foreground';
@@ -120,7 +123,7 @@ function ReadyRepeatField({
           type="number"
           inputMode="numeric"
           min={0}
-          max={KDS_READY_REPEAT_MAX}
+          max={KDS_READY_DELAY_MAX}
           step={1}
           disabled={disabled}
           value={value}
@@ -336,9 +339,17 @@ export function KdsSettingsDialog({
                 ))}
               </select>
             </div>
-            <ReadyRepeatField
+            <ReadyDelayField
+              delay="repeat"
               label={t('readyRepeatLabel')}
               hint={t('readyRepeatHint')}
+              unit={t('readyRepeatUnit')}
+              disabled={!readyOn}
+            />
+            <ReadyDelayField
+              delay="gap"
+              label={t('readyGapLabel')}
+              hint={t('readyGapHint')}
               unit={t('readyRepeatUnit')}
               disabled={!readyOn}
             />

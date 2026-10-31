@@ -15,7 +15,7 @@ import {
   playKdsAlert,
   playKdsReadyBell,
   readKdsReadyBell,
-  readKdsReadyRepeat,
+  readKdsReadyDelay,
   subscribeKdsAlertSound,
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
@@ -144,6 +144,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   const knownStatusesRef = useRef<Map<number, string>>(new Map());
   const lastReadyAtRef = useRef<Map<string, number>>(new Map());
   const readAloudEndedAtRef = useRef(-Infinity);
+  const readyAlertEndedAtRef = useRef(-Infinity);
+  const readyChainRef = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
     const knownItems = knownItemIdsRef.current;
@@ -174,7 +176,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     // order is still cooking. A table is announced once however many items turn ready together, and
     // not again until this display's repeat delay has passed.
     const now = Date.now();
-    const repeatMs = readKdsReadyRepeat() * 1000;
+    const repeatMs = readKdsReadyDelay('repeat') * 1000;
     const lastReadyAt = lastReadyAtRef.current;
     const readyPhrases = new Map<string, string>();
     for (const order of orders) {
@@ -193,15 +195,32 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     }
     if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
       for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
-      const announcement = [...readyPhrases.values()].join('. ');
       const lang = kdsSpeechLang();
-      queueKdsSound(async () => {
-        const wait = readAloudEndedAtRef.current + AFTER_READ_ALOUD_MS - Date.now();
-        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-        const bell = readKdsReadyBell();
-        if (bell !== 'none') await playKdsReadyBell(bell);
-        await speakKdsNow(announcement, lang);
-      });
+      const gapMs = readKdsReadyDelay('gap') * 1000;
+      // With a delay between tables each table waits its turn; without one they share a bell.
+      const announcements = gapMs > 0 ? [...readyPhrases.values()] : [[...readyPhrases.values()].join('. ')];
+      const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : undefined);
+      for (const announcement of announcements) {
+        // The wait between tables happens outside the speech queue, so new orders are still read out.
+        readyChainRef.current = readyChainRef.current
+          .then(async () => {
+            await sleep(readyAlertEndedAtRef.current + gapMs - Date.now());
+            await new Promise<void>((done) =>
+              queueKdsSound(async () => {
+                try {
+                  await sleep(readAloudEndedAtRef.current + AFTER_READ_ALOUD_MS - Date.now());
+                  const bell = readKdsReadyBell();
+                  if (bell !== 'none') await playKdsReadyBell(bell);
+                  await speakKdsNow(announcement, lang);
+                } finally {
+                  readyAlertEndedAtRef.current = Date.now();
+                  done();
+                }
+              }),
+            );
+          })
+          .catch(() => {});
+      }
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
     knownStatusesRef.current = new Map(

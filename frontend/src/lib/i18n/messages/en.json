@@ -571,6 +571,8 @@
     "readyRepeatLabel": "Same-table bell delay",
     "readyRepeatUnit": "seconds",
     "readyRepeatHint": "After a table is announced, its sound does not play again until this time has passed (the screen still updates as usual).",
+    "readyGapLabel": "Bell delay between tables",
+    "readyGapHint": "After one table is announced, the next table's bell waits this long (it is queued, not skipped). New orders are still read out as usual.",
     "voiceLabel": "Reading voice",
     "voiceAuto": "Automatic (Edge natural voice when available)",
     "voiceNatural": "{name} · natural, online",
