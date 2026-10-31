@@ -251,7 +251,10 @@ reachable without signing in: the table's name, the menu, and order creation. Th
 hidden `Guest` user (`guest-self-order`) that has no usable password, no staff code, and does not
 appear in staff or owner lists; the order lines are rebuilt from the catalog so a guest cannot
 choose a price, order creation is limited to 12 per 10 minutes per address, and a guest cannot
-read orders or customers. Server App sessions end at the next 06:00 in the store time zone.
+read orders or customers. The `guest_qr_ordering_enabled` setting (the "Take orders by QR code"
+checkbox on the OrderFlow settings tab, on by default) closes all three routes with `403`
+`guest_ordering_disabled` when it is `false`, and the guest view then asks the customer to call staff.
+Server App sessions end at the next 06:00 in the store time zone.
 
 ## Audit attribution
 

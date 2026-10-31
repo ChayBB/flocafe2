@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Minus,
   Plus,
+  QrCode,
   Send,
   ShoppingCart,
   Smartphone,
@@ -226,6 +227,7 @@ export default function ServerStandalonePage() {
   );
   const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
   const [guestChecked, setGuestChecked] = useState(false);
+  const [guestClosed, setGuestClosed] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const guestAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
@@ -482,8 +484,10 @@ export default function ServerStandalonePage() {
         orderLoadedTableIdRef.current = table.id;
         setOrderLoadedTableId(table.id);
       })
-      .catch(() => {
-        if (!cancelled) setGuestTable(null);
+      .catch((error) => {
+        if (cancelled) return;
+        setGuestTable(null);
+        setGuestClosed(error?.response?.data?.code === 'guest_ordering_disabled');
       })
       .finally(() => {
         if (!cancelled) setGuestChecked(true);
@@ -1176,6 +1180,19 @@ export default function ServerStandalonePage() {
         <Smartphone size={44} className="text-muted-foreground" />
         <h1 className="text-lg font-semibold">{t('disabledTitle')}</h1>
         <p className="max-w-sm text-sm text-muted-foreground">{t('disabledHint')}</p>
+      </div>
+    );
+  }
+
+  if (!user && guestClosed && !showLogin) {
+    return (
+      <div
+        data-testid="server-app-guest-closed"
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground"
+      >
+        <QrCode size={44} className="text-muted-foreground" />
+        <h1 className="text-lg font-semibold">{t('guestClosedTitle')}</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">{t('guestClosedHint')}</p>
       </div>
     );
   }

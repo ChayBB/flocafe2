@@ -1483,6 +1483,11 @@ export function isServerAppEnabled(): boolean {
   return getSettingValue('server_app_enabled') !== 'false';
 }
 
+/** Whether customers may order from a table QR code. Defaults to enabled. */
+export function isGuestQrOrderingEnabled(): boolean {
+  return getSettingValue('guest_qr_ordering_enabled') !== 'false';
+}
+
 /** KOT ticket printing on/off switch (gates automatic and manual prints). Defaults to enabled. */
 export function isKotPrintingEnabled(): boolean {
   return getSettingValue('kot_printing_enabled') !== 'false';

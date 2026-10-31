@@ -1037,6 +1037,9 @@ The ten routes that are not forwards:
 When the frontend export is missing, the `GET /` redirect is replaced by a placeholder page instead,
 so `GET /` is two mutually exclusive registrations rather than two routes.
 
+All three `/api/guest/*` routes answer `403` with `code` `guest_ordering_disabled` while the
+`guest_qr_ordering_enabled` setting is `false`.
+
 `requireServerAppAuth` is applied to every route except `/api/health`, `/api/server-app/info`, the three `/api/guest/*` routes and the login route, and
 it runs the feature check **before** the token check. Behaviour by condition:
 

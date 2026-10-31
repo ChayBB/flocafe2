@@ -1614,6 +1614,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'kds_enabled',
   'require_kitchen_delivered_before_settlement',
   'server_app_enabled',
+  'guest_qr_ordering_enabled',
   'kot_printing_enabled',
   'server_app_bill_printing_enabled',
   'split_checks_enabled',

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
-import { getE2eToken } from './helpers/test-auth';
+import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
 
 const manager = () => ({
   Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
@@ -181,4 +181,45 @@ test.describe('Server App guest from a table QR', () => {
       expect(product).not.toHaveProperty('cost');
     }
   });
+});
+
+test('the QR ordering checkbox in OrderFlow settings closes and reopens ordering from a table QR', async ({ page }) => {
+  const table = await createTable(page);
+  const owner = { Authorization: `Bearer ${getE2eToken('e2e-owner', 'owner@flo.local', 'owner')}` };
+  try {
+    await page.goto(`${E2E_BASE_URL}/auth/login`);
+    await page.getByLabel('Email').fill('owner@flo.local');
+    await page.getByLabel('Password').fill(E2E_PASSWORD);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
+    await page.goto(`${E2E_BASE_URL}/settings?tab=orderflow`);
+    const checkbox = page.getByTestId('settings-qr-ordering');
+    await expect(checkbox).toBeChecked();
+    await expect(page.getByText('Take orders by QR code')).toBeVisible();
+    await checkbox.uncheck();
+    await expect(page.getByText('QR ordering turned off')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('settings-qr-ordering')).not.toBeChecked();
+
+    // A guest scanning the table QR is told to ask staff, and the order route refuses.
+    await setEnglish(page);
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}`);
+    await expect(page.getByTestId('server-app-guest-closed')).toContainText('Ordering by QR code is closed');
+    const refused = await page.request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+      data: { table_id: table.id, items: [{ product_id: 'e2e-product', quantity: 1 }] },
+    });
+    expect(refused.status()).toBe(403);
+    expect((await refused.json()).code).toBe('guest_ordering_disabled');
+
+    await page.goto(`${E2E_BASE_URL}/settings?tab=orderflow`);
+    await page.getByTestId('settings-qr-ordering').check();
+    await expect(page.getByText('QR ordering turned on')).toBeVisible();
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}`);
+    await expect(page.locator('header').getByTestId('server-app-guest-name')).toHaveText('Guest');
+  } finally {
+    await page.request.put(`${E2E_BASE_URL}/api/settings/guest_qr_ordering_enabled`, {
+      headers: owner,
+      data: { value: 'true' },
+    });
+  }
 });

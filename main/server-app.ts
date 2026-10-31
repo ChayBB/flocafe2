@@ -19,6 +19,7 @@ import {
   databaseMaintenanceMiddleware,
   getDatabase,
   isServerAppEnabled,
+  isGuestQrOrderingEnabled,
   revokeDatabaseMaintenanceHandoff,
 } from './db';
 import { getJWTSecret } from './security/jwt-secret';
@@ -201,6 +202,10 @@ async function forwardToMainApiImpl(req: Request, res: Response, targetPath: str
       revokeDatabaseMaintenanceHandoff(handoffToken);
     }
   }
+}
+
+function guestOrderingClosed(res: Response) {
+  return res.status(403).json({ code: 'guest_ordering_disabled', error: 'Ordering by QR code is turned off' });
 }
 
 /** Calls the main API on behalf of the Guest account that table-QR visitors order as. */
@@ -486,6 +491,7 @@ export function startServerApp(): Promise<void> {
 
     app.get('/api/guest/table', serverAppApiRateLimit, (req: Request, res: Response) => {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
       const tableId = typeof req.query.table_id === 'string' ? req.query.table_id : '';
       const table = tableId
         ? (getDatabase()
@@ -498,6 +504,7 @@ export function startServerApp(): Promise<void> {
 
     app.get('/api/guest/menu', serverAppApiRateLimit, async (req: Request, res: Response) => {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
       try {
         ensureGuestUser();
         const [categories, products] = await trackHttpRequestWork(
@@ -527,6 +534,7 @@ export function startServerApp(): Promise<void> {
       guestOrderRateLimit,
       async (req: Request, res: Response) => {
         if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+        if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
         try {
           const db = getDatabase();
           const tableId = typeof req.body?.table_id === 'string' ? req.body.table_id : '';

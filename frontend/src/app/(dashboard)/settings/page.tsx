@@ -1724,6 +1724,7 @@ export default function SettingsPage() {
   const [kdsEnabledSetting, setKdsEnabledSetting] = useState(true);
   const [requireKitchenDeliveredSetting, setRequireKitchenDeliveredSetting] = useState(false);
   const [serverAppEnabledSetting, setServerAppEnabledSetting] = useState(true);
+  const [guestQrOrderingEnabled, setGuestQrOrderingEnabled] = useState(true);
   const [savingServerAppEnabled, setSavingServerAppEnabled] = useState(false);
   const [serverAppBillPrintingEnabledSetting, setServerAppBillPrintingEnabledSetting] =
     useState(false);
@@ -2789,6 +2790,10 @@ export default function SettingsPage() {
             if (isRequestCancelled(error)) throw error;
           }
         }
+        if (tab === 'orderflow') {
+          const { data } = await get('/settings/guest_qr_ordering_enabled');
+          if (active()) setGuestQrOrderingEnabled(data.setting?.value !== 'false');
+        }
         await loadCloud(!includeStatusOnly);
       }
     } catch (error) {
@@ -3394,6 +3399,18 @@ export default function SettingsPage() {
       false,
       '/settings/require_kitchen_delivered_before_settlement',
     );
+  };
+
+  const saveGuestQrOrderingEnabled = async (enabled: boolean) => {
+    const previous = guestQrOrderingEnabled;
+    setGuestQrOrderingEnabled(enabled);
+    try {
+      await api.put('/settings/guest_qr_ordering_enabled', { value: enabled ? 'true' : 'false' });
+      toast.success(enabled ? t('qrOrderingOn') : t('qrOrderingOff'));
+    } catch {
+      setGuestQrOrderingEnabled(previous);
+      toast.error(t('saveFailed'));
+    }
   };
 
   const saveServerAppEnabled = async (enabled: boolean) => {
@@ -6137,6 +6154,19 @@ export default function SettingsPage() {
                     className="rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
                   />
                   <span className="text-sm text-foreground">{t('enableOnlineOrderPolling')}</span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid="settings-qr-ordering"
+                    checked={guestQrOrderingEnabled}
+                    onChange={(e) => void saveGuestQrOrderingEnabled(e.target.checked)}
+                    className="mt-0.5 rounded border-gray-300 dark:border-border text-brand focus:ring-brand"
+                  />
+                  <span>
+                    <span className="block text-sm text-foreground">{t('qrOrderingLabel')}</span>
+                    <span className="block text-xs text-muted-foreground">{t('qrOrderingHint')}</span>
+                  </span>
                 </label>
               </div>
             </SettingsTabShell>
