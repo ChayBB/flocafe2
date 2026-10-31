@@ -93,34 +93,29 @@ export function writeKdsReadyBell(bell: KdsReadyBell): void {
   } catch {}
 }
 
-/** Per-display ready bell delays: for the same table again, and between one table and the next. */
-const READY_DELAYS = {
-  repeat: { key: 'flocafe:kds-ready-repeat', fallback: 10 },
-  gap: { key: 'flocafe:kds-ready-gap', fallback: 0 },
-} as const;
-export type KdsReadyDelay = keyof typeof READY_DELAYS;
-export const KDS_READY_DELAY_MAX = 300;
+const READY_REPEAT_KEY = 'flocafe:kds-ready-repeat';
+export const KDS_READY_REPEAT_DEFAULT = 10;
+export const KDS_READY_REPEAT_MAX = 300;
 
-export function clampKdsReadyDelay(delay: KdsReadyDelay, seconds: number): number {
-  if (!Number.isFinite(seconds)) return READY_DELAYS[delay].fallback;
-  return Math.min(KDS_READY_DELAY_MAX, Math.max(0, Math.round(seconds)));
+export function clampKdsReadyRepeat(seconds: number): number {
+  if (!Number.isFinite(seconds)) return KDS_READY_REPEAT_DEFAULT;
+  return Math.min(KDS_READY_REPEAT_MAX, Math.max(0, Math.round(seconds)));
 }
 
-/** Seconds this display waits for the given ready bell delay. */
-export function readKdsReadyDelay(delay: KdsReadyDelay): number {
-  const { key, fallback } = READY_DELAYS[delay];
-  if (typeof window === 'undefined') return fallback;
+/** Seconds this display waits before ringing for the same table again. */
+export function readKdsReadyRepeat(): number {
+  if (typeof window === 'undefined') return KDS_READY_REPEAT_DEFAULT;
   try {
-    const stored = window.localStorage.getItem(key);
-    return stored === null ? fallback : clampKdsReadyDelay(delay, Number(stored));
+    const stored = window.localStorage.getItem(READY_REPEAT_KEY);
+    return stored === null ? KDS_READY_REPEAT_DEFAULT : clampKdsReadyRepeat(Number(stored));
   } catch {
-    return fallback;
+    return KDS_READY_REPEAT_DEFAULT;
   }
 }
 
-export function writeKdsReadyDelay(delay: KdsReadyDelay, seconds: number): void {
+export function writeKdsReadyRepeat(seconds: number): void {
   try {
-    window.localStorage.setItem(READY_DELAYS[delay].key, String(clampKdsReadyDelay(delay, seconds)));
+    window.localStorage.setItem(READY_REPEAT_KEY, String(clampKdsReadyRepeat(seconds)));
   } catch {}
 }
 
