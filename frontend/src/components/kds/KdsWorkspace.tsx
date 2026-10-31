@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BellRing } from 'lucide-react';
 import { useTranslations } from 'use-intl';
+import { KdsBellButton } from '@/components/kds/KdsBellButton';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
 import { KdsSettingsDialog } from '@/components/kds/KdsSettingsDialog';
@@ -278,6 +279,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
             updating={conn.updating}
             inactiveStatuses={inactiveStatuses}
             updateItemStatus={conn.updateItemStatus}
+            lastColumnFooter={soundSettings.showBell ? <KdsBellButton /> : undefined}
           />
         ) : (
           <KdsTabsView

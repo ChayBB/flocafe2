@@ -553,6 +553,8 @@
     "stageSkipped": "Off",
     "soundReadAloud": "Read new menu items aloud",
     "soundOrderReady": "Ring and announce when a menu item is ready to serve",
+    "soundShowBell": "Show a bell button on the KDS",
+    "ringBell": "Ring bell",
     "readAloudTable": "Table {table}: {items}",
     "readAloudOrder": "Order {number}: {items}",
     "readAloudItem": "{quantity} {name}",

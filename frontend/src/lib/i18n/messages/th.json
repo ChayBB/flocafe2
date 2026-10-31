@@ -553,6 +553,8 @@
     "stageSkipped": "ปิดใช้งาน",
     "soundReadAloud": "เสียงอ่านเมนูอัตโนมัติ",
     "soundOrderReady": "เสียงกระดิ่งแจ้งเมนูพร้อมเสิร์ฟ",
+    "soundShowBell": "แสดงกระดิ่งที่หน้า KDS",
+    "ringBell": "กดกระดิ่ง",
     "readAloudTable": "โต๊ะ {table} {items}",
     "readAloudOrder": "ออเดอร์ {number} {items}",
     "readAloudItem": "{name} จำนวน {quantity}",

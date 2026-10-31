@@ -7,12 +7,14 @@ export interface KdsSoundSettings {
   readAloud: boolean;
   /** Ring and announce a table as its menu items turn ready to serve. */
   orderReady: boolean;
+  /** Show a bell button under the last Kanban column that rings the ready bell on demand. */
+  showBell: boolean;
 }
 
 export type KdsSoundSetting = keyof KdsSoundSettings;
 
 const KEY = 'flocafe:kds-sound-settings';
-export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = { readAloud: true, orderReady: true };
+export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = { readAloud: true, orderReady: true, showBell: false };
 
 export function readKdsSoundSettings(): KdsSoundSettings {
   if (typeof window === 'undefined') return DEFAULT_KDS_SOUND_SETTINGS;

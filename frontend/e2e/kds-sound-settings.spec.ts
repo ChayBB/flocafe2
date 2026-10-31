@@ -141,8 +141,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   for (const setting of ['readAloud', 'orderReady']) {
     await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute('aria-checked', 'true');
   }
+  await expect(dialog.getByTestId('kds-sound-switch-showBell')).toHaveAttribute('aria-checked', 'false');
   // Status-change alerts have no switch.
-  await expect(dialog.getByRole('switch')).toHaveCount(2);
+  await expect(dialog.getByRole('switch')).toHaveCount(3);
   await page.keyboard.press('Escape');
 
   // On by default: a new order is read out, and the bell rings and names the order when a menu
@@ -357,4 +358,36 @@ test('a table with several items turning ready is announced once, and not again 
   await markReady(tickets[0].items[3].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(5);
   expect((await sounds(page)).__bells).toBe(start.__bells + 4);
+});
+
+test('the show-bell switch puts a bell button under the Served column that rings the ready bell', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await recordSounds(page);
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Kanban' }).click();
+  await expect(page.getByTestId('kds-bell-button')).toHaveCount(0);
+
+  await page.getByTestId('kds-settings-button').click();
+  const dialog = page.getByTestId('kds-settings-dialog');
+  await dialog.getByTestId('kds-settings-tab-sound').click();
+  await dialog.getByTestId('kds-sound-switch-showBell').click();
+  await page.keyboard.press('Escape');
+
+  const bell = page.getByTestId('kds-column-served').getByTestId('kds-bell-button');
+  await expect(bell).toBeVisible();
+  await expect(bell).toHaveText('Ring bell');
+  const before = (await sounds(page)).__bells;
+  await bell.click();
+  await expect.poll(async () => (await sounds(page)).__bells).toBe(before + 1);
+
+  // The choice is kept after a reload.
+  await page.reload();
+  await expect(page.getByTestId('kds-column-served').getByTestId('kds-bell-button')).toBeVisible();
 });
