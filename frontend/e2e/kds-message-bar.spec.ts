@@ -136,3 +136,43 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
   await expect(takeawayNotice).toHaveCount(0);
   await expect(notices).toHaveCount(startCount + 2);
 });
+
+test('the message box switch in display settings hides the message bar, leaving only the bell when it is shown', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await expect(page.getByTestId('kds-message-box')).toBeVisible();
+
+  await page.getByTestId('kds-settings-button').click();
+  const dialog = page.getByTestId('kds-settings-dialog');
+  const boxSwitch = dialog.getByTestId('kds-display-switch-showMessages');
+  await expect(boxSwitch).toHaveAttribute('aria-checked', 'true');
+  await expect(boxSwitch).toHaveAccessibleName('Message box');
+  await boxSwitch.click();
+  await expect(boxSwitch).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('kds-message-bar')).toHaveCount(0);
+
+  // With the bell shown, the bar holds only the bell at its right end.
+  await page.getByTestId('kds-settings-button').click();
+  await dialog.getByTestId('kds-settings-tab-sound').click();
+  await dialog.getByTestId('kds-sound-switch-showBell').click();
+  await page.keyboard.press('Escape');
+  const bar = page.getByTestId('kds-message-bar');
+  await expect(bar.getByTestId('kds-bell-button')).toBeVisible();
+  await expect(bar.getByTestId('kds-message-box')).toHaveCount(0);
+
+  // The choice is kept after a reload.
+  await page.reload();
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await expect(bar.getByTestId('kds-bell-button')).toBeVisible();
+  await expect(page.getByTestId('kds-message-box')).toHaveCount(0);
+});

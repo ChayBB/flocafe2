@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sun } from 'lucide-react';
+import { MessageSquare, Sun } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import {
   clampKdsReadyDelay,
@@ -255,6 +255,25 @@ export function KdsSettingsDialog({
                   </div>
                 );
               })}
+              <div className="flex items-center gap-3 py-3">
+                <MessageSquare size={12} aria-hidden="true" className="text-muted-foreground" />
+                <span
+                  className={`flex-1 text-sm font-medium ${
+                    soundSettings.showMessages ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  {t('messageBoxLabel')}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {soundSettings.showMessages ? t('stageActive') : t('stageSkipped')}
+                </span>
+                <Switch
+                  checked={soundSettings.showMessages}
+                  label={t('messageBoxLabel')}
+                  testId="kds-display-switch-showMessages"
+                  onToggle={() => onToggleSound('showMessages')}
+                />
+              </div>
             </div>
             <div className="space-y-1.5 pt-2">
               <h3 className="text-sm font-semibold text-foreground">{t('screenModeTitle')}</h3>

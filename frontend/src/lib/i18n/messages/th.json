@@ -555,6 +555,7 @@
     "soundOrderReady": "เสียงกระดิ่งแจ้งเมนูพร้อมเสิร์ฟ",
     "soundShowBell": "แสดงกระดิ่งที่หน้า KDS",
     "ringBell": "กดกระดิ่ง",
+    "messageBoxLabel": "กล่องข้อความ",
     "messagesEmpty": "ไม่มีข้อความแจ้งเตือน",
     "messageDismiss": "รับทราบ",
     "messageOrder": "ออเดอร์ {number}",

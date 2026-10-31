@@ -142,7 +142,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     );
     const known = knownPlacesRef.current;
     knownPlacesRef.current = places;
-    if (!known) return;
+    if (!known || !soundSettingsRef.current.showMessages) return;
     const at = new Date().toISOString();
     const notices = detectKdsBoardChanges(known, places).map((change) => ({
       id: `${change.key}:${at}`,
@@ -166,6 +166,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     const unseen = conn.alerts.filter((alert) => !seen.includes(alert.id));
     if (unseen.length === 0) return;
     writeSeenKdsAlerts([...seen, ...unseen.map((alert) => alert.id)]);
+    if (!soundSettingsRef.current.showMessages) return;
     announceKdsMessages(
       unseen.map((alert) => ({
         id: `alert:${alert.id}`,
@@ -363,7 +364,14 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           />
         )}
       </div>
-      <KdsMessageBar messages={messages} onDismiss={dismissKdsMessage} showBell={soundSettings.showBell} />
+      {(soundSettings.showMessages || soundSettings.showBell) && (
+        <KdsMessageBar
+          messages={messages}
+          onDismiss={dismissKdsMessage}
+          showMessages={soundSettings.showMessages}
+          showBell={soundSettings.showBell}
+        />
+      )}
       <KdsSettingsDialog
         open={settingsOpen}
         stationName={stationName ?? t('allStations')}

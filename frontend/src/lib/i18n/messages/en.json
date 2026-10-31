@@ -555,6 +555,7 @@
     "soundOrderReady": "Ring and announce when a menu item is ready to serve",
     "soundShowBell": "Show a bell button on the KDS",
     "ringBell": "Ring bell",
+    "messageBoxLabel": "Message box",
     "messagesEmpty": "No notices",
     "messageDismiss": "Acknowledge",
     "messageOrder": "Order {number}",

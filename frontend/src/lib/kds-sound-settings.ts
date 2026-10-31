@@ -9,12 +9,19 @@ export interface KdsSoundSettings {
   orderReady: boolean;
   /** Show a bell button in the message bar that rings the ready bell on demand. */
   showBell: boolean;
+  /** Show the message bar and collect its notices; when off, notices are neither kept nor announced. */
+  showMessages: boolean;
 }
 
 export type KdsSoundSetting = keyof KdsSoundSettings;
 
 const KEY = 'flocafe:kds-sound-settings';
-export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = { readAloud: true, orderReady: true, showBell: false };
+export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = {
+  readAloud: true,
+  orderReady: true,
+  showBell: false,
+  showMessages: true,
+};
 
 export function readKdsSoundSettings(): KdsSoundSettings {
   if (typeof window === 'undefined') return DEFAULT_KDS_SOUND_SETTINGS;
