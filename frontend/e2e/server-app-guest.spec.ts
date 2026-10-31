@@ -245,7 +245,7 @@ test('the QR ordering checkbox in OrderFlow settings closes and reopens ordering
   }
 });
 
-test('a public QR address and proxy are saved from OrderFlow settings, and cancelling QR codes retires printed ones', async ({
+test('table QR links use the public address, and cancelling QR codes in OrderFlow settings retires printed ones', async ({
   page,
 }) => {
   const table = await createTable(page);
@@ -263,19 +263,14 @@ test('a public QR address and proxy are saved from OrderFlow settings, and cance
     await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
     await page.goto(`${E2E_BASE_URL}/settings?tab=orderflow`);
     const network = page.getByTestId('settings-qr-network');
-    await network.getByText('Manual setup (your own VPS)').click();
-    const publicUrl = network.getByLabel('Public address for QR codes');
-    await expect(publicUrl).toBeEnabled();
+    await expect(network.getByText('Manual setup (your own VPS)')).toHaveCount(0);
+    await expect(network.getByLabel('Public address for QR codes')).toHaveCount(0);
 
-    await publicUrl.fill('http://order.example.com');
-    await network.getByRole('button', { name: 'Save QR address' }).click();
-    await expect(page.getByText('Enter an https address, for example https://order.example.com')).toBeVisible();
-
-    await publicUrl.fill('https://order.example.com/');
-    await network.getByLabel('Proxy IP address').fill('10.88.0.1');
-    await network.getByRole('button', { name: 'Save QR address' }).click();
-    await expect(page.getByText('QR address saved')).toBeVisible();
-    await expect(publicUrl).toHaveValue('https://order.example.com');
+    const saved = await page.request.put(`${E2E_BASE_URL}/api/settings/guest-qr`, {
+      headers: owner,
+      data: { public_base_url: 'https://order.example.com/', trusted_proxy: '' },
+    });
+    expect((await saved.json()).public_base_url).toBe('https://order.example.com');
 
     // New QR codes point at the public address.
     const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/order-qr`, {

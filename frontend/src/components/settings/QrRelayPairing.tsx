@@ -32,7 +32,7 @@ function remaining(expiresAt: string, now: number): string {
 }
 
 /** Pairs this POS with a QR ordering relay by a short code, so customers can order over mobile data. */
-export function QrRelayPairing({ disabled, onChanged }: { disabled: boolean; onChanged: () => void }) {
+export function QrRelayPairing({ disabled }: { disabled: boolean }) {
   const t = useTranslations('settings');
   const { confirm, ConfirmDialog } = useConfirm();
   const [status, setStatus] = useState<RelayStatus | null>(null);
@@ -45,12 +45,11 @@ export function QrRelayPairing({ disabled, onChanged }: { disabled: boolean; onC
     (next: RelayStatus) => {
       if (stateRef.current === 'pairing' && next.state === 'paired') {
         toast.success(t('qrRelayPairedToast'));
-        onChanged();
       }
       stateRef.current = next.state;
       setStatus(next);
     },
-    [onChanged, t],
+    [t],
   );
 
   useEffect(() => {
@@ -116,7 +115,6 @@ export function QrRelayPairing({ disabled, onChanged }: { disabled: boolean; onC
     if (!ok) return;
     if (await run(() => api.delete('/qr-relay'))) {
       toast.success(t('qrRelayUnpaired'));
-      onChanged();
     }
   };
 
