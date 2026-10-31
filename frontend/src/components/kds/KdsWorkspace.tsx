@@ -64,8 +64,11 @@ const NONE_INACTIVE: KitchenStatus[] = [];
 // A ready announcement waits this long after new items have been read out.
 const AFTER_READ_ALOUD_MS = 3000;
 
+// Items switched to take-away are still cooked, so they are read out and announced; cancelled ones are not.
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
-  return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
+  return (order.items || []).filter(
+    (item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && item.service_change !== 'cancelled',
+  );
 }
 
 

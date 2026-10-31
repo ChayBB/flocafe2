@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { E2E_BASE_URL, E2E_KDS_BASE_URL } from './helpers/urls';
+import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
 type SoundLog = { __beeps: number; __bells: number; __spoken: string[]; __spokenAt: number[]; __voices: string[] };
@@ -394,4 +394,57 @@ test('the show-bell switch puts a bell button at the right end of the message ba
   // The choice is kept after a reload.
   await page.reload();
   await expect(page.getByTestId('kds-message-bar').getByTestId('kds-bell-button')).toBeVisible();
+});
+
+test('an item switched to take-away still rings the ready bell and is announced when it turns ready', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const serverHeaders = { Authorization: `Bearer ${getE2eToken('e2e-server', 'server@flo.local', 'server')}` };
+  const run = Math.random().toString(36).slice(2, 7);
+  const tableName = `Pack ${run}`;
+  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: tableName, capacity: 4 } });
+  expect(table.status()).toBe(201);
+  const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+    headers,
+    data: {
+      type: 'dine_in',
+      table_id: (await table.json()).table.id,
+      items: [
+        { product_id: 'e2e-product', quantity: 1, special_instructions: `to go ${run}` },
+        { product_id: 'e2e-product', quantity: 1, special_instructions: `stays ${run}` },
+      ],
+    },
+  });
+  expect(order.status()).toBe(201);
+  const created = (await order.json()).order as { id: number; items: { id: number }[] };
+  const announced = async () =>
+    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`).length;
+
+  await recordSounds(page);
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.getByRole('button', { name: 'Kanban' }).click();
+  await expect(page.getByText(`to go ${run}`).first()).toBeVisible({ timeout: 15000 });
+
+  const takeaway = await page.request.patch(
+    `${E2E_SERVER_APP_BASE_URL}/api/orders/${created.id}/items/${created.items[0].id}/takeaway`,
+    { headers: serverHeaders },
+  );
+  expect(takeaway.status()).toBe(200);
+  await expect(page.getByTestId('kds-message-bar')).toContainText(`Table ${tableName}:`, { timeout: 15000 });
+  const start = await sounds(page);
+
+  const ready = await page.request.patch(`${E2E_BASE_URL}/api/order-items/${created.items[0].id}/status`, {
+    headers,
+    data: { status: 'ready' },
+  });
+  expect(ready.ok(), await ready.text()).toBeTruthy();
+  await expect.poll(announced, { timeout: 15000 }).toBe(1);
+  expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 });
