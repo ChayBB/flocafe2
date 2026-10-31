@@ -31,11 +31,11 @@ const SCREEN_MODE_LABELS = {
 const READY_BELL_LABELS = {
   hotel: 'readyBellHotel',
   ding: 'readyBellDing',
-  none: 'readyBellNone',
 } as const satisfies Record<KdsReadyBell, string>;
 
 const SOUND_ROWS = [
   { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
+  { setting: 'orderReady' as KdsSoundSetting, labelKey: 'soundOrderReady' as const },
 ];
 
 function Switch({

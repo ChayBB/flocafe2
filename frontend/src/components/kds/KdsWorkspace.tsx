@@ -178,7 +178,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           : t('readyToServeOrder', { number: order.order_number }),
       );
     }
-    if (readyPhrases.size > 0) {
+    if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
       for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
       const announcement = [...readyPhrases.values()].join('. ');
       void playKdsReadyBell().then(() => speakKds(announcement, kdsSpeechLang()));

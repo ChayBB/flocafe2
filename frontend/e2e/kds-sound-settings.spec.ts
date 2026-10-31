@@ -136,9 +136,11 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toBeHidden();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   await expect(dialog.getByTestId('kds-screen-mode-day')).toBeHidden();
-  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'true');
-  // Status-change beeps and the ready announcement have no switch; the bell picker can silence the bell.
-  await expect(dialog.getByRole('switch')).toHaveCount(1);
+  for (const setting of ['readAloud', 'orderReady']) {
+    await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute('aria-checked', 'true');
+  }
+  // Status-change alerts have no switch.
+  await expect(dialog.getByRole('switch')).toHaveCount(2);
   await page.keyboard.press('Escape');
 
   // On by default: a new order is read out, and the bell rings and names the order when a menu
@@ -165,7 +167,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   const bellSelect = dialog.getByTestId('kds-ready-bell-select');
-  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding', 'No bell (read the table only)']);
+  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding']);
   await expect(bellSelect).toHaveValue('hotel');
   const bellsBeforeSample = (await sounds(page)).__bells;
   await bellSelect.selectOption('ding');
@@ -188,8 +190,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect.poll(async () => (await sounds(page)).__voices.at(-1)).toBe('Fake Local English');
   expect((await sounds(page)).__spoken.at(-1)).toBe('Table 5, fried rice, 2');
 
-  // Switched off, and still off after a reload: new orders are not read aloud.
+  // Switched off, and still off after a reload: new orders and ready orders stay silent.
   await dialog.getByTestId('kds-sound-switch-readAloud').click();
+  await dialog.getByTestId('kds-sound-switch-orderReady').click();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
   await page.reload();
@@ -198,13 +201,17 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
+  await expect(dialog.getByTestId('kds-sound-switch-orderReady')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
 
   const quiet = await sounds(page);
   const second = await placeOrder();
   await expect(page.getByText(`#${second.order_number}`).first()).toBeVisible({ timeout: 15000 });
+  await markReady(second.items[0].id);
   await page.waitForTimeout(2000);
-  expect((await sounds(page)).__spoken).toEqual(quiet.__spoken);
+  const after = await sounds(page);
+  expect(after.__spoken).toEqual(quiet.__spoken);
+  expect(after.__bells).toBe(quiet.__bells);
 });
 
 test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({ page }) => {
@@ -281,12 +288,5 @@ test('a table with several items turning ready is announced once, and not again 
   // After the 10 seconds the next item for the table is announced again.
   await markReady(tickets[1].items[1].id);
   await expect.poll(announced, { timeout: 15000 }).toBe(2);
-  expect((await sounds(page)).__bells).toBe(start.__bells + 2);
-
-  // A display set to no bell still reads the table, just without ringing.
-  await page.evaluate(() => localStorage.setItem('flocafe:kds-ready-bell', 'none'));
-  await page.clock.fastForward(11000);
-  await markReady(tickets[0].items[2].id);
-  await expect.poll(announced, { timeout: 15000 }).toBe(3);
   expect((await sounds(page)).__bells).toBe(start.__bells + 2);
 });
