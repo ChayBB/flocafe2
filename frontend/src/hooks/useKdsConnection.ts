@@ -94,10 +94,10 @@ export function normalizeKitchenStatus(status: unknown): KitchenStatus {
 }
 
 export const ORDER_TYPE_BADGE_STYLES: Record<string, string> = {
-  dine_in: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800',
-  takeaway: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800',
-  delivery: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800',
-  online: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800',
+  dine_in: 'bg-transparent text-muted-foreground border-border',
+  takeaway: 'bg-transparent text-(--kds-pending-text) border-(--kds-pending-line)',
+  delivery: 'bg-transparent text-(--kds-served-text) border-(--kds-served-line)',
+  online: 'bg-transparent text-(--kds-ready-text) border-(--kds-ready-line)',
 };
 
 export interface KdsOrderItemAddon {

@@ -281,7 +281,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                   {item.addons.map((addon, i) => (
                     <span
                       key={`${addon.id ?? addon.name}-${i}`}
-                      className="text-[10px] bg-card/70 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200"
+                      className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
                     >
                       + {addon.name}{(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
                     </span>
