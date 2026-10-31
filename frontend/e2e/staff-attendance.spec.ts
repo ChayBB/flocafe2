@@ -34,6 +34,7 @@ test('sign-in and sign-out record a shift, and the staff page turns it into a wa
   await page.getByRole('button', { name: 'Sign In' }).click();
   await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
   await page.goto(`${E2E_BASE_URL}/staff`);
+  await page.getByTestId('staff-tab-attendance').click();
 
   const panel = page.getByTestId('attendance-panel');
   await expect(panel.getByRole('heading', { name: 'Attendance and wages' })).toBeVisible();

@@ -128,7 +128,7 @@ export function AttendancePanel({ canManage }: { canManage: boolean }) {
   const timeOf = (stamp: string) => formatTime(stamp, { hourCycle: 'h23' });
 
   return (
-    <section data-testid="attendance-panel" className="mt-8 bg-card rounded-xl border border-border p-5">
+    <section data-testid="attendance-panel" className="bg-card rounded-xl border border-border p-5">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
           <h2 className="text-lg font-bold text-foreground">{t('attendanceTitle')}</h2>

@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth';
 import { PermissionMatrix } from '@/components/settings/PermissionMatrix';
 import { PermissionAuditLog } from '@/components/settings/PermissionAuditLog';
 import { AttendancePanel } from '@/components/staff/AttendancePanel';
+import { ZoneResponsibilityPanel } from '@/components/staff/ZoneResponsibilityPanel';
 import { OPERATIONAL_ROLES, ROLE_ACCESS, ROLE_KEYS, hasRole } from '@shared/role-permissions';
 import { ROLE_LABEL_KEYS } from '@/lib/i18n-enums';
 import { tenantCan } from '@/lib/permissions';
@@ -42,6 +43,13 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 }
 
 const isOperationalRole = (role: string) => hasRole(role, OPERATIONAL_ROLES);
+
+type StaffTab = 'staff' | 'attendance' | 'zones';
+const STAFF_TABS = [
+  { tab: 'staff', labelKey: 'tabStaff' },
+  { tab: 'attendance', labelKey: 'tabAttendance' },
+  { tab: 'zones', labelKey: 'tabZones' },
+] as const satisfies readonly { tab: StaffTab; labelKey: StaffKey }[];
 const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 4);
 
 export default function StaffPage() {
@@ -54,6 +62,12 @@ export default function StaffPage() {
   const canManageStaff = tenantCan(currentTenant, 'staff.operational.manage');
   const canViewStaff = tenantCan(currentTenant, 'staff.view');
   const canManagePrivilegedStaff = tenantCan(currentTenant, 'staff.privileged.manage');
+  const canViewTables = tenantCan(currentTenant, 'tables.view');
+  const canManageTables = tenantCan(currentTenant, 'tables.manage');
+  const [tab, setTab] = useState<StaffTab>('staff');
+  const tabs = STAFF_TABS.filter(
+    ({ tab: entry }) => entry === 'staff' || (entry === 'attendance' ? canViewStaff : canViewTables),
+  );
   const [staff, setStaff] = useState<Staff[]>([]);
   const [kitchenStations, setKitchenStations] = useState<{ id: string; name: string }[]>([]);
   const [kdsEnabled, setKdsEnabled] = useState(true);
@@ -249,82 +263,105 @@ export default function StaffPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
-        {canManageStaff && (
+        {canManageStaff && tab === 'staff' && (
           <Button ref={addTriggerRef} onClick={openAdd}>
             <Plus size={16} className="me-1" /> {t('addButton')}
           </Button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {staff.map((s) => (
-          <div
-            key={s.id}
-            className={`bg-card rounded-xl p-5 border ${s.is_active ? 'border-border' : 'border-border opacity-60'}`}
-          >
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="font-bold text-foreground">{s.name}</p>
-                <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
-                {Boolean(s.has_pin) && <p className="text-xs text-green-600 mt-1">{t('pinSet')}</p>}
-                {Boolean(s.has_staff_code) && (
-                  <p className="text-xs text-green-600 mt-1">{t('staffCodeSet')}</p>
-                )}
-              </div>
-              <span
-                className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${roleColors[s.role] || 'bg-muted text-foreground'}`}
-              >
-                {roleLabel(s.role, t)}
-              </span>
-            </div>
-            {canManageStaff &&
-              (canManagePrivilegedStaff || !hasRole(s.role, ROLE_ACCESS.ownerManager)) && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <Button
-                    ref={(el) => {
-                      editTriggerRefs.current[s.id] = el;
-                    }}
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => openEdit(s, e)}
-                  >
-                    <Edit size={14} className="me-1" /> {tCommon('edit')}
-                  </Button>
-                  <Button
-                    ref={(el) => {
-                      resetPwTriggerRefs.current[s.id] = el;
-                    }}
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => openResetPw(s, e)}
-                  >
-                    <RotateCcw size={14} className="me-1" /> {t('resetPwButton')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleActive(s)}
-                    className={
-                      s.is_active
-                        ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                        : 'text-green-500 hover:text-green-700 hover:bg-green-50'
-                    }
-                  >
-                    {s.is_active ? t('deactivate') : t('reactivate')}
-                  </Button>
-                </div>
-              )}
-          </div>
-        ))}
-      </div>
-
-      {staff.length === 0 && (
-        <p className="text-center text-muted-foreground py-12">{t('empty')}</p>
+      {tabs.length > 1 && (
+        <div role="tablist" aria-label={t('title')} className="mb-6 inline-flex rounded-lg border border-border p-1">
+          {tabs.map(({ tab: entry, labelKey }) => (
+            <button
+              key={entry}
+              type="button"
+              role="tab"
+              aria-selected={tab === entry}
+              data-testid={`staff-tab-${entry}`}
+              onClick={() => setTab(entry)}
+              className={`rounded px-3 py-1.5 text-sm ${tab === entry ? 'bg-brand text-white' : 'text-muted-foreground'}`}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
       )}
 
-      {canViewStaff && <AttendancePanel canManage={canManageStaff} />}
-      {canManagePermissions && <PermissionMatrix staff={staff} />}
-      {canManagePermissions && <PermissionAuditLog staff={staff} />}
+      {tab === 'staff' && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {staff.map((s) => (
+              <div
+                key={s.id}
+                className={`bg-card rounded-xl p-5 border ${s.is_active ? 'border-border' : 'border-border opacity-60'}`}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="font-bold text-foreground">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
+                    {Boolean(s.has_pin) && <p className="text-xs text-green-600 mt-1">{t('pinSet')}</p>}
+                    {Boolean(s.has_staff_code) && (
+                      <p className="text-xs text-green-600 mt-1">{t('staffCodeSet')}</p>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${roleColors[s.role] || 'bg-muted text-foreground'}`}
+                  >
+                    {roleLabel(s.role, t)}
+                  </span>
+                </div>
+                {canManageStaff &&
+                  (canManagePrivilegedStaff || !hasRole(s.role, ROLE_ACCESS.ownerManager)) && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <Button
+                        ref={(el) => {
+                          editTriggerRefs.current[s.id] = el;
+                        }}
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => openEdit(s, e)}
+                      >
+                        <Edit size={14} className="me-1" /> {tCommon('edit')}
+                      </Button>
+                      <Button
+                        ref={(el) => {
+                          resetPwTriggerRefs.current[s.id] = el;
+                        }}
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => openResetPw(s, e)}
+                      >
+                        <RotateCcw size={14} className="me-1" /> {t('resetPwButton')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleActive(s)}
+                        className={
+                          s.is_active
+                            ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                            : 'text-green-500 hover:text-green-700 hover:bg-green-50'
+                        }
+                      >
+                        {s.is_active ? t('deactivate') : t('reactivate')}
+                      </Button>
+                    </div>
+                  )}
+              </div>
+            ))}
+          </div>
+
+          {staff.length === 0 && (
+            <p className="text-center text-muted-foreground py-12">{t('empty')}</p>
+          )}
+
+          {canManagePermissions && <PermissionMatrix staff={staff} />}
+          {canManagePermissions && <PermissionAuditLog staff={staff} />}
+        </>
+      )}
+      {tab === 'attendance' && canViewStaff && <AttendancePanel canManage={canManageStaff} />}
+      {tab === 'zones' && canViewTables && <ZoneResponsibilityPanel staff={staff} canManageTables={canManageTables} />}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
