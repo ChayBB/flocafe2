@@ -254,6 +254,12 @@ choose a price, order creation is limited to 12 per 10 minutes per address, and 
 read orders or customers. The `guest_qr_ordering_enabled` setting (the "Take orders by QR code"
 checkbox on the OrderFlow settings tab, on by default) closes all three routes with `403`
 `guest_ordering_disabled` when it is `false`, and the guest view then asks the customer to call staff.
+A table id alone cannot place an order: the table and order routes also need the token the QR link
+carries (an HMAC of the table id under `guest_qr_secret`), and "Cancel all table QR codes" on the same
+tab replaces the secret so every printed QR stops working. For ordering over mobile data the tab
+also sets a public https address for the QR links and the one proxy address whose
+`X-Forwarded-For` the Server App believes, which keeps the per-address limit per customer behind
+that proxy.
 Server App sessions end at the next 06:00 in the store time zone.
 
 ## Audit attribution

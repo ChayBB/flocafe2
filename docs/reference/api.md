@@ -1038,7 +1038,20 @@ When the frontend export is missing, the `GET /` redirect is replaced by a place
 so `GET /` is two mutually exclusive registrations rather than two routes.
 
 All three `/api/guest/*` routes answer `403` with `code` `guest_ordering_disabled` while the
-`guest_qr_ordering_enabled` setting is `false`.
+`guest_qr_ordering_enabled` setting is `false`. `GET /api/guest/table` (query `t`) and
+`POST /api/guest/order` (body `table_token`) also need the table's QR token, an HMAC of the table id
+under the `guest_qr_secret` setting; without a matching token they answer `404` as for an unknown
+table. `POST /api/tables/order-qr` puts that token in each link as `t`, builds the links on
+`guest_qr_public_base_url` when it is set (otherwise the shop-network address), and reports
+`public`. The Server App's `trust proxy` accepts `X-Forwarded-For` only from the address in
+`guest_qr_trusted_proxy`, so behind a QR-ordering proxy every rate limit keys on the customer.
+
+The main API manages those settings under `/api/settings/guest-qr`: `GET` (`settings.view`) returns
+`{ public_base_url, trusted_proxy }`; `PUT` (`settings.manage`) takes the same fields, `''` to
+clear, and answers `400` `public_base_url_invalid` for anything but an https address without a query,
+or `trusted_proxy_invalid` for anything but one IP address; `POST /api/settings/guest-qr/rotate`
+(`settings.manage`) replaces `guest_qr_secret`, which retires every printed table QR. The secret is
+in the sensitive set the wildcard settings read refuses.
 
 `requireServerAppAuth` is applied to every route except `/api/health`, `/api/server-app/info`, the three `/api/guest/*` routes and the login route, and
 it runs the feature check **before** the token check. Behaviour by condition:

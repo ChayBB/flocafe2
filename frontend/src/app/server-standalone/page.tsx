@@ -225,6 +225,11 @@ export default function ServerStandalonePage() {
     () => new URLSearchParams(window.location.search).get('table'),
     () => undefined,
   );
+  const guestTableToken = useSyncExternalStore(
+    subscribeToNothing,
+    () => new URLSearchParams(window.location.search).get('t'),
+    () => null,
+  );
   const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
   const [guestChecked, setGuestChecked] = useState(false);
   const [guestClosed, setGuestClosed] = useState(false);
@@ -468,7 +473,7 @@ export default function ServerStandalonePage() {
     if (!api || user || !guestTableId || loading) return;
     let cancelled = false;
     Promise.all([
-      api.get('/api/guest/table', { params: { table_id: guestTableId } }),
+      api.get('/api/guest/table', { params: { table_id: guestTableId, t: guestTableToken } }),
       api.get('/api/guest/menu'),
     ])
       .then(([tableRes, menuRes]) => {
@@ -495,7 +500,7 @@ export default function ServerStandalonePage() {
     return () => {
       cancelled = true;
     };
-  }, [api, user, guestTableId, loading]);
+  }, [api, user, guestTableId, guestTableToken, loading]);
 
   useEffect(() => {
     if (!selectedTableId || !user || !api) return;
@@ -982,6 +987,7 @@ export default function ServerStandalonePage() {
     try {
       await api.post('/api/guest/order', {
         table_id: guestTable.id,
+        table_token: guestTableToken,
         items,
         special_instructions: notes || undefined,
         idempotency_key: key,

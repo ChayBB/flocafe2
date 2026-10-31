@@ -3,6 +3,7 @@ import { getDatabase, isServerAppEnabled, now, parseRowJson, withTxn } from '../
 import * as QRCode from 'qrcode';
 import { getLocalIP } from '../server-state';
 import { getServerAppPort } from '../server-app-state';
+import { guestTableToken, readGuestQrNetwork } from '../lib/guest-qr';
 import { randomUUID } from 'crypto';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { notifyKdsUpdate } from '../services/kds';
@@ -330,7 +331,11 @@ router.post('/order-qr', requirePermission('tables.manage'), async (req: Request
         .json({ error: `table_ids must contain between 1 and ${MAX_BATCH_TABLES} entries` });
     }
     const db = getDatabase();
-    const baseUrl = `http://${getLocalIP()}:${getServerAppPort()}/server-standalone/`;
+    // A public address lets customers order over mobile data; otherwise the QR only works on the shop network.
+    const { publicBaseUrl } = readGuestQrNetwork();
+    const baseUrl = publicBaseUrl
+      ? `${publicBaseUrl}/server-standalone/`
+      : `http://${getLocalIP()}:${getServerAppPort()}/server-standalone/`;
     const qrs: { id: string; name: string; url: string; data_url: string }[] = [];
     for (const id of ids) {
       if (typeof id !== 'string') continue;
@@ -338,11 +343,11 @@ router.post('/order-qr', requirePermission('tables.manage'), async (req: Request
         | { id: string; number: string }
         | undefined;
       if (!table) continue;
-      const url = `${baseUrl}?table=${encodeURIComponent(table.id)}`;
+      const url = `${baseUrl}?table=${encodeURIComponent(table.id)}&t=${guestTableToken(table.id)}`;
       const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 256 });
       qrs.push({ id: table.id, name: table.number, url, data_url: dataUrl });
     }
-    res.json({ server_app_enabled: isServerAppEnabled(), base_url: baseUrl, qrs });
+    res.json({ server_app_enabled: isServerAppEnabled(), base_url: baseUrl, public: Boolean(publicBaseUrl), qrs });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

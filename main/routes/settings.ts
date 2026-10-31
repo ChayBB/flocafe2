@@ -3,6 +3,15 @@ import expressRateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { getDatabase, getSettingValue, now, parseBackupPaginationQuery } from '../db';
 import {
+  GUEST_QR_PUBLIC_URL_KEY,
+  GUEST_QR_SECRET_KEY,
+  GUEST_QR_TRUSTED_PROXY_KEY,
+  normalizePublicBaseUrl,
+  normalizeTrustedProxy,
+  readGuestQrNetwork,
+  rotateGuestQrSecret,
+} from '../lib/guest-qr';
+import {
   CloudRequestError,
   cloudSync,
   DEFAULT_CLOUD_SERVER_URL,
@@ -143,6 +152,7 @@ const SENSITIVE_SETTING_KEYS = new Set([
   'cloud_last_error',
   'posthog_project_token',
   'posthog_host',
+  GUEST_QR_SECRET_KEY,
 ]);
 
 function isGoogleDriveSettingKey(key: string): boolean {
@@ -705,6 +715,56 @@ router.put('/kds', requirePermission('settings.manage'), (req: Request, res: Res
     res.json({
       kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
     });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Table QR ordering from outside the shop (must come BEFORE /:key wildcard) ──
+
+const guestQrNetworkBody = () => {
+  const { publicBaseUrl, trustedProxy } = readGuestQrNetwork();
+  return { public_base_url: publicBaseUrl, trusted_proxy: trustedProxy };
+};
+
+router.get('/guest-qr', requirePermission('settings.view'), (_req: Request, res: Response) => {
+  try {
+    res.json(guestQrNetworkBody());
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/guest-qr', requirePermission('settings.manage'), (req: Request, res: Response) => {
+  try {
+    const publicBaseUrl = normalizePublicBaseUrl(req.body?.public_base_url ?? '');
+    if (publicBaseUrl === null) {
+      return res
+        .status(400)
+        .json({ code: 'public_base_url_invalid', error: 'public_base_url must be an https address' });
+    }
+    const trustedProxy = normalizeTrustedProxy(req.body?.trusted_proxy ?? '');
+    if (trustedProxy === null) {
+      return res.status(400).json({ code: 'trusted_proxy_invalid', error: 'trusted_proxy must be an IP address' });
+    }
+    upsertSettings(getDatabase(), {
+      [GUEST_QR_PUBLIC_URL_KEY]: publicBaseUrl,
+      [GUEST_QR_TRUSTED_PROXY_KEY]: trustedProxy,
+    });
+    res.json(guestQrNetworkBody());
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Every table QR printed before stops working; reprint them afterwards.
+router.post('/guest-qr/rotate', requirePermission('settings.manage'), (_req: Request, res: Response) => {
+  try {
+    rotateGuestQrSecret();
+    res.json({ success: true });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

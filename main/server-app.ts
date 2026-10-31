@@ -61,6 +61,7 @@ import {
 } from './services/authorization';
 import { clockNow } from './lib/clock';
 import { recordClockIn, recordClockOut } from './services/attendance';
+import { isTrustedGuestProxy, verifyGuestTableToken } from './lib/guest-qr';
 
 let serverApp: http.Server | null = null;
 let stopPromise: Promise<void> | null = null;
@@ -270,6 +271,8 @@ export function startServerApp(): Promise<void> {
   return new Promise((resolve, reject) => {
     startReject = reject;
     const app: Express = express();
+    // Behind the QR-ordering proxy, req.ip (and so every rate limit) becomes the customer's address.
+    app.set('trust proxy', (address: string) => isTrustedGuestProxy(address));
 
     app.use(cors(corsOptions));
     app.use((req: Request, res: Response, next: NextFunction) => {
@@ -493,7 +496,7 @@ export function startServerApp(): Promise<void> {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
       if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
       const tableId = typeof req.query.table_id === 'string' ? req.query.table_id : '';
-      const table = tableId
+      const table = verifyGuestTableToken(tableId, req.query.t)
         ? (getDatabase()
             .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
             .get(tableId) as { id: string; number: string } | undefined)
@@ -538,7 +541,7 @@ export function startServerApp(): Promise<void> {
         try {
           const db = getDatabase();
           const tableId = typeof req.body?.table_id === 'string' ? req.body.table_id : '';
-          const table = tableId
+          const table = verifyGuestTableToken(tableId, req.body?.table_token)
             ? db.prepare('SELECT id FROM tables WHERE id = ? AND is_active = 1').get(tableId)
             : undefined;
           if (!table) return res.status(404).json({ error: 'Table not found' });

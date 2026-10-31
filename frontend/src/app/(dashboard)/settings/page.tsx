@@ -59,6 +59,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { normalizeOptionalPhone } from '@/lib/phone';
 import { useConfirm } from '@/hooks/use-confirm';
+import { GuestQrNetworkSettings } from '@/components/settings/GuestQrNetworkSettings';
 import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
 import AutoUpdateCheckToggle from '@/components/settings/AutoUpdateCheckToggle';
 import BetaChannelToggle from '@/components/settings/BetaChannelToggle';
@@ -6168,6 +6169,7 @@ export default function SettingsPage() {
                     <span className="block text-xs text-muted-foreground">{t('qrOrderingHint')}</span>
                   </span>
                 </label>
+                <GuestQrNetworkSettings disabled={!guestQrOrderingEnabled} />
               </div>
             </SettingsTabShell>
           </TabsContent>
