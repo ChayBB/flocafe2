@@ -228,6 +228,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         stations={conn.stations}
         stationId={stationId}
         onChangeStation={setSelectedStation}
+        screenMode={screen.mode}
+        onScreenMode={screen.setMode}
         onOpenSettings={() => setSettingsOpen(true)}
         onLogout={conn.handleLogout}
       />

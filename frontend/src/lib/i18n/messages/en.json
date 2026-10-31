@@ -561,6 +561,8 @@
     "screenModeTitle": "Screen",
     "screenModeDay": "Day",
     "screenModeNight": "Night",
+    "screenModeToDay": "Switch to day",
+    "screenModeToNight": "Switch to night",
     "brightnessLabel": "Brightness",
     "readyBellLabel": "Bell sound",
     "readyBellHotel": "Hotel bell",

@@ -561,6 +561,8 @@
     "screenModeTitle": "หน้าจอ",
     "screenModeDay": "กลางวัน",
     "screenModeNight": "กลางคืน",
+    "screenModeToDay": "เปลี่ยนเป็นโหมดกลางวัน",
+    "screenModeToNight": "เปลี่ยนเป็นโหมดกลางคืน",
     "brightnessLabel": "ความสว่าง",
     "readyBellLabel": "เลือกเสียงกระดิ่ง",
     "readyBellHotel": "กระดิ่งโรงแรม",

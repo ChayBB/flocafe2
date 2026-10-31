@@ -24,6 +24,23 @@ const dimming = (page: Page) =>
     return dimmer ? Number(getComputedStyle(dimmer).opacity) : 0;
   });
 
+test('the KDS header button flips between day and night and the choice is kept', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openKds(page);
+  await page.evaluate(() => localStorage.setItem('flocafe:kds-screen-mode', 'day'));
+  await page.reload();
+  const toggle = page.getByTestId('kds-screen-mode-toggle');
+  await expect(toggle).toHaveAttribute('aria-label', 'Switch to night');
+  await toggle.click();
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(21, 23, 25)' });
+  await expect(toggle).toHaveAttribute('aria-label', 'Switch to day');
+  expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-screen-mode'))).toBe('night');
+  await page.reload();
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(21, 23, 25)' });
+  await page.getByTestId('kds-screen-mode-toggle').click();
+  await expect.poll(() => screen(page)).toEqual({ dark: false, background: 'rgb(220, 217, 210)' });
+});
+
 test('each KDS display picks day or night and a brightness, and keeps both over the app theme', async ({ page }) => {
   // The app itself is dark on this device, so a display that never chose starts at night.
   await page.emulateMedia({ colorScheme: 'dark' });

@@ -1,9 +1,10 @@
 'use client';
 
-import { ChefHat, LogOut, Settings, Wifi, WifiOff } from 'lucide-react';
+import { ChefHat, LogOut, Moon, Settings, Sun, Wifi, WifiOff } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { ConnectionMode, KdsStation } from '@/hooks/useKdsConnection';
 import type { KdsViewMode } from '@/hooks/useKdsView';
+import type { KdsScreenMode } from '@/lib/kds-screen-mode';
 
 export interface KdsHeaderProps {
   userName: string;
@@ -15,6 +16,8 @@ export interface KdsHeaderProps {
   stations: KdsStation[];
   stationId: string;
   onChangeStation: (stationId: string) => void;
+  screenMode: KdsScreenMode;
+  onScreenMode: (mode: KdsScreenMode) => void;
   onOpenSettings: () => void;
   onLogout: () => void;
 }
@@ -29,6 +32,8 @@ export function KdsHeader({
   stations,
   stationId,
   onChangeStation,
+  screenMode,
+  onScreenMode,
   onOpenSettings,
   onLogout,
 }: KdsHeaderProps) {
@@ -105,6 +110,17 @@ export function KdsHeader({
               {t('viewKanban')}
             </button>
           </div>
+
+          <button
+            type="button"
+            data-testid="kds-screen-mode-toggle"
+            onClick={() => onScreenMode(screenMode === 'night' ? 'day' : 'night')}
+            className="min-w-11 min-h-11 p-2 hover:bg-muted rounded-lg text-muted-foreground ms-2"
+            title={screenMode === 'night' ? t('screenModeToDay') : t('screenModeToNight')}
+            aria-label={screenMode === 'night' ? t('screenModeToDay') : t('screenModeToNight')}
+          >
+            {screenMode === 'night' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
 
           <button
             type="button"
