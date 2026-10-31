@@ -114,8 +114,8 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   }
   await page.keyboard.press('Escape');
 
-  // On by default: a new order is read out, and the bell rings and names the order for each menu
-  // item that turns ready to serve, even while the rest of the order is still cooking.
+  // On by default: a new order is read out, and the bell rings and names the order when a menu
+  // item turns ready to serve, even while the rest of the order is still cooking.
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
@@ -126,13 +126,13 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
     .toContain(`Order ${first.order_number} is ready to serve`);
-  const spokenAfterFirst = (await sounds(page)).__spoken.length;
-  const beepsAfterFirst = (await sounds(page)).__beeps;
+  // The rest of the order turning ready within 10 seconds is not announced again.
+  const afterFirst = await sounds(page);
   await markReady(first.items[1].id);
-  await expect.poll(async () => (await sounds(page)).__beeps, { timeout: 15000 }).toBe(beepsAfterFirst + 2);
-  await expect
-    .poll(async () => (await sounds(page)).__spoken.slice(spokenAfterFirst), { timeout: 15000 })
-    .toEqual([`Order ${first.order_number} is ready to serve`]);
+  await expect(page.getByTestId('kds-column-ready').or(page.getByTestId('kds-workspace')).first()).toBeVisible();
+  await page.waitForTimeout(1500);
+  expect((await sounds(page)).__beeps).toBe(afterFirst.__beeps);
+  expect((await sounds(page)).__spoken).toEqual(afterFirst.__spoken);
 
   // The display can pick another voice; the choice is read out as a sample.
   await page.getByTestId('kds-settings-button').click();
@@ -170,4 +170,74 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   expect(after.__spoken).toEqual(quiet.__spoken);
   expect(after.__spoken.join(' | ')).not.toContain(second.order_number);
   expect(after.__beeps).toBe(quiet.__beeps);
+});
+
+test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const run = Math.random().toString(36).slice(2, 7);
+  const tableName = `Bell ${run}`;
+  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: tableName, capacity: 4 } });
+  expect(table.status()).toBe(201);
+  const tableId = (await table.json()).table.id;
+  // Two tickets on the same table, as when staff add a second round.
+  const tickets: { items: { id: number }[] }[] = [];
+  for (const note of ['first round', 'second round']) {
+    const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+      headers,
+      data: {
+        type: 'dine_in',
+        table_id: tableId,
+        items: [
+          { product_id: 'e2e-product', quantity: 1, special_instructions: `${note} a` },
+          { product_id: 'e2e-product', quantity: 1, special_instructions: `${note} b` },
+          { product_id: 'e2e-product', quantity: 1, special_instructions: `${note} c` },
+        ],
+      },
+    });
+    expect(order.status()).toBe(201);
+    tickets.push((await order.json()).order);
+  }
+  const markReady = async (itemId: number) => {
+    const ready = await page.request.patch(`${E2E_BASE_URL}/api/order-items/${itemId}/status`, {
+      headers,
+      data: { status: 'ready' },
+    });
+    expect(ready.ok(), await ready.text()).toBeTruthy();
+  };
+  const announced = async () =>
+    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`).length;
+
+  await page.clock.install();
+  await recordSounds(page);
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await expect(page.getByText(`first round a`).first()).toBeVisible({ timeout: 15000 });
+  const start = await sounds(page);
+
+  // Items from both tickets turn ready together: one bell, one announcement for the table.
+  await Promise.all([markReady(tickets[0].items[0].id), markReady(tickets[1].items[0].id)]);
+  await expect.poll(announced, { timeout: 15000 }).toBe(1);
+  await page.waitForTimeout(1500);
+  expect(await announced()).toBe(1);
+  expect((await sounds(page)).__beeps).toBe(start.__beeps + 2);
+
+  // More items for the same table within 10 seconds stay quiet.
+  await page.clock.fastForward(5000);
+  await markReady(tickets[0].items[1].id);
+  await page.waitForTimeout(1500);
+  expect(await announced()).toBe(1);
+  expect((await sounds(page)).__beeps).toBe(start.__beeps + 2);
+
+  // Once 10 seconds have passed the table is announced again.
+  await page.clock.fastForward(6000);
+  await markReady(tickets[1].items[1].id);
+  await expect.poll(announced, { timeout: 15000 }).toBe(2);
+  expect((await sounds(page)).__beeps).toBe(start.__beeps + 4);
 });

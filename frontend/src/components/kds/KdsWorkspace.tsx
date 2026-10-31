@@ -41,6 +41,7 @@ function readInactiveStages(): InactiveStages {
 }
 
 const NONE_INACTIVE: KitchenStatus[] = [];
+const READY_REPEAT_MS = 10_000;
 
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter((item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && !item.service_change);
@@ -136,6 +137,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   // Items already on this display when it opens are not announced again, nor are items already ready.
   const knownItemIdsRef = useRef<Set<number> | null>(null);
   const knownStatusesRef = useRef<Map<number, string>>(new Map());
+  const lastReadyAtRef = useRef<Map<string, number>>(new Map());
   useEffect(() => {
     const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
     const knownItems = knownItemIdsRef.current;
@@ -156,21 +158,29 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       if (phrases.length > 0) speakKds(phrases.join('. '), kdsSpeechLang());
     }
     // Any menu item that turns ready rings the bell and names its table, even while the rest of the
-    // order is still cooking.
-    const readyPhrases = orders
-      .filter((order) =>
-        liveItems(order).some(
-          (item) => item.status === 'ready' && knownStatuses.has(item.id) && knownStatuses.get(item.id) !== 'ready',
-        ),
-      )
-      .map((order) =>
+    // order is still cooking. A table is announced once however many items turn ready together, and
+    // not again for 10 seconds.
+    const now = Date.now();
+    const lastReadyAt = lastReadyAtRef.current;
+    const readyPhrases = new Map<string, string>();
+    for (const order of orders) {
+      const turnedReady = liveItems(order).some(
+        (item) => item.status === 'ready' && knownStatuses.has(item.id) && knownStatuses.get(item.id) !== 'ready',
+      );
+      if (!turnedReady) continue;
+      const key = order.table?.name ? `table:${order.table.name}` : `order:${order.id}`;
+      if (readyPhrases.has(key) || now - (lastReadyAt.get(key) ?? -Infinity) < READY_REPEAT_MS) continue;
+      readyPhrases.set(
+        key,
         order.table?.name
           ? t('readyToServeTable', { table: order.table.name })
           : t('readyToServeOrder', { number: order.order_number }),
       );
-    if (readyPhrases.length > 0 && soundSettingsRef.current.orderReady) {
+    }
+    if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
+      for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
       playKdsAlert(2);
-      speakKds(readyPhrases.join('. '), kdsSpeechLang());
+      speakKds([...readyPhrases.values()].join('. '), kdsSpeechLang());
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
     knownStatusesRef.current = new Map(
