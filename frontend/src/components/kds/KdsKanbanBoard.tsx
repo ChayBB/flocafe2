@@ -320,7 +320,7 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
   const count = groups.reduce((sum, g) => sum + g.items.length, 0);
 
   return (
-    <div className="flex-1 min-w-[260px] flex flex-col">
+    <div className="flex-1 min-w-[260px] min-h-0 flex flex-col">
       <div
         className={`flex items-center gap-2 px-3 py-2 ${config.bg} rounded-t-lg border border-border border-b-0`}
       >
@@ -332,7 +332,7 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
       </div>
       <div
         className="flex-1 border border-border border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40"
-        style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 300px)' }}
+        style={{ minHeight: '60vh' }}
       >
         {groups.map(({ order, items }) => (
           <div

@@ -22,7 +22,7 @@ export function KdsColumn({ status, count, children }: KdsColumnProps) {
   });
 
   return (
-    <div data-testid={`kds-column-${status}`} className="flex-1 min-w-[260px] flex flex-col">
+    <div data-testid={`kds-column-${status}`} className="flex-1 min-w-[260px] min-h-0 flex flex-col">
       <div className={`flex items-center gap-2 px-3 py-2 ${config.bg} rounded-t-lg border border-border border-b-0`}>
         <div className={`w-2 h-2 rounded-full ${config.color}`} />
         <span className={`text-base font-semibold ${config.text}`}>{statusLabel}</span>
@@ -35,7 +35,7 @@ export function KdsColumn({ status, count, children }: KdsColumnProps) {
         className={`flex-1 border border-border border-t-0 rounded-b-lg p-2 space-y-2 overflow-y-auto bg-muted/40 transition-colors ${
           isDropTarget ? 'bg-muted ring-2 ring-border ring-inset' : ''
         }`}
-        style={{ minHeight: '60vh', maxHeight: 'calc(100vh - 300px)' }}
+        style={{ minHeight: '60vh' }}
       >
         {children}
         {count === 0 && (

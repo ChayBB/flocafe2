@@ -56,6 +56,9 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
   // The bar sits at the bottom edge of the screen, below the board.
   const barBox = (await bar.boundingBox())!;
   expect(900 - (barBox.y + barBox.height)).toBeLessThanOrEqual(24);
+  // The Kanban columns reach down to the top of the bar.
+  const columnBox = (await page.getByTestId('kds-column-pending').boundingBox())!;
+  expect(barBox.y - (columnBox.y + columnBox.height)).toBeLessThanOrEqual(16);
   for (const note of ['move', 'merge', 'stay']) {
     await expect(page.getByText(`${note} ${run}`).first()).toBeVisible({ timeout: 15000 });
   }
