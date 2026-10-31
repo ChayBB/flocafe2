@@ -130,6 +130,12 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
 
   await page.getByTestId('kds-settings-button').click();
   const dialog = page.getByTestId('kds-settings-dialog');
+  // Settings open on the display tab; sounds sit on their own tab.
+  await expect(dialog.getByTestId('kds-settings-tab-display')).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.getByTestId('kds-screen-mode-day')).toBeVisible();
+  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toBeHidden();
+  await dialog.getByTestId('kds-settings-tab-sound').click();
+  await expect(dialog.getByTestId('kds-screen-mode-day')).toBeHidden();
   for (const setting of ['readAloud', 'statusChange', 'orderReady']) {
     await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute('aria-checked', 'true');
   }
@@ -157,6 +163,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
 
   // The display can pick its ready bell; the choice rings as a sample and is kept.
   await page.getByTestId('kds-settings-button').click();
+  await dialog.getByTestId('kds-settings-tab-sound').click();
   const bellSelect = dialog.getByTestId('kds-ready-bell-select');
   await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding', 'No bell (read the table only)']);
   await expect(bellSelect).toHaveValue('hotel');
@@ -168,6 +175,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
 
   // The display can pick another voice; the choice is read out as a sample.
   await page.getByTestId('kds-settings-button').click();
+  await dialog.getByTestId('kds-settings-tab-sound').click();
   const voiceSelect = dialog.getByTestId('kds-voice-select');
   await expect(voiceSelect.locator('option')).toHaveText([
     'Automatic (Edge natural voice when available)',
@@ -190,6 +198,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
   await page.getByTestId('kds-settings-button').click();
+  await dialog.getByTestId('kds-settings-tab-sound').click();
   await expect(dialog.getByTestId('kds-sound-switch-orderReady')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
 
