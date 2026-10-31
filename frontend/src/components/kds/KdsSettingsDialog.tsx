@@ -36,8 +36,6 @@ const READY_BELL_LABELS = {
 
 const SOUND_ROWS = [
   { setting: 'readAloud' as KdsSoundSetting, labelKey: 'soundReadAloud' as const },
-  { setting: 'statusChange' as KdsSoundSetting, labelKey: 'soundStatusChange' as const },
-  { setting: 'orderReady' as KdsSoundSetting, labelKey: 'soundOrderReady' as const },
 ];
 
 function Switch({

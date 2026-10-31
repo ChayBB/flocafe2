@@ -5,16 +5,12 @@ import { playKdsAudio } from '@/lib/kds-alert-sound';
 export interface KdsSoundSettings {
   /** Speak newly arrived menu items aloud. */
   readAloud: boolean;
-  /** Beep when service staff change an item (take-away, cancel, confirmed served). */
-  statusChange: boolean;
-  /** Ring and announce each menu item as it turns ready to serve. */
-  orderReady: boolean;
 }
 
 export type KdsSoundSetting = keyof KdsSoundSettings;
 
 const KEY = 'flocafe:kds-sound-settings';
-export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = { readAloud: true, statusChange: true, orderReady: true };
+export const DEFAULT_KDS_SOUND_SETTINGS: KdsSoundSettings = { readAloud: true };
 
 export function readKdsSoundSettings(): KdsSoundSettings {
   if (typeof window === 'undefined') return DEFAULT_KDS_SOUND_SETTINGS;

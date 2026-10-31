@@ -552,8 +552,6 @@
     "stageActive": "On",
     "stageSkipped": "Off",
     "soundReadAloud": "Read new menu items aloud",
-    "soundStatusChange": "Alert when a menu item's status changes",
-    "soundOrderReady": "Ring and announce when a menu item is ready to serve",
     "readAloudTable": "Table {table}: {items}",
     "readAloudOrder": "Order {number}: {items}",
     "readAloudItem": "{quantity} {name}",

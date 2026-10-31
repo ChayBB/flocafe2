@@ -95,7 +95,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     for (const [id, change] of current) {
       if (change && known.has(id) && known.get(id) !== change) changed = true;
     }
-    if (changed && soundSettingsRef.current.statusChange && !playKdsAlert()) {
+    if (changed && !playKdsAlert()) {
       flashRef.current?.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
         duration: 700,
         iterations: 4,
@@ -178,7 +178,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           : t('readyToServeOrder', { number: order.order_number }),
       );
     }
-    if (readyPhrases.size > 0 && soundSettingsRef.current.orderReady) {
+    if (readyPhrases.size > 0) {
       for (const key of readyPhrases.keys()) lastReadyAt.set(key, now);
       const announcement = [...readyPhrases.values()].join('. ');
       void playKdsReadyBell().then(() => speakKds(announcement, kdsSpeechLang()));

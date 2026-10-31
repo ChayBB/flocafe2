@@ -136,9 +136,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toBeHidden();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   await expect(dialog.getByTestId('kds-screen-mode-day')).toBeHidden();
-  for (const setting of ['readAloud', 'statusChange', 'orderReady']) {
-    await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute('aria-checked', 'true');
-  }
+  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'true');
+  // Status-change beeps and the ready announcement have no switch; the bell picker can silence the bell.
+  await expect(dialog.getByRole('switch')).toHaveCount(1);
   await page.keyboard.press('Escape');
 
   // On by default: a new order is read out, and the bell rings and names the order when a menu
@@ -188,29 +188,23 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect.poll(async () => (await sounds(page)).__voices.at(-1)).toBe('Fake Local English');
   expect((await sounds(page)).__spoken.at(-1)).toBe('Table 5, fried rice, 2');
 
-  // Switched off, and still off after a reload: new orders and ready orders stay silent.
+  // Switched off, and still off after a reload: new orders are not read aloud.
   await dialog.getByTestId('kds-sound-switch-readAloud').click();
-  await dialog.getByTestId('kds-sound-switch-orderReady').click();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
-  await expect(dialog.getByTestId('kds-sound-switch-statusChange')).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-settings-tab-sound').click();
-  await expect(dialog.getByTestId('kds-sound-switch-orderReady')).toHaveAttribute('aria-checked', 'false');
+  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.press('Escape');
 
+  const quiet = await sounds(page);
   const second = await placeOrder();
   await expect(page.getByText(`#${second.order_number}`).first()).toBeVisible({ timeout: 15000 });
-  const quiet = await sounds(page);
-  await markReady(second.items[0].id);
   await page.waitForTimeout(2000);
-  const after = await sounds(page);
-  expect(after.__spoken).toEqual(quiet.__spoken);
-  expect(after.__spoken.join(' | ')).not.toContain(second.order_number);
-  expect(after.__bells).toBe(quiet.__bells);
+  expect((await sounds(page)).__spoken).toEqual(quiet.__spoken);
 });
 
 test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({ page }) => {

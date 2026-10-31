@@ -552,8 +552,6 @@
     "stageActive": "เปิดใช้งาน",
     "stageSkipped": "ปิดใช้งาน",
     "soundReadAloud": "เสียงอ่านเมนูอัตโนมัติ",
-    "soundStatusChange": "เสียงเตือนเปลี่ยนสถานะเมนู",
-    "soundOrderReady": "เสียงกระดิ่งแจ้งเมนูพร้อมเสิร์ฟ",
     "readAloudTable": "โต๊ะ {table} {items}",
     "readAloudOrder": "ออเดอร์ {number} {items}",
     "readAloudItem": "{name} จำนวน {quantity}",
