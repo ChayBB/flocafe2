@@ -72,11 +72,11 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
     doc.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(t('tableQrTitle'))}</title><style>
         body{font-family:sans-serif;margin:12mm}
-        .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
+        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72mm,1fr));gap:8mm}
         .card{border:1px solid #999;border-radius:4mm;padding:4mm;text-align:center;break-inside:avoid}
         .name{font-size:23.4pt;font-weight:700;margin-bottom:2mm}
         .menu{font-size:21pt;font-weight:700;margin-top:1mm}
-        img{width:100%;max-width:48mm}
+        img{width:100%;max-width:62.4mm}
         .zone{font-size:10pt;color:#555}
       </style></head><body><div class="grid">${cards}</div></body></html>`,
     );
@@ -139,7 +139,11 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
                 >
                   <p className="text-[18px] leading-tight font-bold">{qr.name}</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qr.data_url} alt="QR" className="size-32 rounded bg-white p-1" />
+                  <img
+                    src={qr.data_url}
+                    alt="QR"
+                    className="aspect-square w-full max-w-[166px] rounded bg-white p-1"
+                  />
                   <p className="text-[16px] leading-tight font-bold">{t('tableQrMenu')}</p>
                 </div>
               ))}
