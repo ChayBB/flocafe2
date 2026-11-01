@@ -306,17 +306,10 @@ async function run() {
       html.includes('<strong>شماره مشتری</strong>'),
     );
     assert(
-      'Table headers show Persian items, qty, rate, amount',
-      html.includes('<th>اقلام</th>') &&
-        html.includes('<th class="text-end">تعداد</th>') &&
-        html.includes('<th class="text-end">نرخ</th>') &&
-        html.includes('<th class="text-end">مبلغ</th>'),
-    );
-    assert(
-      'items table numbers each product row 1, 2, ... under a leading column',
-      /<th class="line-no">[^<]+<\/th>\s*<th>اقلام<\/th>/.test(html) &&
-        /<td class="line-no num">1<\/td>[\s\S]*<td class="line-no num">2<\/td>/.test(html) &&
-        !html.includes('<td class="line-no num">3</td>'),
+      'items table has only item, qty and amount columns',
+      /<thead>\s*<tr>\s*<th>اقلام<\/th>\s*<th class="text-end">تعداد<\/th>\s*<th class="text-end">مبلغ<\/th>\s*<\/tr>/.test(
+        html,
+      ) && !html.includes('نرخ'),
     );
     assert('bill table headers have no grey background', !/th[^{]*\{[^}]*background/.test(html));
     assert(
@@ -638,7 +631,6 @@ async function run() {
       customerNo: 'شماره مشتری',
       item: 'اقلام',
       quantity: 'تعداد',
-      rate: 'نرخ',
       amount: 'مبلغ',
       subtotal: 'جمع جزء',
       tax: 'مالیات کل',

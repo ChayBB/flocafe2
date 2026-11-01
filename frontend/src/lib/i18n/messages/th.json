@@ -1631,7 +1631,7 @@
     "saveFailed": "บันทึกไม่สำเร็จ ลองอีกครั้ง"
   },
   "receipt": {
-    "amount": "จำนวนเงิน",
+    "amount": "รวม",
     "billNumber": "เลขบิล#",
     "cashReceived": "เงินสดที่ได้รับ",
     "customerNo": "หมายเลขลูกค้า",
@@ -1640,7 +1640,6 @@
     "economicCode": "รหัสกิจกรรมเศรษฐกิจ",
     "grandTotal": "ยอดรวมทั้งสิ้น",
     "item": "สินค้า",
-    "lineNumber": "รายการ",
     "onlineOrder": "คำสั่งซื้อออนไลน์",
     "payments": "การชำระเงิน",
     "phone": "โทร",

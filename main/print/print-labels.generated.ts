@@ -642,7 +642,7 @@ const PRINT_LABELS: Record<PrintLabelLanguage, PrintLabelTable> = {
     'receipt.item': "สินค้า",
     'receipt.qty': "จำนวน",
     'receipt.rate': "ราคา",
-    'receipt.amount': "จำนวนเงิน",
+    'receipt.amount': "รวม",
     'printTest.amt': "จำนวนเงิน",
     'pos.subtotal': "ยอดรวมย่อย",
     'pos.discount': "ส่วนลด",
