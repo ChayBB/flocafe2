@@ -50,6 +50,13 @@ import { getCountryByCode, getCurrencySymbol, resolveTenantCurrency } from '@/li
 const DOCUMENT_PRINTER_MARKER = 'Document printer';
 const DOCUMENT_PRINTER_TOAST = 'The selected printer saves documents — printing via system print';
 
+/** PromptPay QR for a bill total; a shop without a PromptPay account prints no QR. */
+async function loadBillPaymentQr(total: number): Promise<string | undefined> {
+  if (!(Number(total) > 0)) return undefined;
+  const { data } = await api.get('/payment-methods/qr-code', { params: { amount: total } });
+  return typeof data?.data_url === 'string' ? data.data_url : undefined;
+}
+
 type CoreBillTemplate = 'classic' | 'compact';
 
 function nativeFallbackCapabilities(
@@ -297,6 +304,7 @@ export const usePrinterStore = create<PrinterState>()(
                 useUnicode: printerUseUnicode,
                 isReprint,
                 trimDecimals: printerTrimDecimals,
+                loadPaymentQr: () => loadBillPaymentQr(bill.total),
               },
               reservedWindow,
             );
@@ -557,6 +565,7 @@ export const usePrinterStore = create<PrinterState>()(
               showTableNumber: billShowTableNumber,
               useUnicode: printerUseUnicode,
               trimDecimals: printerTrimDecimals,
+              loadPaymentQr: () => loadBillPaymentQr(bill.total),
             });
             return browserWarnings;
           }

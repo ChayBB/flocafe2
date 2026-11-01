@@ -311,6 +311,39 @@ async function run() {
         html,
       ) && !html.includes('نرخ'),
     );
+    const details = html.slice(
+      html.indexOf('<div class="bill-details">'),
+      html.indexOf('<!-- Items Table -->'),
+    );
+    const rowOf = (label: string) =>
+      details.split('<tr>').findIndex((row) => row.startsWith('<td colspan="2"><strong>' + label));
+    assert(
+      'bill number, table, then date and time each sit on their own row',
+      rowOf('رسید #') > 0 &&
+        rowOf('میز') === rowOf('رسید #') + 1 &&
+        rowOf('تاریخ') === rowOf('میز') + 1,
+    );
+    assert('no PromptPay QR is printed without one', !html.includes('class="payment-qr"'));
+    const qrHtml = generateBillHtml(testIranBill, baseIranTenant, {
+      language: 'fa',
+      paymentQrDataUrl: 'data:image/png;base64,QUJD',
+    });
+    const footer = qrHtml.slice(qrHtml.indexOf('<div class="footer">'));
+    assert(
+      'the PromptPay QR prints centred in the footer, under the footer message',
+      /<p>[^<]+<\/p>[\s\S]*<img class="payment-qr" src="data:image\/png;base64,QUJD"/.test(
+        footer,
+      ) &&
+        qrHtml.includes('.payment-qr { display: block;') &&
+        qrHtml.includes('margin: 8px auto 0'),
+    );
+    assert(
+      'a QR that is not an image data URL is not printed',
+      !generateBillHtml(testIranBill, baseIranTenant, {
+        language: 'fa',
+        paymentQrDataUrl: 'javascript:alert(1)',
+      }).includes('payment-qr" src'),
+    );
     assert('bill table headers have no grey background', !/th[^{]*\{[^}]*background/.test(html));
     assert(
       'Tax Details header shows Persian "جزئیات مالیات"',

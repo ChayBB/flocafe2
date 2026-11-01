@@ -99,6 +99,10 @@ export interface WebPrintOptions {
   language?: Language;
   /** Resolved receipt languages supplied by the caller's print policy. */
   languages?: ResolvedPrintLanguages;
+  /** PromptPay QR (PNG data URL) for the bill total, printed centred under the footer. */
+  paymentQrDataUrl?: string;
+  /** Fetches `paymentQrDataUrl` after the print window opens; resolving undefined prints no QR. */
+  loadPaymentQr?: () => Promise<string | undefined>;
 }
 
 /** Resolve tax-id label printed on receipt (special case for Iranian Economic Code). */
@@ -143,13 +147,15 @@ export async function printWebBill(
   let html: string;
   try {
     const failedLanguages = await ensurePrintLanguagesLoaded(languages);
+    const paymentQrDataUrl =
+      opts.paymentQrDataUrl ?? (await opts.loadPaymentQr?.().catch(() => undefined));
     warnings = failedLanguages.map((language) => ({
       field: 'receipt language',
       text: language,
       message: `Receipt language "${language}" could not be loaded, so English labels were used. Check the locale bundle and retry.`,
       kind: 'locale' as const,
     }));
-    html = generateBillHtml(bill, tenant, { ...opts, languages });
+    html = generateBillHtml(bill, tenant, { ...opts, languages, paymentQrDataUrl });
   } catch (error) {
     if (!printWindow.closed) printWindow.close();
     throw error;
@@ -367,11 +373,9 @@ export function generateBillHtml(
     <!-- Bill Details -->
     <div class="bill-details">
       <table>
-        <tr>
-          <td><strong>${escapeHtml(invoiceNumberLabel)}</strong> ${meta ? directionalValue(meta.invoiceNumber, base) : ''}</td>
-          <td class="text-end"><strong>${escapeHtml(L.date)}</strong> ${meta ? escapeHtml(formatReceiptDate(meta.timestamp.text, tenant, LANGUAGES[lang]?.locale ?? lang)) : ''}</td>
-        </tr>
-        ${meta?.table ? `<tr><td><strong>${escapeHtml(L.table)}</strong> ${escapeHtml(meta.table.name.text)}</td><td></td></tr>` : ''}
+        <tr><td colspan="2"><strong>${escapeHtml(invoiceNumberLabel)}</strong> ${meta ? directionalValue(meta.invoiceNumber, base) : ''}</td></tr>
+        ${meta?.table ? `<tr><td colspan="2"><strong>${escapeHtml(L.table)}</strong> ${escapeHtml(meta.table.name.text)}</td></tr>` : ''}
+        <tr><td colspan="2"><strong>${escapeHtml(L.date)}</strong> ${meta ? escapeHtml(formatReceiptDate(meta.timestamp.text, tenant, LANGUAGES[lang]?.locale ?? lang)) : ''}</td></tr>
         ${customer?.heading ? `<tr><td colspan="2"><strong>${escapeHtml(customer.heading.primary)}</strong></td></tr>` : ''}
         ${customer?.name ? `<tr><td><strong>${escapeHtml(L.customer)}</strong> ${escapeHtml(customer.name.text)}</td><td></td></tr>` : ''}
         ${customer?.phone ? `<tr><td><strong>${escapeHtml(L.customerNo)}</strong> ${directionalValue(customer.phone, base)}</td><td></td></tr>` : ''}
@@ -480,6 +484,7 @@ export function generateBillHtml(
     <div class="footer">
       ${messages?.footerNote ? `<p>${escapeHtml(messages.footerNote.text)}</p>` : `<p>${escapeHtml(L.thankYou)}</p>`}
       ${hasTax ? `<p>${escapeHtml(L.taxIncluded)}</p>` : ''}
+      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" />` : ''}
     </div>
   </div>
 
@@ -560,6 +565,7 @@ function getPaperStyles(size: PaperSize): string {
     .totals-table td { padding: 6px 8px; }
     .total-row { border-top: 2px solid #333; font-size: 16px; }
     .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; }
+    .payment-qr { display: block; width: 45mm; max-width: 80%; margin: 8px auto 0; }
     .text-end { text-align: end !important; }
     .num { unicode-bidi: isolate; white-space: nowrap; }
     .ltr { direction: ltr; unicode-bidi: isolate; }
