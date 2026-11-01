@@ -40,6 +40,22 @@ test('each table shows waiting-ready-served counts, and its sent items spell out
   await setStatus(items[1].id, 'ready');
   await setStatus(items[2].id, 'served');
 
+  // A free table and one being cleaned, for the table colours.
+  const freeName = `Free ${run}`;
+  const cleaningName = `Clean ${run}`;
+  for (const name of [freeName, cleaningName]) {
+    const made = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: name, capacity: 2 } });
+    expect(made.ok()).toBeTruthy();
+    if (name === cleaningName) {
+      const id = (await made.json()).table.id;
+      const cleaning = await page.request.patch(`${E2E_BASE_URL}/api/tables/${id}/status`, {
+        headers,
+        data: { status: 'cleaning' },
+      });
+      expect(cleaning.ok(), await cleaning.text()).toBeTruthy();
+    }
+  }
+
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
   await page.evaluate(
     ([key, token]) => {
@@ -57,7 +73,23 @@ test('each table shows waiting-ready-served counts, and its sent items spell out
   const tableButton = page.getByRole('button', { name: new RegExp(`Count ${run}`) });
   const counts = tableButton.getByTestId('table-kitchen-counts');
   await expect(counts).toHaveText('1-1-1');
-  await expect(counts).toHaveClass(/text-gray-400/);
+  await expect(counts).toHaveClass(/text-gray-500/);
+  // Serving tables are light green, free ones white and tables being cleaned light yellow.
+  await expect(tableButton).toHaveAttribute('data-table-tone', 'serving');
+  await expect(tableButton).toHaveCSS('background-color', /^(rgb|oklch|lab)/);
+  const tones = await page.evaluate(
+    ([serving, free, cleaning]) =>
+      [serving, free, cleaning].map((name) => {
+        const button = Array.from(document.querySelectorAll('[data-table-tone]')).find((node) =>
+          node.textContent?.startsWith(name),
+        ) as HTMLElement;
+        return [button.dataset.tableTone, getComputedStyle(button).backgroundColor, button.textContent];
+      }),
+    [`Count ${run}`, freeName, cleaningName],
+  );
+  expect(tones.map(([tone]) => tone)).toEqual(['serving', 'available', 'cleaning']);
+  expect(new Set(tones.map(([, color]) => color)).size).toBe(3);
+  expect(tones[2][2]).toContain('Cleaning');
   await expect(counts).toHaveAttribute('title', 'Waiting 1 · Ready 1 · Served 1');
 
   // The sent items spell out their kitchen status in place of the old status icons.

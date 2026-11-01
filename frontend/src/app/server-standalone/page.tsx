@@ -1574,25 +1574,37 @@ export default function ServerStandalonePage() {
               {ownedOrAllTables(tables, user?.id).map((table) => {
                 const selected = table.id === selectedTableId;
                 const order = table.activeOrder || table.current_order;
+                // Serving tables are light green, cleaning ones light yellow, free ones white.
+                const tone = order ? 'serving' : table.status === 'cleaning' ? 'cleaning' : 'available';
+                const toneClass = {
+                  serving: 'border-green-300 bg-green-100',
+                  cleaning: 'border-yellow-300 bg-yellow-100',
+                  available: 'border-gray-200 bg-white',
+                }[tone];
                 return (
                   <button
                     key={table.id}
                     disabled={sending}
                     // The picker stays open so the table's actions show before adding food.
                     onClick={() => selectTable(table.id)}
-                    className={`min-h-14 rounded-lg border px-2 py-2 text-start disabled:opacity-50 ${selected ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}
+                    data-table-tone={tone}
+                    className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
                   >
                     <span className="block truncate text-sm font-semibold">
                       {table.name || table.number}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {order ? t('openOrder') : tTables('statusAvailable')}
+                    <span className="text-xs text-gray-600">
+                      {order
+                        ? t('openOrder')
+                        : tone === 'cleaning'
+                          ? tTables('statusCleaning')
+                          : tTables('statusAvailable')}
                       {order?.kitchen_counts && (
                         <Ltr
                           as="span"
                           data-testid="table-kitchen-counts"
                           title={t('kitchenCountsTitle', order.kitchen_counts)}
-                          className="ms-1 tabular-nums text-gray-400"
+                          className="ms-1 tabular-nums text-gray-500"
                         >
                           {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-{order.kitchen_counts.served}
                         </Ltr>
