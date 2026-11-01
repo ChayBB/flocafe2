@@ -14,7 +14,10 @@ export function parsePhone(
   defaultCountry: string,
 ): { e164: string; countryCode: string; digits: string } | null {
   if (!input || !defaultCountry) return null;
-  const raw = String(input).trim();
+  // No calling code starts with 0, so "+0812345678" is a local number with a stray plus.
+  const raw = String(input)
+    .trim()
+    .replace(/^\+(?=0)/, '');
   if (!raw) return null;
   try {
     const parsed = parsePhoneNumber(raw, {

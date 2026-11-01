@@ -57,7 +57,7 @@ import api from '@/lib/api';
 import type { ProductAnalyticsLevel } from '@/components/analytics/ProductAnalyticsDialog';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { normalizeOptionalPhone } from '@/lib/phone';
+import { formatPhoneLocal, normalizeOptionalPhone } from '@/lib/phone';
 import { useConfirm } from '@/hooks/use-confirm';
 import { GuestQrNetworkSettings } from '@/components/settings/GuestQrNetworkSettings';
 import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
@@ -1821,7 +1821,7 @@ export default function SettingsPage() {
           d.tax_registered === 'true' || d.tax_registered === true || d.tax_registered === 1,
         taxRegistrationNumber: d.tax_registration_number || '',
         businessAddress: d.business_address || '',
-        businessPhone: d.business_phone || '',
+        businessPhone: formatPhoneLocal(d.business_phone, d.country),
         instagramHandle: d.instagram_handle || '',
         receiptLogo: d.receipt_logo || '',
         receiptLogoRaster: d.receipt_logo_raster || '',
@@ -2160,7 +2160,7 @@ export default function SettingsPage() {
             d.tax_registered === 'true' || d.tax_registered === true || d.tax_registered === 1,
           taxRegistrationNumber: d.tax_registration_number || '',
           businessAddress: d.business_address || '',
-          businessPhone: d.business_phone || '',
+          businessPhone: formatPhoneLocal(d.business_phone, d.country),
           instagramHandle: d.instagram_handle || '',
           receiptLogo: d.receipt_logo || '',
           receiptLogoRaster: d.receipt_logo_raster || '',
@@ -3587,7 +3587,10 @@ export default function SettingsPage() {
           }
         }
       }
-      const updatedForm = { ...form, businessPhone: normalizedBusinessPhone };
+      const updatedForm = {
+        ...form,
+        businessPhone: formatPhoneLocal(normalizedBusinessPhone, form.countryCode),
+      };
       setSavedBusiness(updatedForm);
       setForm(updatedForm);
       setTaxIdFormat(resolvedTaxIdFormat);
@@ -6166,7 +6169,9 @@ export default function SettingsPage() {
                   />
                   <span>
                     <span className="block text-sm text-foreground">{t('qrOrderingLabel')}</span>
-                    <span className="block text-xs text-muted-foreground">{t('qrOrderingHint')}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t('qrOrderingHint')}
+                    </span>
                   </span>
                 </label>
                 <GuestQrNetworkSettings disabled={!guestQrOrderingEnabled} />
