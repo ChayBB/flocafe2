@@ -2,9 +2,8 @@ import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-test('the KDS message bar lists table moves, merges, take-away changes and Server App emergencies until acknowledged', async ({
+test('the KDS message bar lists table moves, merges, take-away changes and emergency calls until acknowledged', async ({
   page,
-  browser,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -93,25 +92,12 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
   const takeawayNotice = bar.locator('[data-testid="kds-message"][data-kind="takeaway"]', { hasText: moveTo });
   await expect(takeawayNotice).toContainText('changed to take-away', { timeout: 15000 });
 
-  // An emergency sent from the Server App's header button.
-  const serverApp = await browser.newPage();
-  await serverApp.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
-  await serverApp.evaluate((token) => {
-    localStorage.setItem('flocafe:server-app-token', token);
-    const raw = localStorage.getItem('pos-settings');
-    const parsed = raw ? JSON.parse(raw) : { state: {} };
-    parsed.state = { ...parsed.state, language: 'en' };
-    localStorage.setItem('pos-settings', JSON.stringify(parsed));
-  }, managerToken);
-  await serverApp.setViewportSize({ width: 390, height: 844 });
-  await serverApp.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${moveToId}`);
-  await serverApp.getByTestId('server-app-emergency-button').click();
-  const dialog = serverApp.getByTestId('server-app-emergency-dialog');
-  await expect(dialog).toBeVisible();
-  await dialog.getByTestId('server-app-emergency-message').fill(`Spill ${run}`);
-  await dialog.getByTestId('server-app-emergency-send').click();
-  await expect(dialog).toHaveCount(0);
-  await serverApp.close();
+  // An emergency call reaching the Server App's alert endpoint.
+  const alert = await page.request.post(`${E2E_SERVER_APP_BASE_URL}/api/kds-alerts`, {
+    headers: { Authorization: `Bearer ${managerToken}` },
+    data: { message: `Spill ${run}`, table: moveTo },
+  });
+  expect(alert.ok(), await alert.text()).toBeTruthy();
   const emergencyNotice = bar.locator('[data-testid="kds-message"][data-kind="emergency"]', { hasText: `Spill ${run}` });
   await expect(emergencyNotice).toContainText(`Emergency · Table ${moveTo} · Spill ${run}`, { timeout: 15000 });
   await expect(notices).toHaveCount(startCount + 4);

@@ -86,7 +86,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
-  test('a phone keeps the table list hidden until Select Table is pressed; a tablet always shows it', async ({
+  test('a phone opens on the table list and toggles it from the title; a tablet always shows it', async ({
     page,
   }) => {
     const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -101,17 +101,17 @@ test.describe('Server App tableside ordering', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openServerApp(page, serverToken);
     const picker = page.getByTestId('server-app-table-button');
-    await expect(picker).toHaveText(/Select a table/);
-    await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: new RegExp(tableName) })).toHaveCount(0);
-
-    await picker.click();
+    await expect(picker).toContainText('Select a table');
+    await expect(picker).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
+    await expect(picker).toContainText(tableName);
 
-    await expect(page.locator('header')).toContainText(tableName);
+    // Tapping the title hides the list and brings it back.
     await picker.click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+    await picker.click();
+    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
 
     // A tablet shows the tables beside the menu with no Select Table or emergency button.
     for (const size of [
@@ -139,18 +139,16 @@ test.describe('Server App tableside ordering', () => {
       await openServerApp(page, serverToken);
       await expect(page.getByTestId('pos-product-grid')).toBeVisible();
 
+      // The title opens the tables; besides it only the session button remains.
       const header = page.locator('header');
       const tableButton = header.getByTestId('server-app-table-button');
-      const emergencyButton = header.getByTestId('server-app-emergency-button');
       const logoutButton = header.getByRole('button', { name: 'Logout' });
       await expect(tableButton).toBeVisible();
-      await expect(emergencyButton).toBeVisible();
       await expect(logoutButton).toBeVisible();
-      await expect(header.getByRole('button')).toHaveCount(3);
+      await expect(header.getByRole('button')).toHaveCount(2);
       await expect(header.getByRole('img', { name: 'Flo' })).toHaveCount(0);
-      await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
 
-      for (const button of [tableButton, emergencyButton, logoutButton]) {
+      for (const button of [tableButton, logoutButton]) {
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -170,7 +168,6 @@ test.describe('Server App tableside ordering', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     const header = page.locator('header');
-    await header.getByTestId('server-app-table-button').click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
 
     await header.getByRole('button', { name: 'Logout' }).click();

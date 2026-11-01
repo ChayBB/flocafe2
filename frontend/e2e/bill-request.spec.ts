@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -79,7 +80,7 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     [TOKEN_KEY, getE2eToken('e2e-server', 'server@flo.local', 'server')],
   );
   await phone.reload();
-  await phone.getByTestId('server-app-table-button').click();
+  await openServerAppTables(phone);
   await phone.getByRole('button', { name: new RegExp(label) }).click();
   await phone.getByTestId('server-app-ordered-items-button').click();
   const printer = phone.getByTestId('server-app-print-bill');

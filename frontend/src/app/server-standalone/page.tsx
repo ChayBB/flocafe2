@@ -15,10 +15,10 @@ import {
   Trash2,
   UserRound,
   UtensilsCrossed,
+  ChevronDown,
   MoreVertical,
   ArrowLeftRight,
   Merge,
-  TriangleAlert,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -38,7 +38,6 @@ import {
   type TransferMode,
   type TransferTable,
 } from '@/components/server-app/TableTransferDialog';
-import { EmergencyAlertDialog } from '@/components/server-app/EmergencyAlertDialog';
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
@@ -204,8 +203,7 @@ export default function ServerStandalonePage() {
   const [password, setPassword] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [disabled, setDisabled] = useState(false);
-  const [tablePickerOpen, setTablePickerOpen] = useState(false);
-  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [tablePickerOpen, setTablePickerOpen] = useState(true);
   const [orderedItemsOpen, setOrderedItemsOpen] = useState(false);
   const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<TransferMode | null>(null);
@@ -215,7 +213,7 @@ export default function ServerStandalonePage() {
     () => window.matchMedia(WIDE_QUERY).matches,
     () => false,
   );
-  // A tablet always shows its tables beside the menu, so it has no table or emergency button.
+  // A tablet always shows its tables beside the menu; a phone opens on them and toggles them from the title.
   const showTablePicker = Boolean(user) && (tablePickerOpen || isWide);
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
@@ -1156,6 +1154,9 @@ export default function ServerStandalonePage() {
   }
 
   const activeTable = tables.find((table) => table.id === selectedTableId) || null;
+  const headerTableText = activeTable
+    ? t('tableLabel', { name: activeTable.name ?? String(activeTable.number) })
+    : t('selectTable');
   const draftTotal = draft.reduce((sum, line) => {
     const addonTotal = line.addons.reduce(
       (addonSum, addon) => addonSum + Number(addon.price || 0) * (addon.quantity || 1),
@@ -1491,16 +1492,29 @@ export default function ServerStandalonePage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
             <ChefHat size={18} />
           </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold">{t('title')}</h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {activeTable
-                ? t('tableLabel', {
-                    name: activeTable.name ?? String(activeTable.number),
-                  })
-                : t('selectTable')}
-            </p>
-          </div>
+          {user && !isWide ? (
+            // On a phone the title opens and closes the table list.
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => setTablePickerOpen((open) => !open)}
+              aria-expanded={showTablePicker}
+              aria-label={t('tables')}
+              data-testid="server-app-table-button"
+              className="flex min-h-11 min-w-0 flex-1 flex-col justify-center text-start disabled:opacity-50"
+            >
+              <span className="block truncate text-base font-semibold">{t('title')}</span>
+              <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                <span className="truncate">{headerTableText}</span>
+                <ChevronDown size={14} className={`shrink-0 transition-transform ${showTablePicker ? 'rotate-180' : ''}`} />
+              </span>
+            </button>
+          ) : (
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-semibold">{t('title')}</h1>
+              <p className="truncate text-xs text-muted-foreground">{headerTableText}</p>
+            </div>
+          )}
           {user ? (
             <>
               <span
@@ -1509,36 +1523,11 @@ export default function ServerStandalonePage() {
               >
                 {user.name}
               </span>
-              {!isWide && (
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => setTablePickerOpen((open) => !open)}
-                aria-expanded={tablePickerOpen}
-                data-testid="server-app-table-button"
-                className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
-              >
-                <UtensilsCrossed size={14} />
-                {t('selectTable')}
-              </button>
-              )}
             </>
           ) : (
             <span data-testid="server-app-guest-name" className="text-sm font-medium text-muted-foreground">
               {t('guestLabel')}
             </span>
-          )}
-          {user && !isWide && (
-            <button
-              type="button"
-              onClick={() => setEmergencyOpen(true)}
-              aria-label={t('emergencyTitle')}
-              title={t('emergencyTitle')}
-              data-testid="server-app-emergency-button"
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-500 p-2 text-red-600 hover:bg-red-50"
-            >
-              <TriangleAlert size={17} />
-            </button>
           )}
           {user ? (
             <button
@@ -1674,15 +1663,6 @@ export default function ServerStandalonePage() {
             {ticketPanelBody}
           </section>
         </main>
-      )}
-
-      {api && user && (
-        <EmergencyAlertDialog
-          api={api}
-          tableName={activeTable ? (activeTable.name ?? String(activeTable.number)) : null}
-          open={emergencyOpen}
-          onClose={() => setEmergencyOpen(false)}
-        />
       )}
 
       {transferMode && activeTable && (

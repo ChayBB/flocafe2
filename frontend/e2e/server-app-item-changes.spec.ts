@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -60,7 +61,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
     [TOKEN_KEY, managerToken],
   );
   await page.reload();
-  await page.getByTestId('server-app-table-button').click();
+  await openServerAppTables(page);
   await page.getByRole('button', { name: new RegExp(label) }).click();
   await page.getByTestId('server-app-ordered-items-button').click();
   const rows = page.getByTestId('server-app-ordered-item');

@@ -408,7 +408,7 @@ The Server App also forwards `POST /api/tables/:id/move-order` (`tables.orders.m
 current-ticket menu uses to move a table's open order to a free table.
 
 `POST /api/kds-alerts` (`server-app.use`, router `main/routes/kds-alerts.ts`, forwarded by the Server App)
-sends an emergency call to the kitchen from the Server App header button. Body: `message` (up to 120
+sends an emergency call to the kitchen; the Server App has no button for it. Body: `message` (up to 120
 characters, may be empty) and `table`; it answers `201` `{ alert: { id, kind, message, table, sent_by,
 created_at } }` and `400` for a longer message. Alerts are held in memory for 30 minutes (at most 20)
 and are not audited. `GET /api/kds/orders` on both ports, `GET /api/kitchen/orders`, and every WebSocket

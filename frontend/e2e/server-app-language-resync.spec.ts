@@ -21,10 +21,10 @@ test('the Server App picks the store language up again when the page comes back 
   );
   await page.reload();
   const tableButton = page.getByTestId('server-app-table-button');
-  await expect(tableButton).toHaveText('Select a table');
+  await expect(tableButton).toContainText('Select a table');
 
   // Without a reload: returning to the page re-reads the store language.
   language = 'th';
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(tableButton).toHaveText('เลือกโต๊ะ');
+  await expect(tableButton).toContainText('เลือกโต๊ะ');
 });

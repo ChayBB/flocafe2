@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -41,7 +42,7 @@ test('the ordered-items menu merges a table into another table by its typed numb
     [TOKEN_KEY, managerToken],
   );
   await page.reload();
-  await page.getByTestId('server-app-table-button').click();
+  await openServerAppTables(page);
   await page.getByRole('button', { name: new RegExp(from) }).click();
   await page.getByTestId('server-app-ordered-items-button').click();
 
