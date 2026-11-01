@@ -9,6 +9,7 @@ type SoundLog = {
   __spoken: string[];
   __spokenAt: number[];
   __voices: string[];
+  __volumes: number[];
 };
 
 async function recordSounds(page: Page) {
@@ -20,6 +21,7 @@ async function recordSounds(page: Page) {
     w.__spoken = [];
     w.__spokenAt = [];
     w.__voices = [];
+    w.__volumes = [];
     class FakeAudioContext {
       currentTime = 0;
       destination = {};
@@ -61,6 +63,7 @@ async function recordSounds(page: Page) {
     class FakeUtterance {
       lang = '';
       rate = 1;
+      volume = 1;
       voice: unknown = null;
       constructor(public text: string) {}
     }
@@ -80,6 +83,7 @@ async function recordSounds(page: Page) {
           w.__spoken.push(utterance.text);
           w.__spokenAt.push(Date.now());
           w.__voices.push(utterance.voice?.name ?? '');
+          w.__volumes.push(utterance.volume);
           setTimeout(() => utterance.onend?.(), 0);
         },
       },
@@ -157,6 +161,13 @@ test('orders already in the kitchen when the display signs in or switches statio
   expect(spoken).toBe(`New order: 1 ${productName}`);
   // A browser voice is woken first too, so the first word is not swallowed.
   expect((await sounds(page)).__hums).toBeGreaterThan(0);
+  // After a quiet spell an online browser voice cuts its first sentence short, so a silent
+  // first word goes ahead of the order.
+  const warm = await sounds(page);
+  const spokenAt = warm.__spoken.indexOf(spoken);
+  expect(warm.__spoken[spokenAt - 1]).toBe('New');
+  expect(warm.__volumes[spokenAt - 1]).toBe(0);
+  expect(warm.__volumes[spokenAt]).toBe(1);
   expect(spoken).not.toContain(fresh.order_number);
   await expect
     .poll(async () => (await sounds(page)).__spoken.includes(`Order note: rush ${run}`), {

@@ -103,6 +103,36 @@ export async function kdsVoicesFor(lang: string): Promise<SpeechSynthesisVoice[]
     .sort((a, b) => Number(isNaturalVoice(b)) - Number(isNaturalVoice(a)));
 }
 
+// An online browser voice (Edge's "Online (Natural)") reconnects after a quiet spell and cuts the
+// start of its first sentence, which was the word "โต๊ะ"; a silent first sentence takes that cut.
+const VOICE_WARMUP_IDLE_MS = 20000;
+const VOICE_WARMUP_TIMEOUT_MS = 4000;
+let lastDeviceSpeechAt = -Infinity;
+
+function utter(
+  text: string,
+  lang: string,
+  voice: SpeechSynthesisVoice,
+  volume: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.voice = voice;
+    utterance.rate = 0.95;
+    utterance.volume = volume;
+    const timer = window.setTimeout(() => resolve(true), timeoutMs);
+    const done = (spoke: boolean) => {
+      window.clearTimeout(timer);
+      resolve(spoke);
+    };
+    utterance.onend = () => done(true);
+    utterance.onerror = () => done(false);
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 async function speakOnDevice(
   text: string,
   lang: string,
@@ -110,21 +140,13 @@ async function speakOnDevice(
 ): Promise<boolean> {
   // A browser voice also starts cold, so the speaker is woken first or it swallows the first word.
   await wakeKdsSpeaker();
-  return new Promise((resolve) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.voice = voice;
-    utterance.rate = 0.95;
-    const timer = window.setTimeout(() => resolve(true), SPEECH_TIMEOUT_MS);
-    const done = (spoke: boolean) => {
-      window.clearTimeout(timer);
-      noteKdsSpeechEnded();
-      resolve(spoke);
-    };
-    utterance.onend = () => done(true);
-    utterance.onerror = () => done(false);
-    window.speechSynthesis.speak(utterance);
-  });
+  if (Date.now() - lastDeviceSpeechAt > VOICE_WARMUP_IDLE_MS) {
+    await utter(text.split(/\s+/)[0] || text, lang, voice, 0, VOICE_WARMUP_TIMEOUT_MS);
+  }
+  const spoke = await utter(text, lang, voice, 1, SPEECH_TIMEOUT_MS);
+  lastDeviceSpeechAt = Date.now();
+  noteKdsSpeechEnded();
+  return spoke;
 }
 
 /** The POS computer's voice for the language (a local voice service or Windows), played on this display. */
