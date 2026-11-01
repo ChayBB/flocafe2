@@ -6,7 +6,10 @@ const TOKEN_KEY = 'flocafe:server-app-token';
 
 const brandVariable = (page: import('@playwright/test').Page) =>
   page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue('--color-brand').trim().toLowerCase(),
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-brand')
+      .trim()
+      .toLowerCase(),
   );
 
 test('the Server App uses an orange brand colour while the rest of the app stays blue', async ({
@@ -34,12 +37,14 @@ test('the Server App uses an orange brand colour while the rest of the app stays
   );
   await page.reload();
 
-  const allChip = page.getByTestId('pos-category-row').getByRole('button', { name: 'All', exact: true });
+  const allChip = page
+    .getByTestId('pos-category-row')
+    .getByRole('button', { name: 'All', exact: true });
   await expect(allChip).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/theme-server-app/);
   expect(await brandVariable(page)).toBe('#ea580c');
-  // The selected category chip paints with the brand colour: orange, not blue.
-  await expect(allChip).toHaveCSS('background-color', 'rgb(234, 88, 12)');
+  // The selected category tab is underlined in the brand colour: orange, not blue.
+  await expect(allChip).toHaveCSS('border-bottom-color', 'rgb(234, 88, 12)');
 
   // The same page signed out (login form) is orange too.
   await page.evaluate((key) => localStorage.removeItem(key), TOKEN_KEY);

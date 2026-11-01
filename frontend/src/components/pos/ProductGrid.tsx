@@ -18,23 +18,43 @@ import { subscribeToQuickSearch } from '@/lib/quick-search';
 import { parseQuantitySearch } from '@/lib/quantity-search';
 import CollapsiblePosChoices from './CollapsiblePosChoices';
 
+const FLAT_TAB =
+  'max-w-56 truncate border-b-2 px-0.5 py-1.5 text-[15px] whitespace-nowrap transition-colors';
+const FLAT_TAB_ACTIVE = 'border-brand font-medium text-foreground';
+const FLAT_TAB_IDLE = 'border-transparent text-muted-foreground';
+
 /** The category chip shared by both category row modes. */
 function CategoryChip({
   categoryName,
   categoryColor,
   isSelected,
   onSelect,
+  flat,
 }: {
   categoryName: string;
   categoryColor: string | null;
   isSelected: boolean;
   onSelect: () => void;
+  flat: boolean;
 }) {
   const colorClasses = getCategoryColorClasses(categoryColor);
+  if (flat) {
+    return (
+      <button
+        onClick={onSelect}
+        title={categoryName}
+        aria-pressed={isSelected}
+        className={`${FLAT_TAB} ${isSelected ? FLAT_TAB_ACTIVE : FLAT_TAB_IDLE}`}
+      >
+        {categoryName}
+      </button>
+    );
+  }
   return (
     <button
       onClick={onSelect}
       title={categoryName}
+      aria-pressed={isSelected}
       className={`max-w-56 truncate px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
         isSelected
           ? colorClasses
@@ -62,9 +82,11 @@ function CategoryRow({
   setSelectedCategory,
   allLabel,
   resetKey,
+  flat,
 }: {
   className: string;
   collapse: boolean;
+  flat: boolean;
   categories: Category[];
   selectedCategory: Category['id'] | null;
   setSelectedCategory: (id: Category['id'] | null) => void;
@@ -76,11 +98,16 @@ function CategoryRow({
       data-chip-key="all"
       onClick={() => setSelectedCategory(null)}
       title={collapse ? allLabel : undefined}
-      className={`${collapse ? 'min-w-0 truncate ' : ''}px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-        !selectedCategory
-          ? 'bg-brand text-white'
-          : 'bg-card text-foreground border border-border hover:bg-muted'
-      }`}
+      aria-pressed={!selectedCategory}
+      className={
+        flat
+          ? `${FLAT_TAB} ${!selectedCategory ? FLAT_TAB_ACTIVE : FLAT_TAB_IDLE}`
+          : `${collapse ? 'min-w-0 truncate ' : ''}px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              !selectedCategory
+                ? 'bg-brand text-white'
+                : 'bg-card text-foreground border border-border hover:bg-muted'
+            }`
+      }
     >
       {allLabel}
     </button>
@@ -96,6 +123,7 @@ function CategoryRow({
           categoryColor={cat.color}
           isSelected={selectedCategory === cat.id}
           onSelect={() => setSelectedCategory(cat.id)}
+          flat={flat}
         />
       ),
     }));
@@ -104,7 +132,7 @@ function CategoryRow({
     return (
       <div
         data-testid="pos-category-row"
-        className={`flex flex-nowrap gap-2 ${className} overflow-x-auto`}
+        className={`flex flex-nowrap ${flat ? 'gap-5 [scrollbar-width:none]' : 'gap-2'} ${className} overflow-x-auto`}
       >
         {allChip}
         {categoryChips.map((chip) => (
@@ -307,6 +335,8 @@ interface Props {
   scrollSpy?: boolean;
   /** With scrollSpy: scrolling past the last category carries on into the first, and back. */
   loopSections?: boolean;
+  /** A light, borderless look for the Server App on a phone: text category tabs and edge-to-edge photos. */
+  flat?: boolean;
 }
 
 export default function ProductGrid({
@@ -329,6 +359,7 @@ export default function ProductGrid({
   collapseCategories = false,
   scrollSpy = false,
   loopSections = false,
+  flat = false,
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cart = useCartStore();
@@ -558,7 +589,11 @@ export default function ProductGrid({
           if (!validateSelectionQuantity(product, quantity)) return;
           onProductClick(product, quantity);
         }}
-        className="min-h-36 bg-card rounded-xl p-2.5 border border-border hover:border-brand/40 active:border-brand active:bg-muted/40 hover:shadow-md transition-all text-start relative cursor-pointer overflow-hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`${
+          flat
+            ? 'rounded-xl active:opacity-70'
+            : 'min-h-36 bg-card rounded-xl p-2.5 border border-border hover:border-brand/40 active:border-brand active:bg-muted/40 hover:shadow-md'
+        } transition-all text-start relative cursor-pointer overflow-hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {!!product.track_inventory && (
           <>
@@ -580,7 +615,9 @@ export default function ProductGrid({
         )}
 
         {showProductImages && (
-          <div className="w-full aspect-square rounded-lg mb-3 relative overflow-hidden">
+          <div
+            className={`w-full aspect-square relative overflow-hidden ${flat ? 'rounded-xl mb-2' : 'rounded-lg mb-3'}`}
+          >
             {/* Always-visible background tile — no flash when image loads */}
             <div
               className="absolute inset-0 flex items-center justify-center"
@@ -611,11 +648,15 @@ export default function ProductGrid({
           </div>
         )}
 
-        <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-snug">
+        <h3
+          className={`text-foreground line-clamp-2 leading-snug ${flat ? 'text-[15px] font-normal' : 'font-medium text-sm'}`}
+        >
           {product.name}
         </h3>
         <div className="flex items-center justify-between mt-1">
-          <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
+          <p className={flat ? 'text-[15px] text-muted-foreground' : 'text-brand font-bold'}>
+            {fmt(Number(product.price))}
+          </p>
           <div className="flex items-center gap-1 shrink-0">
             {!showProductImages && product.tags && product.tags.length > 0 && (
               <TagBadge tag={product.tags[0]} />
@@ -697,7 +738,11 @@ export default function ProductGrid({
             }}
             placeholder={searchPlaceholder ?? `${t('searchProducts')} [/]`}
             data-testid="pos-product-search"
-            className="w-full ps-9 pe-8 py-2 bg-card border border-border rounded-xl focus:border-brand outline-none transition-colors text-sm"
+            className={`w-full ps-9 pe-8 py-2 border outline-none transition-colors text-sm ${
+              flat
+                ? 'bg-muted/60 border-transparent rounded-full focus:border-brand/40'
+                : 'bg-card border-border rounded-xl focus:border-brand'
+            }`}
           />
           {!search && (
             <kbd className="hidden sm:inline-flex absolute end-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">
@@ -712,6 +757,7 @@ export default function ProductGrid({
           selectedCategory={selectedCategory}
           setSelectedCategory={chooseCategory}
           allLabel={t('allCategories')}
+          flat={flat}
           resetKey={
             collapseCategories
               ? cart.customer?.id == null
@@ -748,10 +794,18 @@ export default function ProductGrid({
               className="mb-4"
             >
               {section.name && (
-                <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{section.name}</h2>
+                <h2
+                  className={
+                    flat
+                      ? 'mb-3 text-lg font-medium text-foreground'
+                      : 'mb-2 text-sm font-semibold text-muted-foreground'
+                  }
+                >
+                  {section.name}
+                </h2>
               )}
               <div
-                className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+                className={`grid ${flat ? 'gap-x-3 gap-y-5' : 'gap-3'} ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
               >
                 {section.items.map(renderProductCard)}
               </div>
@@ -759,7 +813,7 @@ export default function ProductGrid({
           ))
         ) : (
           <div
-            className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+            className={`grid ${flat ? 'gap-x-3 gap-y-5' : 'gap-3'} ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
           >
             {filtered.map(renderProductCard)}
           </div>

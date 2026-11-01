@@ -1561,13 +1561,13 @@ export default function ServerStandalonePage() {
         </div>
       ) : (
         <main
-          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
+          className={`mx-auto grid max-w-6xl min-w-0 gap-3 px-4 py-2 md:p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
           {showTablePicker && (
             <section
               ref={tablePickerRef}
               data-testid="server-app-table-picker"
-              className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-card p-3"
+              className="min-w-0 scroll-mt-20 md:rounded-lg md:border md:border-border md:bg-card md:p-3"
             >
               <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                 {t('tables')}
@@ -1624,8 +1624,9 @@ export default function ServerStandalonePage() {
             </section>
           )}
 
-          {/* svh, not dvh: the menu keeps its height while a phone browser's toolbar slides in and out. */}
-          <section className="flex h-[calc(100svh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
+          {/* svh, not dvh: the menu keeps its height while a phone browser's toolbar slides in and out.
+              On a phone the menu has no frame of its own, so the photos get the full width. */}
+          <section className="flex h-[calc(100svh-5rem)] min-h-96 min-w-0 flex-col md:rounded-lg md:border md:border-border md:bg-card md:p-3">
             {user && tablePickerOpen && activeTable && !isWide && (
               <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
                 <button
@@ -1675,6 +1676,7 @@ export default function ServerStandalonePage() {
               searchPlaceholder={t('searchMenu')}
               scrollSpy
               loopSections
+              flat
             />
           </section>
 

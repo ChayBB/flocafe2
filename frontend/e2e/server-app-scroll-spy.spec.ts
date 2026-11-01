@@ -68,7 +68,7 @@ test('the highlighted category follows the menu scroll and choosing one scrolls 
   const row = page.getByTestId('pos-category-row');
   const chip = (name: string) => row.getByRole('button', { name, exact: true });
   const isActive = async (name: string) =>
-    (await chip(name).getAttribute('class'))?.includes('bg-brand') ?? false;
+    (await chip(name).getAttribute('aria-pressed')) === 'true';
 
   await expect(grid.getByRole('heading', { name: first, exact: true })).toBeVisible();
   await expect(grid.getByRole('heading', { name: second, exact: true })).toHaveCount(1);
