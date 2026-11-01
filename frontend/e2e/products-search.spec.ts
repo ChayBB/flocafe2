@@ -32,7 +32,14 @@ test('the products search finds a menu item by its name, its category or its pri
     await expect(search).toHaveAttribute('placeholder', 'Search menu name, category, price');
     const row = page.getByText(`Searchdish ${run}`, { exact: true });
 
-    for (const query of [`Searchdish ${run}`, `Searchcat ${run}`, String(price)]) {
+    // The price is found as typed and as the list shows it, decimals and thousands separator included.
+    for (const query of [
+      `Searchdish ${run}`,
+      `Searchcat ${run}`,
+      String(price),
+      `${price}.00`,
+      `${String(price).slice(0, 1)},${String(price).slice(1)}.00`,
+    ]) {
       await search.fill(query);
       await expect(row, `found by "${query}"`).toBeVisible();
     }

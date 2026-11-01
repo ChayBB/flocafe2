@@ -934,6 +934,9 @@ export default function ProductsPage() {
               (c) => String(c.id) === String(product.category_id || product.category?.id),
             )?.name,
             String(Number(product.price)),
+            // The price as shown in the list ("฿1,250.00"), with or without the thousands separator.
+            fmt(Number(product.price)),
+            fmt(Number(product.price)).replace(/,/g, ''),
           ]),
         );
   const visibleCategories =
