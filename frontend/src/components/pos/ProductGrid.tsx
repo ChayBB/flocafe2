@@ -496,7 +496,20 @@ export default function ProductGrid({
     }
   }, [scrollSpy, selectedCategory]);
 
+  // Browsing the menu again ends the search: picking a category or scrolling clears it.
+  const pendingCategory = useRef<{ id: string | null } | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const clearSearchOnBrowse = () => {
+    if (search) setSearch('');
+  };
+
   const chooseCategory = (id: string | null) => {
+    if (search) {
+      pendingCategory.current = { id };
+      setSearch('');
+      setSelectedCategory(id);
+      return;
+    }
     if (!scrollSpy) {
       setSelectedCategory(id);
       return;
@@ -523,6 +536,13 @@ export default function ProductGrid({
       container.scrollTo({ top: container.scrollTop + offset, behavior: 'smooth' });
     }
   };
+
+  useEffect(() => {
+    if (search || !pendingCategory.current) return;
+    const { id } = pendingCategory.current;
+    pendingCategory.current = null;
+    chooseCategory(id);
+  });
 
   const renderProductCard = (product: Product) => {
     const inCartQty = cartQuantities.get(product.id) || 0;
@@ -707,6 +727,15 @@ export default function ProductGrid({
       <div
         ref={scrollRef}
         onScroll={onCatalogScroll}
+        onWheel={(event) => {
+          if (event.deltaY !== 0) clearSearchOnBrowse();
+        }}
+        onTouchStart={(event) => (touchStartY.current = event.touches[0]?.clientY ?? null)}
+        onTouchMove={(event) => {
+          const start = touchStartY.current;
+          const y = event.touches[0]?.clientY;
+          if (start !== null && y !== undefined && Math.abs(y - start) > 10) clearSearchOnBrowse();
+        }}
         data-testid="pos-catalog-scroll"
         // Looping shifts the scroll itself; the browser's own scroll anchoring would shift it twice.
         className={`flex-1 min-h-0 overflow-y-auto overscroll-contain pb-20 md:pb-0 ${looping ? '[overflow-anchor:none]' : ''}`}
