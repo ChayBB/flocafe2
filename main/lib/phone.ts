@@ -1,6 +1,9 @@
 import { parsePhoneNumber, type CountryCode } from 'libphonenumber-js';
 
-export function parsePhoneE164(input: string, defaultCountry: string): { e164: string; countryCode: string } | null {
+export function parsePhoneE164(
+  input: string,
+  defaultCountry: string,
+): { e164: string; countryCode: string } | null {
   try {
     const raw = String(input || '').trim();
     if (!raw) return null;
@@ -30,7 +33,10 @@ export type NormalizedPhoneResult = {
   error?: string;
 };
 
-export function normalizeOptionalPhone(input: unknown, defaultCountry: string): NormalizedPhoneResult {
+export function normalizeOptionalPhone(
+  input: unknown,
+  defaultCountry: string,
+): NormalizedPhoneResult {
   if (input === undefined || input === null) {
     return { valid: true, e164: null, countryCode: null };
   }
@@ -44,8 +50,28 @@ export function normalizeOptionalPhone(input: unknown, defaultCountry: string): 
       valid: false,
       e164: null,
       countryCode: null,
-      error: 'Invalid phone number format. Please provide a valid phone number with optional country code.',
+      error:
+        'Invalid phone number format. Please provide a valid phone number with optional country code.',
     };
   }
   return { valid: true, e164: parsed.e164, countryCode: parsed.countryCode };
+}
+
+/** Local dialling form for printing (`+66828292599` → `0828292599`); other countries' numbers stay international. */
+export function formatPhoneLocal(
+  phone: string | null | undefined,
+  country: string | null | undefined,
+): string {
+  const raw = String(phone || '').trim();
+  if (!raw || !country) return raw;
+  try {
+    const parsed = parsePhoneNumber(raw, {
+      defaultCountry: country.toUpperCase() as CountryCode,
+      extract: false,
+    });
+    if (!parsed?.isValid() || parsed.country !== country.toUpperCase()) return raw;
+    return parsed.formatNational().replace(/[^\d+]/g, '');
+  } catch {
+    return raw;
+  }
 }

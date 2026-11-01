@@ -5,6 +5,7 @@ import {
   dialCodeFor,
   normalizeOptionalPhone,
   formatPhoneDisplay,
+  formatPhoneLocal,
 } from '../frontend/src/lib/phone';
 import { disambiguateCustomerInput } from '../frontend/src/lib/customer-disambiguation';
 
@@ -114,4 +115,10 @@ test('disambiguateCustomerInput: short digits are marked ambiguous', () => {
 
   const r2 = disambiguateCustomerInput('12');
   assert.equal(r2.category, 'ambiguous');
+});
+
+test('printed shop phones use the local dialling form', () => {
+  assert.equal(formatPhoneLocal('+66828292599', 'TH'), '0828292599');
+  assert.equal(formatPhoneLocal('+919876543210', 'TH'), '+919876543210');
+  assert.equal(formatPhoneLocal('', 'TH'), '');
 });

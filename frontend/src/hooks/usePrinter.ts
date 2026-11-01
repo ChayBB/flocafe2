@@ -45,6 +45,7 @@ import { rasterWebUsbPathEnabled } from '@print/raster';
 import { columnsForConfiguredPrinter } from '@print/width';
 import { ensureReceiptSettingsLoaded } from '@/hooks/useReceiptSettingsSync';
 import { getCountryByCode, getCurrencySymbol, resolveTenantCurrency } from '@/lib/countries';
+import { formatPhoneLocal } from '@/lib/phone';
 
 /** Matches the backend error for a Windows PDF/XPS/OneNote/fax printer, which cannot take raw receipts. */
 const DOCUMENT_PRINTER_MARKER = 'Document printer';
@@ -289,7 +290,10 @@ export const usePrinterStore = create<PrinterState>()(
                     ? billTaxRegistrationNumber
                     : undefined,
                 address: billShowAddress && billAddress ? billAddress : undefined,
-                phone: billShowPhone && billPhone ? billPhone : undefined,
+                phone:
+                  billShowPhone && billPhone
+                    ? formatPhoneLocal(billPhone, tenant.country)
+                    : undefined,
                 footerNote: billFooterMessage || undefined,
                 businessName: tenant.business_name,
                 showBusinessName: billShowName,
@@ -382,7 +386,8 @@ export const usePrinterStore = create<PrinterState>()(
             taxRegistrationNumber:
               billShowTaxId && billTaxRegistrationNumber ? billTaxRegistrationNumber : undefined,
             address: billShowAddress && billAddress ? billAddress : undefined,
-            phone: billShowPhone && billPhone ? billPhone : undefined,
+            phone:
+              billShowPhone && billPhone ? formatPhoneLocal(billPhone, tenant.country) : undefined,
             footerNote: billFooterMessage || undefined,
             showBusinessName: billShowName,
             showLogo: billShowLogo,
@@ -551,7 +556,9 @@ export const usePrinterStore = create<PrinterState>()(
                 ? opts?.taxRegistrationNumber || billTaxRegistrationNumber || undefined
                 : undefined,
               address: billShowAddress ? opts?.address || billAddress || undefined : undefined,
-              phone: billShowPhone ? opts?.phone || billPhone || undefined : undefined,
+              phone: billShowPhone
+                ? formatPhoneLocal(opts?.phone || billPhone, tenant.country) || undefined
+                : undefined,
               footerNote: billFooterMessage || undefined,
               businessName: tenant.business_name,
               showBusinessName: billShowName,
@@ -588,7 +595,9 @@ export const usePrinterStore = create<PrinterState>()(
                 ? opts?.taxRegistrationNumber || billTaxRegistrationNumber || undefined
                 : undefined,
               address: billShowAddress ? opts?.address || billAddress || undefined : undefined,
-              phone: billShowPhone ? opts?.phone || billPhone || undefined : undefined,
+              phone: billShowPhone
+                ? formatPhoneLocal(opts?.phone || billPhone, tenant.country) || undefined
+                : undefined,
               showBusinessName: billShowName,
               showTaxBreakdown: billShowTaxBreakdown,
               showCustomerName: billShowCustomerName,

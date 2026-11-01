@@ -1,3 +1,4 @@
+import { formatPhoneLocal } from '../lib/phone';
 import {
   renderPaymentRequestSlip,
   renderPaymentRequestSlipHtml,
@@ -1332,7 +1333,7 @@ function paymentRequestSlipContext(slip: PaymentRequestSlipOrder, language?: str
       businessPhone:
         getSettingValue('bill_show_phone') === 'false'
           ? ''
-          : (getSettingValue('business_phone') ?? ''),
+          : formatPhoneLocal(getSettingValue('business_phone'), countryCode),
       taxId:
         getSettingValue('bill_show_tax_id') === 'true'
           ? (getSettingValue('tax_registration_number') ?? '')

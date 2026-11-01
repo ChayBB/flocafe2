@@ -1,8 +1,4 @@
-import {
-  parsePhoneNumber,
-  getCountryCallingCode,
-  type CountryCode,
-} from 'libphonenumber-js';
+import { parsePhoneNumber, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 
 export interface NormalizedPhoneResult {
   valid: boolean;
@@ -15,7 +11,7 @@ export interface NormalizedPhoneResult {
 /** Parse + return e164, digits, and country code (e.g. `'+91'`). null when invalid or unparseable. */
 export function parsePhone(
   input: string | null | undefined,
-  defaultCountry: string
+  defaultCountry: string,
 ): { e164: string; countryCode: string; digits: string } | null {
   if (!input || !defaultCountry) return null;
   const raw = String(input).trim();
@@ -40,7 +36,7 @@ export function parsePhone(
  * when empty, or validates against defaultCountry. */
 export function normalizeOptionalPhone(
   input: unknown,
-  defaultCountry: string
+  defaultCountry: string,
 ): NormalizedPhoneResult {
   if (input === null || input === undefined) {
     return { valid: true, e164: null, digits: null, countryCode: null };
@@ -56,7 +52,8 @@ export function normalizeOptionalPhone(
       e164: null,
       digits: null,
       countryCode: null,
-      error: 'Invalid phone number format. Please provide a valid phone number with optional country code.',
+      error:
+        'Invalid phone number format. Please provide a valid phone number with optional country code.',
     };
   }
   return {
@@ -78,8 +75,30 @@ export function dialCodeFor(code: string): string {
 }
 
 /** Format phone for display or return original string */
-export function formatPhoneDisplay(phone: string | null | undefined, defaultCountry: string): string {
+export function formatPhoneDisplay(
+  phone: string | null | undefined,
+  defaultCountry: string,
+): string {
   if (!phone) return '';
   const parsed = parsePhone(phone, defaultCountry);
   return parsed?.e164 || phone;
+}
+
+/** Local dialling form for printing (`+66828292599` → `0828292599`); other countries' numbers stay international. */
+export function formatPhoneLocal(
+  phone: string | null | undefined,
+  country: string | null | undefined,
+): string {
+  const raw = String(phone || '').trim();
+  if (!raw || !country) return raw;
+  try {
+    const parsed = parsePhoneNumber(raw, {
+      defaultCountry: country.toUpperCase() as CountryCode,
+      extract: false,
+    });
+    if (!parsed?.isValid() || parsed.country !== country.toUpperCase()) return raw;
+    return parsed.formatNational().replace(/[^\d+]/g, '');
+  } catch {
+    return raw;
+  }
 }

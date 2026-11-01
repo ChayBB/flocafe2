@@ -1,3 +1,4 @@
+import { formatPhoneLocal } from '../lib/phone';
 import { isTerminalItemStatus } from '../../shared/order-item-status';
 import { formatVariantItemHeading, parseVariantSelection } from '../printers/formatting-helpers';
 import { buildPromptPayPayload } from '../lib/promptpay';
@@ -1073,7 +1074,7 @@ router.post(
       const business = {
         name: settings.business_name || '',
         address: settings.business_address || '',
-        phone: settings.business_phone || '',
+        phone: formatPhoneLocal(settings.business_phone, country),
         taxRegistrationNumber: settings.tax_registration_number || '',
         currency,
         // CLDR-derived only — a stored currency_symbol setting is not an input
