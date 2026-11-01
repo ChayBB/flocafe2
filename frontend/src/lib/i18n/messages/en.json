@@ -3115,6 +3115,7 @@
     "capacityBlankHint": "Blank capacity uses the default of 4 seats.",
     "tableQrTitle": "Order QR codes",
     "tableQrHint": "Scan with a staff phone to open the Server App at this table.",
+    "tableQrMenu": "Menu",
     "tableQrTable": "Table {name}",
     "tableQrServerAppOff": "The Server App is turned off, so these QR codes will not open until it is enabled in Settings.",
     "tableQrFailed": "Could not create the QR codes",

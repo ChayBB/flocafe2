@@ -65,7 +65,7 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
     const cards = qrs
       .map(
         (qr) =>
-          `<div class="card"><div class="name">${escapeHtml(t('tableQrTable', { name: qr.name }))}</div><img src="${qr.data_url}" alt="QR"><div class="zone">${escapeHtml(zoneName)}</div></div>`,
+          `<div class="card"><div class="name">${escapeHtml(qr.name)}</div><img src="${qr.data_url}" alt="QR"><div class="menu">${escapeHtml(t('tableQrMenu'))}</div>${zoneName ? `<div class="zone">${escapeHtml(zoneName)}</div>` : ''}</div>`,
       )
       .join('');
     doc.open();
@@ -74,7 +74,8 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
         body{font-family:sans-serif;margin:12mm}
         .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
         .card{border:1px solid #999;border-radius:4mm;padding:4mm;text-align:center;break-inside:avoid}
-        .name{font-size:18pt;font-weight:700;margin-bottom:2mm}
+        .name{font-size:23.4pt;font-weight:700;margin-bottom:2mm}
+        .menu{font-size:21pt;font-weight:700;margin-top:1mm}
         img{width:100%;max-width:48mm}
         .zone{font-size:10pt;color:#555}
       </style></head><body><div class="grid">${cards}</div></body></html>`,
@@ -136,9 +137,10 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
                   key={qr.id}
                   className="flex flex-col items-center gap-1 rounded-xl border border-border p-3"
                 >
-                  <p className="text-sm font-bold">{t('tableQrTable', { name: qr.name })}</p>
+                  <p className="text-[18px] leading-tight font-bold">{qr.name}</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={qr.data_url} alt="QR" className="size-32 rounded bg-white p-1" />
+                  <p className="text-[16px] leading-tight font-bold">{t('tableQrMenu')}</p>
                 </div>
               ))}
             </div>

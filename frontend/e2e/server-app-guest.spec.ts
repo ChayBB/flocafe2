@@ -284,7 +284,10 @@ test('table QR links use the public address, and cancelling QR codes in OrderFlo
     // The settings button shows a QR for every active table on the public address.
     await network.getByRole('button', { name: 'Create QR and register tables' }).click();
     const sheet = page.getByTestId('table-qr-sheet');
-    await expect(sheet.getByText(`Table ${table.name}`)).toBeVisible();
+    const card = sheet.locator('div', { has: page.getByRole('img', { name: 'QR' }) }).filter({ hasText: table.name }).last();
+    await expect(card.getByText(table.name, { exact: true })).toHaveCSS('font-size', '18px');
+    await expect(card.getByText('Menu', { exact: true })).toHaveCSS('font-size', '16px');
+    await expect(card.getByText(`Table ${table.name}`)).toHaveCount(0);
     await expect(sheet.getByText('https://order.example.com/server-standalone/')).toBeVisible();
     await sheet.getByRole('button', { name: 'Close' }).first().click();
     await expect(sheet).toHaveCount(0);
