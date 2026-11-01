@@ -211,7 +211,7 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
-  expect((await sounds(page)).__spoken.join(' | ')).toContain(`New order: 2 ${productName}`);
+  expect((await sounds(page)).__spoken.join(' | ')).toContain(`New order: 2 ${productName}, 1 ${productName}, later`);
   const bellsBefore = (await sounds(page)).__bells;
   await markReady(first.items[0].id);
   await expect.poll(async () => (await sounds(page)).__bells, { timeout: 15000 }).toBe(bellsBefore + 1);

@@ -239,7 +239,12 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           const fresh = liveItems(order).filter((item) => !knownItems.has(item.id));
           if (fresh.length === 0) return null;
           const items = fresh
-            .map((item) => t('readAloudItem', { name: item.product_name, quantity: item.quantity }))
+            .map((item) => {
+              const note = item.special_instructions?.trim();
+              return note
+                ? t('readAloudItemNote', { name: item.product_name, quantity: item.quantity, note })
+                : t('readAloudItem', { name: item.product_name, quantity: item.quantity });
+            })
             .join(', ');
           return order.table?.name
             ? t('readAloudTable', { table: order.table.name, items })
