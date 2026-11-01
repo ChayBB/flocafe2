@@ -2,7 +2,13 @@ import { test, expect, type Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
 
-type SoundLog = { __beeps: number; __bells: number; __spoken: string[]; __spokenAt: number[]; __voices: string[] };
+type SoundLog = {
+  __beeps: number;
+  __bells: number;
+  __spoken: string[];
+  __spokenAt: number[];
+  __voices: string[];
+};
 
 async function recordSounds(page: Page) {
   await page.addInitScript(() => {
@@ -22,7 +28,13 @@ async function recordSounds(page: Page) {
       }
       createOscillator() {
         w.__beeps += 1;
-        return { type: '', frequency: { value: 0 }, connect: (node: unknown) => node, start() {}, stop() {} };
+        return {
+          type: '',
+          frequency: { value: 0 },
+          connect: (node: unknown) => node,
+          start() {},
+          stop() {},
+        };
       }
       createGain() {
         return { gain: { value: 0 }, connect: (node: unknown) => node };
@@ -57,7 +69,9 @@ async function recordSounds(page: Page) {
       configurable: true,
       value: {
         getVoices: () => voices,
-        speak: (utterance: FakeUtterance & { onend?: () => void; voice: { name: string } | null }) => {
+        speak: (
+          utterance: FakeUtterance & { onend?: () => void; voice: { name: string } | null },
+        ) => {
           w.__spoken.push(utterance.text);
           w.__spokenAt.push(Date.now());
           w.__voices.push(utterance.voice?.name ?? '');
@@ -74,10 +88,15 @@ test('orders already in the kitchen when the display signs in or switches statio
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
   const run = Math.random().toString(36).slice(2, 7);
   const categoryName = `Old ${run}`;
-  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, { headers, data: { name: categoryName } });
+  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+    headers,
+    data: { name: categoryName },
+  });
   expect(category.status()).toBe(201);
   const productName = `Soup ${run}`;
   const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
@@ -108,7 +127,9 @@ test('orders already in the kitchen when the display signs in or switches statio
 
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -131,11 +152,17 @@ test('orders already in the kitchen when the display signs in or switches statio
   expect(spoken).toBe(`New order: 1 ${productName}`);
   expect(spoken).not.toContain(fresh.order_number);
   await expect
-    .poll(async () => (await sounds(page)).__spoken.includes(`Order note: rush ${run}`), { timeout: 15000 })
+    .poll(async () => (await sounds(page)).__spoken.includes(`Order note: rush ${run}`), {
+      timeout: 15000,
+    })
     .toBe(true);
   const log = await sounds(page);
   const at = log.__spoken.indexOf(spoken);
-  expect(log.__spoken.slice(at, at + 3)).toEqual([spoken, 'extra coconut', `Order note: rush ${run}`]);
+  expect(log.__spoken.slice(at, at + 3)).toEqual([
+    spoken,
+    'extra coconut',
+    `Order note: rush ${run}`,
+  ]);
   expect(log.__spokenAt[at + 1] - log.__spokenAt[at]).toBeGreaterThanOrEqual(650);
   expect(log.__spokenAt[at + 2] - log.__spokenAt[at + 1]).toBeGreaterThanOrEqual(650);
   expect(log.__spoken.join(' | ')).not.toContain('old note');
@@ -143,12 +170,19 @@ test('orders already in the kitchen when the display signs in or switches statio
   expect(await spokenAboutProduct()).toHaveLength(1);
 });
 
-test('KDS sound switches turn reading new items aloud and the ready-to-serve announcement on and off', async ({ page }) => {
+test('KDS sound switches turn reading new items aloud and the ready-to-serve announcement on and off', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
   const run = Math.random().toString(36).slice(2, 7);
   const categoryName = `Sounds ${run}`;
-  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, { headers, data: { name: categoryName } });
+  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+    headers,
+    data: { name: categoryName },
+  });
   expect(category.status()).toBe(201);
   const productName = `Lemonade ${run}`;
   const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
@@ -194,7 +228,9 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
 
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -206,15 +242,24 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await page.getByTestId('kds-settings-button').click();
   const dialog = page.getByTestId('kds-settings-dialog');
   // Settings open on the display tab; sounds sit on their own tab.
-  await expect(dialog.getByTestId('kds-settings-tab-display')).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.getByTestId('kds-settings-tab-display')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(dialog.getByTestId('kds-screen-mode-day')).toBeVisible();
   await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toBeHidden();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   await expect(dialog.getByTestId('kds-screen-mode-day')).toBeHidden();
   for (const setting of ['readAloud', 'orderReady']) {
-    await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute('aria-checked', 'true');
+    await expect(dialog.getByTestId(`kds-sound-switch-${setting}`)).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   }
-  await expect(dialog.getByTestId('kds-sound-switch-showBell')).toHaveAttribute('aria-checked', 'false');
+  await expect(dialog.getByTestId('kds-sound-switch-showBell')).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   // Status-change alerts have no switch.
   await expect(dialog.getByRole('switch')).toHaveCount(3);
   await page.keyboard.press('Escape');
@@ -222,27 +267,36 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   // On by default: a new order is read out, and the bell rings and names the order when a menu
   // item turns ready to serve, even while the rest of the order is still cooking.
   const first = await placeOrder();
-  await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
+  await expect
+    .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
+    .toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
-  await expect.poll(async () => (await sounds(page)).__spoken.includes('later'), { timeout: 15000 }).toBe(true);
+  await expect
+    .poll(async () => (await sounds(page)).__spoken.includes('later'), { timeout: 15000 })
+    .toBe(true);
   const readOut = await sounds(page);
   const readIndex = readOut.__spoken.indexOf(`New order: 2 ${productName}, 1 ${productName}`);
   expect(readOut.__spoken[readIndex + 1]).toBe('later');
   const bellsBefore = (await sounds(page)).__bells;
   await markReady(first.items[0].id);
-  await expect.poll(async () => (await sounds(page)).__bells, { timeout: 15000 }).toBe(bellsBefore + 1);
+  await expect
+    .poll(async () => (await sounds(page)).__bells, { timeout: 15000 })
+    .toBe(bellsBefore + 1);
   await expect
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
     .toContain('An order is ready to serve');
   // The new order is read out first, and the ready announcement waits at least 3 seconds after it.
   const log = await sounds(page);
-  const readAt = log.__spokenAt[log.__spoken.findIndex((text) => text.includes(`New order: 2 ${productName}`))];
+  const readAt =
+    log.__spokenAt[log.__spoken.findIndex((text) => text.includes(`New order: 2 ${productName}`))];
   const readyAt = log.__spokenAt[log.__spoken.indexOf('An order is ready to serve')];
   expect(readyAt - readAt).toBeGreaterThanOrEqual(2900);
   // The rest of the order turning ready within 10 seconds is not announced again.
   const afterFirst = await sounds(page);
   await markReady(first.items[1].id);
-  await expect(page.getByTestId('kds-column-ready').or(page.getByTestId('kds-workspace')).first()).toBeVisible();
+  await expect(
+    page.getByTestId('kds-column-ready').or(page.getByTestId('kds-workspace')).first(),
+  ).toBeVisible();
   await page.waitForTimeout(1500);
   expect((await sounds(page)).__bells).toBe(afterFirst.__bells);
   expect((await sounds(page)).__spoken).toEqual(afterFirst.__spoken);
@@ -251,7 +305,11 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-settings-tab-sound').click();
   const bellSelect = dialog.getByTestId('kds-ready-bell-select');
-  await expect(bellSelect.locator('option')).toHaveText(['Hotel bell', 'Double ding', 'No bell (read the table only)']);
+  await expect(bellSelect.locator('option')).toHaveText([
+    'Hotel bell',
+    'Double ding',
+    'No bell (read the table only)',
+  ]);
   await expect(bellSelect).toHaveValue('hotel');
   const bellsBeforeSample = (await sounds(page)).__bells;
   await bellSelect.selectOption('ding');
@@ -295,15 +353,24 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   await expect(dialog.getByTestId('kds-ready-bell-select')).toBeDisabled();
   await expect(dialog.getByTestId('kds-ready-repeat')).toBeDisabled();
   await expect(dialog.getByTestId('kds-ready-gap')).toBeDisabled();
-  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
+  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
   await page.getByTestId('kds-settings-button').click();
   await dialog.getByTestId('kds-settings-tab-sound').click();
-  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute('aria-checked', 'false');
-  await expect(dialog.getByTestId('kds-sound-switch-orderReady')).toHaveAttribute('aria-checked', 'false');
+  await expect(dialog.getByTestId('kds-sound-switch-readAloud')).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
+  await expect(dialog.getByTestId('kds-sound-switch-orderReady')).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   await page.keyboard.press('Escape');
 
   const quiet = await sounds(page);
@@ -316,12 +383,19 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   expect(after.__bells).toBe(quiet.__bells);
 });
 
-test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({ page }) => {
+test('a table with several items turning ready is announced once, and not again for 10 seconds', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
   const run = Math.random().toString(36).slice(2, 7);
   const tableName = `Bell ${run}`;
-  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: tableName, capacity: 4 } });
+  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+    headers,
+    data: { number: tableName, capacity: 4 },
+  });
   expect(table.status()).toBe(201);
   const tableId = (await table.json()).table.id;
   // Two tickets on the same table, as when staff add a second round.
@@ -351,12 +425,15 @@ test('a table with several items turning ready is announced once, and not again 
     expect(ready.ok(), await ready.text()).toBeTruthy();
   };
   const announced = async () =>
-    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`).length;
+    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`)
+      .length;
 
   await page.clock.install();
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -436,11 +513,15 @@ test('a table with several items turning ready is announced once, and not again 
   expect((await sounds(page)).__bells).toBe(start.__bells + 4);
 });
 
-test('the show-bell switch puts a bell button at the right end of the message bar that rings the ready bell', async ({ page }) => {
+test('the show-bell switch puts a bell button at the right end of the message bar that rings the ready bell', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -472,13 +553,22 @@ test('the show-bell switch puts a bell button at the right end of the message ba
   await expect(page.getByTestId('kds-message-bar').getByTestId('kds-bell-button')).toBeVisible();
 });
 
-test('an item switched to take-away still rings the ready bell and is announced when it turns ready', async ({ page }) => {
+test('an item switched to take-away still rings the ready bell and is announced when it turns ready', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
-  const serverHeaders = { Authorization: `Bearer ${getE2eToken('e2e-server', 'server@flo.local', 'server')}` };
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
+  const serverHeaders = {
+    Authorization: `Bearer ${getE2eToken('e2e-server', 'server@flo.local', 'server')}`,
+  };
   const run = Math.random().toString(36).slice(2, 7);
   const tableName = `Pack ${run}`;
-  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: tableName, capacity: 4 } });
+  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+    headers,
+    data: { number: tableName, capacity: 4 },
+  });
   expect(table.status()).toBe(201);
   const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
     headers,
@@ -494,11 +584,14 @@ test('an item switched to take-away still rings the ready bell and is announced 
   expect(order.status()).toBe(201);
   const created = (await order.json()).order as { id: number; items: { id: number }[] };
   const announced = async () =>
-    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`).length;
+    (await sounds(page)).__spoken.filter((text) => text === `Table ${tableName} is ready to serve`)
+      .length;
 
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -513,14 +606,103 @@ test('an item switched to take-away still rings the ready bell and is announced 
     { headers: serverHeaders },
   );
   expect(takeaway.status()).toBe(200);
-  await expect(page.getByTestId('kds-message-bar')).toContainText(`Table ${tableName}:`, { timeout: 15000 });
+  await expect(page.getByTestId('kds-message-bar')).toContainText(`Table ${tableName}:`, {
+    timeout: 15000,
+  });
   const start = await sounds(page);
 
-  const ready = await page.request.patch(`${E2E_BASE_URL}/api/order-items/${created.items[0].id}/status`, {
-    headers,
-    data: { status: 'ready' },
-  });
+  const ready = await page.request.patch(
+    `${E2E_BASE_URL}/api/order-items/${created.items[0].id}/status`,
+    {
+      headers,
+      data: { status: 'ready' },
+    },
+  );
   expect(ready.ok(), await ready.text()).toBeTruthy();
   await expect.poll(announced, { timeout: 15000 }).toBe(1);
   expect((await sounds(page)).__bells).toBe(start.__bells + 1);
+});
+
+test('a spoken order on a POS-computer voice starts after a short lead so quiet speakers do not swallow "Table"', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
+  const run = Math.random().toString(36).slice(2, 7);
+  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+    headers,
+    data: { name: `Lead ${run}` },
+  });
+  expect(category.status()).toBe(201);
+  const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
+    headers,
+    data: {
+      name: `Rice ${run}`,
+      category_id: (await category.json()).category.id,
+      price: 40,
+      tax_category_id: null,
+      tax_behavior: 'exempt',
+    },
+  });
+  expect(product.status()).toBe(201);
+
+  await recordSounds(page);
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __starts: number[];
+      AudioContext: { prototype: Record<string, unknown> };
+    };
+    w.__starts = [];
+    localStorage.setItem('flocafe:kds-voice', 'server:e2e-voice');
+    w.AudioContext.prototype.createBufferSource = function (this: { currentTime: number }) {
+      const currentTime = () => this.currentTime;
+      const source = {
+        buffer: null,
+        onended: null as null | (() => void),
+        connect: (node: unknown) => node,
+        start(when = 0) {
+          w.__starts.push(when - currentTime());
+          setTimeout(() => source.onended?.(), 10);
+        },
+      };
+      return source;
+    };
+  });
+  await page.route('**/api/kds/speech', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'audio/wav',
+          body: Buffer.from('RIFF-e2e-audio'),
+        })
+      : route.fulfill({
+          json: { engine: 'local', voices: [{ id: 'e2e-voice', name: 'E2E voice' }] },
+        }),
+  );
+
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await page.waitForTimeout(2500);
+
+  const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+    headers,
+    data: {
+      type: 'takeaway',
+      items: [{ product_id: (await product.json()).product.id, quantity: 1 }],
+    },
+  });
+  expect(order.status()).toBe(201);
+  const starts = () => page.evaluate(() => (window as unknown as { __starts: number[] }).__starts);
+  await expect.poll(async () => (await starts()).length, { timeout: 15000 }).toBeGreaterThan(0);
+  expect((await starts())[0]).toBeGreaterThanOrEqual(0.4);
 });

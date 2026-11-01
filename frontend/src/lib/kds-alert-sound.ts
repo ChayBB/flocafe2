@@ -15,7 +15,8 @@ function notify(): void {
 function getContext(): AudioContext | null {
   if (context || typeof window === 'undefined') return context;
   const AudioCtx: AudioContextClass | undefined =
-    window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioContextClass }).webkitAudioContext;
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: AudioContextClass }).webkitAudioContext;
   if (!AudioCtx) return null;
   try {
     context = new AudioCtx();
@@ -64,6 +65,11 @@ export function playKdsAlert(beeps = 3): boolean {
   }
   return true;
 }
+
+// Speakers that have been quiet take a moment to wake, which swallowed the first word ("table").
+const AUDIO_WAKE_LEAD_S = 0.4;
+const AUDIO_IDLE_MS = 1500;
+let lastAudioEndedAt = -Infinity;
 
 /** The ready-to-serve bells a KDS display can pick from; `none` reads the table without a bell. */
 export const KDS_READY_BELLS = {
@@ -120,7 +126,10 @@ export function readKdsReadyDelay(delay: KdsReadyDelay): number {
 
 export function writeKdsReadyDelay(delay: KdsReadyDelay, seconds: number): void {
   try {
-    window.localStorage.setItem(READY_DELAYS[delay].key, String(clampKdsReadyDelay(delay, seconds)));
+    window.localStorage.setItem(
+      READY_DELAYS[delay].key,
+      String(clampKdsReadyDelay(delay, seconds)),
+    );
   } catch {}
 }
 
@@ -136,7 +145,9 @@ export async function playKdsReadyBell(bell: KdsReadyBell = readKdsReadyBell()):
   let loading = readyBells.get(bell);
   if (!loading) {
     loading = fetch(url)
-      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+      .then((response) =>
+        response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status))),
+      )
       .then((data) => audio.decodeAudioData(data))
       .catch(() => null);
     readyBells.set(bell, loading);
@@ -151,7 +162,10 @@ export async function playKdsReadyBell(bell: KdsReadyBell = readKdsReadyBell()):
   source.buffer = buffer;
   source.connect(audio.destination);
   source.start();
-  await new Promise((resolve) => setTimeout(resolve, Math.min(buffer.duration * 1000, READY_BELL_LEAD_MS)));
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.min(buffer.duration * 1000, READY_BELL_LEAD_MS)),
+  );
+  lastAudioEndedAt = Date.now();
 }
 
 /** Plays encoded audio (such as a spoken announcement) and resolves when it ends. False when sound is blocked. */
@@ -163,10 +177,12 @@ export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
     const source = audio.createBufferSource();
     source.buffer = buffer;
     source.connect(audio.destination);
+    const lead = Date.now() - lastAudioEndedAt > AUDIO_IDLE_MS ? AUDIO_WAKE_LEAD_S : 0;
     await new Promise<void>((resolve) => {
       source.onended = () => resolve();
-      source.start();
+      source.start(audio.currentTime + lead);
     });
+    lastAudioEndedAt = Date.now();
     return true;
   } catch {
     return false;
