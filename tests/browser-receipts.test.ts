@@ -338,6 +338,16 @@ async function run() {
         qrHtml.includes('margin: 8px auto 0'),
     );
     assert(
+      'a large centred "scan to pay" line sits under the QR',
+      /<img class="payment-qr"[^>]*\/><p class="payment-qr-caption">Scan to pay<\/p>/.test(
+        footer,
+      ) &&
+        /\.payment-qr-caption \{[^}]*text-align: center;[^}]*font-size: 1\.6em;[^}]*font-weight: 700;/.test(
+          qrHtml,
+        ),
+    );
+    assert('no "scan to pay" line without a QR', !html.includes('payment-qr-caption">'));
+    assert(
       'a QR that is not an image data URL is not printed',
       !generateBillHtml(testIranBill, baseIranTenant, {
         language: 'fa',

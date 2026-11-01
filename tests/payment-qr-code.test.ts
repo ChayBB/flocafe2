@@ -109,15 +109,33 @@ async function main() {
     // Thermal bills carry the PromptPay QR for the total just above the paper cut.
     const receipt = Buffer.from([0x41, 0x0a, 0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00]);
     const printer = { paper_width: '80mm' };
-    const withQr = insertBillPaymentQr(receipt, 250, printer);
+    const withQr = await insertBillPaymentQr(receipt, 250, printer);
     const qrAt = withQr.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
     assertOrThrow(qrAt > 1, 'the bill carries a QR raster');
     assertOrThrow(
       qrAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
       'the QR prints before the feed and cut',
     );
+    // A large centred "scan to pay" line sits under the QR, still above the cut.
+    const captionAt = withQr.indexOf(Buffer.from('Scan to pay'));
+    assertOrThrow(captionAt > qrAt, 'the scan-to-pay line prints under the QR');
+    assertOrThrow(
+      captionAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
+      'the scan-to-pay line prints before the feed and cut',
+    );
+    assertOrThrow(
+      withQr.subarray(qrAt, captionAt).includes(Buffer.from([0x1b, 0x61, 0x01])),
+      'the scan-to-pay line is centred',
+    );
+    // A printer that cannot draw Thai as text still prints the QR; the line follows the bill's raster path.
+    const thai = await insertBillPaymentQr(receipt, 250, printer, 'th');
+    assertOrThrow(thai.includes(Buffer.from([0x1d, 0x76, 0x30, 0x00])), 'a Thai bill keeps its QR');
+    assertOrThrow(
+      !thai.includes(Buffer.from('Scan to pay')),
+      'a Thai bill does not fall back to English',
+    );
     assertEqualOrThrow(
-      insertBillPaymentQr(receipt, 0, printer),
+      await insertBillPaymentQr(receipt, 0, printer),
       receipt,
       'a zero bill prints no QR',
     );
@@ -130,7 +148,7 @@ async function main() {
     assertEqualOrThrow(cleared.status, 200, 'account can be cleared');
     assertEqualOrThrow((await qr(100)).status, 404, 'cleared account stops QR creation');
     assertEqualOrThrow(
-      insertBillPaymentQr(receipt, 250, printer),
+      await insertBillPaymentQr(receipt, 250, printer),
       receipt,
       'a shop without PromptPay prints bills without a QR',
     );

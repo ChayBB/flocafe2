@@ -80,6 +80,11 @@ const LABELS: Record<
   },
 };
 
+/** The line printed under a payment QR, in the print language when it has one. */
+export function paymentQrCaption(language: string): string {
+  return (LABELS[language] ?? LABELS.en).scan;
+}
+
 export interface PaymentRequestSlipHtmlOptions {
   readonly language: string;
   readonly locale: string;

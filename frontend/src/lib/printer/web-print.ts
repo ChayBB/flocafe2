@@ -331,6 +331,7 @@ export function generateBillHtml(
     thankYou: surfaceLabel(messages?.thankYou, 'print.thankYouShort', 'receipt.thankYou', lang),
     taxIncluded: messages?.taxIncluded.primary ?? printLabelResolver('receipt.taxIncluded', lang),
     printBill: printLabelResolver('receipt.printBill', lang),
+    scanToPay: printLabelResolver('receipt.scanToPay', lang),
   };
 
   const invoiceNumberLabel = L.billNumber;
@@ -485,7 +486,7 @@ export function generateBillHtml(
     <div class="footer">
       ${messages?.footerNote ? `<p>${escapeHtml(messages.footerNote.text)}</p>` : `<p>${escapeHtml(L.thankYou)}</p>`}
       ${hasTax ? `<p>${escapeHtml(L.taxIncluded)}</p>` : ''}
-      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" />` : ''}
+      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" /><p class="payment-qr-caption">${escapeHtml(L.scanToPay)}</p>` : ''}
     </div>
   </div>
 
@@ -573,6 +574,7 @@ function getPaperStyles(size: PaperSize): string {
     .total-row { border-top: 2px solid #333; font-size: 16px; }
     .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; }
     .payment-qr { display: block; width: 45mm; max-width: 80%; margin: 8px auto 0; }
+    .payment-qr-caption { margin: 4px 0 0; text-align: center; font-size: 1.6em; font-weight: 700; }
     .text-end { text-align: end !important; }
     .num { unicode-bidi: isolate; white-space: nowrap; }
     .ltr { direction: ltr; unicode-bidi: isolate; }

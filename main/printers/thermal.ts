@@ -3,6 +3,7 @@ import { resolvePaymentQrTarget } from '../lib/payment-qr-target';
 import { buildPromptPayPayload } from '../lib/promptpay';
 import {
   buildQrRasterBytes,
+  paymentQrCaption,
   renderPaymentRequestSlip,
   renderPaymentRequestSlipHtml,
   type PaymentRequestSlipData,
@@ -947,22 +948,50 @@ export async function initPrinter(): Promise<void> {
 
 const FEED_BEFORE_CUT = [0x1b, 0x64, 0x05];
 
-/** Puts the PromptPay QR for the bill total just above the paper cut; a shop without PromptPay prints none. */
-export function insertBillPaymentQr(
+/**
+ * Puts the PromptPay QR for the bill total just above the paper cut, with a large centred
+ * "scan to pay" line under it; a shop without PromptPay prints none.
+ */
+export async function insertBillPaymentQr(
   data: Buffer,
   total: number,
   printer: Parameters<typeof resolvePrinterContext>[0],
-): Buffer {
+  language: string = 'en',
+): Promise<Buffer> {
   const amount = Number(Number(total).toFixed(2));
   const target = amount > 0 ? resolvePaymentQrTarget('promptpay') : null;
   if (!target) return data;
-  const { columns, capabilities } = resolvePrinterContext(printer);
+  const { profile, columns, capabilities } = resolvePrinterContext(printer);
   const qr = buildQrRasterBytes(
     buildPromptPayPayload(target, amount),
     capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576),
     capabilities.raster?.maxBandHeight ?? 200,
   );
-  const block = Buffer.concat([Buffer.from([0x0a]), Buffer.from(qr), Buffer.from([0x0a])]);
+  const lines = [
+    '',
+    `{RAW_BYTES:${Buffer.from(qr).toString('base64')}}`,
+    `{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}${paymentQrCaption(language)}{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}`,
+    '',
+  ];
+  const textOptions = { cutMode: profile.cutMode, columns, language };
+  let block: Buffer | null = null;
+  if (rasterCapabilityEnabled(capabilities)) {
+    // Thai and other scripts the printer cannot draw as text print as an image, like the bill.
+    const rasterized = await rasterizeDocumentLines(lines, [], {
+      ...textOptions,
+      useUnicode: false,
+      arabicShaping: capabilities.shaping.arabic,
+      capabilities,
+      requestPrefix: 'bill-qr',
+    });
+    if (rasterized.rasterSelected && !rasterized.rasterFailed) block = rasterized.data;
+  }
+  block ??= buildEscPos(lines, false, {
+    ...textOptions,
+    capabilities: rasterCapabilityEnabled(capabilities)
+      ? nativeFallbackCapabilities(capabilities)
+      : capabilities,
+  });
   const cut = data.lastIndexOf(Buffer.from([0x1d, 0x56]));
   const feedAt = cut - FEED_BEFORE_CUT.length;
   const at =
@@ -1037,7 +1066,12 @@ export async function printReceipt(
       pulseSetting === null
         ? printer.cash_drawer_pulse_enabled === 1
         : pulseSetting === 'true' && shouldPulseForPayment(bill);
-    const withQr = insertBillPaymentQr(data, Number(bill?.total), printer);
+    const withQr = await insertBillPaymentQr(
+      data,
+      Number(bill?.total),
+      printer,
+      normalizePrintLanguage(language),
+    );
     const receiptData = shouldPulse ? appendCashDrawerPulse(withQr) : withQr;
     console.log(
       '[Printer] Using printer:',
