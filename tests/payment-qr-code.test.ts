@@ -29,6 +29,7 @@ const {
 } = require('./helpers/test-setup');
 const { paymentMethodRoutes } = require('../main/routes/payment-methods');
 const { printerRoutes } = require('../main/routes/printers');
+const { insertBillPaymentQr } = require('../main/printers/thermal');
 const { crc16Ccitt } = require('../main/lib/promptpay');
 
 async function main() {
@@ -105,6 +106,22 @@ async function main() {
     assertOrThrow(html.includes('Latte &#60;b&#62;'), 'item names are escaped');
     assertOrThrow(/<img src="data:image\/png;base64,/.test(html), 'the page carries the QR image');
 
+    // Thermal bills carry the PromptPay QR for the total just above the paper cut.
+    const receipt = Buffer.from([0x41, 0x0a, 0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00]);
+    const printer = { paper_width: '80mm' };
+    const withQr = insertBillPaymentQr(receipt, 250, printer);
+    const qrAt = withQr.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
+    assertOrThrow(qrAt > 1, 'the bill carries a QR raster');
+    assertOrThrow(
+      qrAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
+      'the QR prints before the feed and cut',
+    );
+    assertEqualOrThrow(
+      insertBillPaymentQr(receipt, 0, printer),
+      receipt,
+      'a zero bill prints no QR',
+    );
+
     const cleared = await api(baseUrl, '/api/payment-methods/qr-account', {
       method: 'PUT',
       headers: authHeader,
@@ -112,6 +129,11 @@ async function main() {
     });
     assertEqualOrThrow(cleared.status, 200, 'account can be cleared');
     assertEqualOrThrow((await qr(100)).status, 404, 'cleared account stops QR creation');
+    assertEqualOrThrow(
+      insertBillPaymentQr(receipt, 250, printer),
+      receipt,
+      'a shop without PromptPay prints bills without a QR',
+    );
     console.log('\nAll QR payment checks passed');
   } finally {
     server.close();

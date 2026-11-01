@@ -1,5 +1,8 @@
 import { formatPhoneLocal } from '../lib/phone';
+import { resolvePaymentQrTarget } from '../lib/payment-qr-target';
+import { buildPromptPayPayload } from '../lib/promptpay';
 import {
+  buildQrRasterBytes,
   renderPaymentRequestSlip,
   renderPaymentRequestSlipHtml,
   type PaymentRequestSlipData,
@@ -942,6 +945,35 @@ export async function initPrinter(): Promise<void> {
   }
 }
 
+const FEED_BEFORE_CUT = [0x1b, 0x64, 0x05];
+
+/** Puts the PromptPay QR for the bill total just above the paper cut; a shop without PromptPay prints none. */
+export function insertBillPaymentQr(
+  data: Buffer,
+  total: number,
+  printer: Parameters<typeof resolvePrinterContext>[0],
+): Buffer {
+  const amount = Number(Number(total).toFixed(2));
+  const target = amount > 0 ? resolvePaymentQrTarget('promptpay') : null;
+  if (!target) return data;
+  const { columns, capabilities } = resolvePrinterContext(printer);
+  const qr = buildQrRasterBytes(
+    buildPromptPayPayload(target, amount),
+    capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576),
+    capabilities.raster?.maxBandHeight ?? 200,
+  );
+  const block = Buffer.concat([Buffer.from([0x0a]), Buffer.from(qr), Buffer.from([0x0a])]);
+  const cut = data.lastIndexOf(Buffer.from([0x1d, 0x56]));
+  const feedAt = cut - FEED_BEFORE_CUT.length;
+  const at =
+    cut >= 0 && feedAt >= 0 && data.subarray(feedAt, cut).equals(Buffer.from(FEED_BEFORE_CUT))
+      ? feedAt
+      : cut >= 0
+        ? cut
+        : data.length;
+  return Buffer.concat([data.subarray(0, at), block, data.subarray(at)]);
+}
+
 export async function printReceipt(
   order: any,
   bill: any,
@@ -1005,7 +1037,8 @@ export async function printReceipt(
       pulseSetting === null
         ? printer.cash_drawer_pulse_enabled === 1
         : pulseSetting === 'true' && shouldPulseForPayment(bill);
-    const receiptData = shouldPulse ? appendCashDrawerPulse(data) : data;
+    const withQr = insertBillPaymentQr(data, Number(bill?.total), printer);
+    const receiptData = shouldPulse ? appendCashDrawerPulse(withQr) : withQr;
     console.log(
       '[Printer] Using printer:',
       printer.name,
