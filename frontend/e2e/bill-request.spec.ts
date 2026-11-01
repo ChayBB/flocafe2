@@ -19,7 +19,13 @@ async function countBeeps(page: Page) {
       }
       createOscillator() {
         w.__beeps += 1;
-        return { type: '', frequency: { value: 0 }, connect: (node: unknown) => node, start() {}, stop() {} };
+        return {
+          type: '',
+          frequency: { value: 0 },
+          connect: (node: unknown) => node,
+          start() {},
+          stop() {},
+        };
       }
       createGain() {
         return { gain: { value: 0 }, connect: (node: unknown) => node };
@@ -33,10 +39,15 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   page,
   context,
 }) => {
-  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
   const run = Math.random().toString(36).slice(2, 7);
   const label = `Bill ${run}`;
-  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: label, capacity: 2 } });
+  const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+    headers,
+    data: { number: label, capacity: 2 },
+  });
   const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
     headers,
     data: {
@@ -49,9 +60,16 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     },
   });
   expect(order.status()).toBe(201);
-  const created = (await order.json()).order as { id: number; order_number: string; items: { id: number }[] };
+  const created = (await order.json()).order as {
+    id: number;
+    order_number: string;
+    items: { id: number }[];
+  };
   for (const item of created.items) {
-    await page.request.patch(`${E2E_BASE_URL}/api/order-items/${item.id}/status`, { headers, data: { status: 'served' } });
+    await page.request.patch(`${E2E_BASE_URL}/api/order-items/${item.id}/status`, {
+      headers,
+      data: { status: 'served' },
+    });
   }
 
   // POS first, so the request arrives while it is open.
@@ -65,7 +83,7 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   await page.waitForTimeout(500);
   const beepsBefore = await page.evaluate(() => (window as unknown as { __beeps: number }).__beeps);
 
-  // Server App on a phone: no printer until every item is confirmed at the table.
+  // Server App on a phone: the printer says what is missing until every item is confirmed at the table.
   const phone = await context.newPage();
   await phone.setViewportSize({ width: 390, height: 844 });
   await phone.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
@@ -85,30 +103,55 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   await phone.getByTestId('server-app-ordered-items-button').click();
   const printer = phone.getByTestId('server-app-print-bill');
   await expect(phone.getByTestId('server-app-ordered-item')).toHaveCount(2);
-  await expect(printer).toHaveCount(0);
-  for (const index of [0, 1]) {
-    await phone.getByTestId('server-app-ordered-item').nth(index).getByTestId('server-app-item-menu').click();
-    await phone.getByRole('menuitem', { name: 'Confirm served' }).click();
-    await expect(phone.getByTestId('server-app-ordered-item').nth(index).getByTestId('server-app-served-confirmed-tag')).toBeVisible();
-  }
   await expect(printer).toBeVisible();
+  await expect(printer).toHaveAttribute('data-ready', 'false');
   await printer.click();
-  await expect(phone.getByText('Bill printed; the cashier has been told').first()).toBeVisible();
+  await expect(phone.getByText('2 items are not confirmed at the table yet').first()).toBeVisible();
+  await expect(page.getByTestId('bill-request-alerts')).toHaveCount(0);
+  for (const index of [0, 1]) {
+    await phone
+      .getByTestId('server-app-ordered-item')
+      .nth(index)
+      .getByTestId('server-app-item-menu')
+      .click();
+    await phone.getByRole('menuitem', { name: 'Confirm served' }).click();
+    await expect(
+      phone
+        .getByTestId('server-app-ordered-item')
+        .nth(index)
+        .getByTestId('server-app-served-confirmed-tag'),
+    ).toBeVisible();
+  }
+  await expect(printer).toHaveAttribute('data-ready', 'true');
+  await printer.click();
+  // Servers may not print bills here, so only the cashier is told; nothing prints on the phone.
+  await expect(phone.getByText('The cashier has been told', { exact: true }).first()).toBeVisible();
+  await expect(phone.getByText('Bill printed; the cashier has been told')).toHaveCount(0);
 
   // POS: two beeps, no top bar; the order row turns pink and the wait counts up.
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps), { timeout: 15000 })
+    .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps), {
+      timeout: 15000,
+    })
     .toBe(beepsBefore + 2);
   await expect(page.getByTestId('bill-request-alerts')).toHaveCount(0);
-  const row = page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first();
+  const row = page
+    .getByRole('button')
+    .filter({ hasText: `#${created.order_number}` })
+    .first();
   await expect(row).toHaveAttribute('data-bill-awaiting', 'true', { timeout: 15000 });
   await expect(row).toHaveClass(/animate-bill-awaiting/);
-  await expect(row.getByTestId('bill-request-waiting')).toContainText(/Awaiting payment\s*\d+:\d{2}/);
+  await expect(row.getByTestId('bill-request-waiting')).toContainText(
+    /Awaiting payment\s*\d+:\d{2}/,
+  );
   await row.click();
   await expect(page.getByText('Bill printed by').first()).toBeVisible();
 
   // The cashier takes the money: the wait stops, is stamped, and the table leaves the bar.
-  const bill = await page.request.post(`${E2E_BASE_URL}/api/bills/generate`, { headers, data: { order_id: created.id } });
+  const bill = await page.request.post(`${E2E_BASE_URL}/api/bills/generate`, {
+    headers,
+    data: { order_id: created.id },
+  });
   expect(bill.ok()).toBeTruthy();
   const billBody = (await bill.json()).bill as { id: number; total: number };
   const paid = await page.request.post(`${E2E_BASE_URL}/api/bills/${billBody.id}/payments`, {
@@ -118,10 +161,18 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   expect(paid.ok(), await paid.text()).toBeTruthy();
   await page.reload();
   await page.getByRole('button', { name: 'All', exact: true }).first().click();
-  await page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first().click();
-  await expect(page.getByTestId('bill-request-received').first()).toContainText(/Paid \d{2}:\d{2} · waited \d+ min/);
-  await expect(page.getByRole('button').filter({ hasText: `#${created.order_number}` }).first()).not.toHaveAttribute(
-    'data-bill-awaiting',
-    'true',
+  await page
+    .getByRole('button')
+    .filter({ hasText: `#${created.order_number}` })
+    .first()
+    .click();
+  await expect(page.getByTestId('bill-request-received').first()).toContainText(
+    /Paid \d{2}:\d{2} · waited \d+ min/,
   );
+  await expect(
+    page
+      .getByRole('button')
+      .filter({ hasText: `#${created.order_number}` })
+      .first(),
+  ).not.toHaveAttribute('data-bill-awaiting', 'true');
 });

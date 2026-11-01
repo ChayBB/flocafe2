@@ -23,7 +23,7 @@ import {
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { parsePhone } from '@/lib/phone';
-import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
+import { useSyncServerLanguage } from '@/lib/i18n';
 import { useReloadOnNewBuild } from '@/hooks/useReloadOnNewBuild';
 import { holdDarkClass } from '@/lib/kds-screen-mode';
 import { useTranslations } from 'use-intl';
@@ -43,7 +43,6 @@ import {
 import { toastApiError } from '@/lib/api-error';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
-import { usePosSettingsStore } from '@/store/pos-settings';
 import { printerService } from '@/lib/printer/PrinterService';
 import { generateCartItemId } from '@/lib/cart-identity';
 import { productNeedsCustomizer, scannedVariantNeedsCustomizer } from '@/lib/product-variants';
@@ -101,7 +100,6 @@ type ServerAppInfo = {
   timezone?: string;
   server_time?: string;
 };
-
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 const LIVE_REFRESH_MS = 5000;
@@ -188,7 +186,6 @@ function pickLinkedTable<T extends { id: string }>(tables: T[]): T | undefined {
 export default function ServerStandalonePage() {
   // Syncs tenant language preference from /api/server-app/info.
   useSyncServerLanguage('/api/server-app/info');
-  const language = usePosSettingsStore((state) => state.language);
   const t = useTranslations('serverApp');
   const tAuth = useTranslations('auth');
   const tTables = useTranslations('tables');
@@ -336,7 +333,10 @@ export default function ServerStandalonePage() {
       orderLoaded ? fetchTableOrder(tableId) : Promise.resolve(null),
     ]);
     if (sendInFlightRef.current) return;
-    const keepIfSame = <T,>(next: T) => (prev: T) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+    const keepIfSame =
+      <T,>(next: T) =>
+      (prev: T) =>
+        JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
     setTables(keepIfSame<Table[]>(tablesRes.data.tables || []));
     if (orderRes && loadSeq === orderLoadSeqRef.current && selectedTableIdRef.current === tableId) {
       setCurrentOrder(keepIfSame<Order | null>(orderRes.data.orders?.[0] || null));
@@ -436,7 +436,9 @@ export default function ServerStandalonePage() {
         const loadedTables = tablesRes.data.tables || [];
         setTables(loadedTables);
         setTablesLoaded(true);
-        const linkedTable = linkedTableAppliedRef.current ? undefined : pickLinkedTable(loadedTables);
+        const linkedTable = linkedTableAppliedRef.current
+          ? undefined
+          : pickLinkedTable(loadedTables);
         linkedTableAppliedRef.current = true;
         if (!selectedTableIdRef.current && linkedTable) {
           selectedTableIdRef.current = linkedTable.id;
@@ -587,9 +589,15 @@ export default function ServerStandalonePage() {
           order_id: currentOrder.id,
         });
       } else {
-        await api.post(`/api/orders/${currentOrder.id}/merge-table`, { target_table_id: target.id });
+        await api.post(`/api/orders/${currentOrder.id}/merge-table`, {
+          target_table_id: target.id,
+        });
       }
-      toast.success(mode === 'move' ? t('tableMoved', { name: target.name }) : t('tablesMerged', { name: target.name }));
+      toast.success(
+        mode === 'move'
+          ? t('tableMoved', { name: target.name })
+          : t('tablesMerged', { name: target.name }),
+      );
       setTransferMode(null);
       const listWasOpen = orderedItemsOpen;
       await loadAll({ allowWhileSending: true }).catch(() => {});
@@ -602,7 +610,12 @@ export default function ServerStandalonePage() {
       else if (code === 'source_discount') toast.error(t('mergeBlockedDiscount'));
       else if (code === 'target_paying') toast.error(t('mergeBlockedPaying'));
       else if (code === 'target_empty') toast.error(t('tableHasNoOrder', { name: target.name }));
-      else toastApiError(error, mode === 'move' ? t('moveTableFailed') : t('mergeTableFailed'), apiErrorT);
+      else
+        toastApiError(
+          error,
+          mode === 'move' ? t('moveTableFailed') : t('mergeTableFailed'),
+          apiErrorT,
+        );
     } finally {
       setTransferring(false);
     }
@@ -620,11 +633,10 @@ export default function ServerStandalonePage() {
       else toastApiError(error, t('billRequestFailed'), apiErrorT);
       return;
     }
-    await printOrderSlip(currentOrder.id, {
-      ...currentOrder,
-      table: activeTable ? { name: activeTable.name ?? String(activeTable.number) } : undefined,
-    } as unknown as Record<string, unknown>);
-    toast.success(t('billRequested'));
+    const printed = await printOrderSlip(currentOrder.id);
+    if (printed === 'printed') toast.success(t('billRequested'));
+    else if (printed === 'not-allowed') toast.success(t('billRequestNotified'));
+    else toast.error(t('billRequestCashierPrintFailed'));
   }
 
   /** Packs a sent item to go, cancels one still waiting, or confirms a served one reached the table. */
@@ -734,7 +746,9 @@ export default function ServerStandalonePage() {
     const token = localStorage.getItem(TOKEN_KEY);
     let expiresAt = 0;
     try {
-      expiresAt = JSON.parse(atob((token ?? '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000;
+      expiresAt =
+        JSON.parse(atob((token ?? '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp *
+        1000;
     } catch {
       return;
     }
@@ -929,58 +943,26 @@ export default function ServerStandalonePage() {
     }
   }
 
-  // Same browser-print fallback as KOT above on 400; stays quiet on 403 (owner hasn't enabled server bill printing).
-  async function printOrderSlip(orderId: number, orderForPrint: Record<string, unknown>) {
-    if (!api) return;
+  /** Bills print only on the cashier's printer, never on this device; 403 means servers may not print bills. */
+  async function printOrderSlip(orderId: number): Promise<'printed' | 'not-allowed' | 'failed'> {
+    if (!api) return 'failed';
     try {
       await api.post('/api/printers/print-bill', { orderId });
-      return;
+      return 'printed';
     } catch (printError: unknown) {
       const status = axios.isAxiosError(printError) ? printError.response?.status : undefined;
-      if (status === 403) return;
-      if (status !== 400) {
-        toastApiError(printError, t('billPrintFailed'), apiErrorT);
-        return;
-      }
-    }
-    try {
-      const { generateOrderSlipHtml } = await import('@/lib/printer/order-slip-web-print');
-      const html = generateOrderSlipHtml(
-        orderForPrint as unknown as FullOrder,
-        {
-          title: t('orderSlipTitle'),
-          subtotal: t('orderSlipSubtotal'),
-          discount: t('orderSlipDiscount'),
-          serviceCharge: t('orderSlipServiceCharge'),
-          deliveryCharge: t('orderSlipDeliveryCharge'),
-          packagingCharge: t('orderSlipPackagingCharge'),
-          tax: t('orderSlipTax'),
-          total: t('orderSlipTotal'),
-        },
-        {
-          paperWidth: 80,
-          country: regional?.country,
-          currency: regional?.currency,
-          locale: getLanguageLocale(language),
-          direction: getLanguageDirection(language),
-        },
-      );
-      await printerService.printViaBrowser(html, 80);
-    } catch (fallbackError: unknown) {
-      toastApiError(fallbackError, t('billPrintFailed'), apiErrorT);
+      return status === 403 ? 'not-allowed' : 'failed';
     }
   }
 
   async function sendGuestDraft() {
-    if (
-      !api ||
-      !guestTable ||
-      draft.length === 0 ||
-      sendInFlightRef.current
-    ) {
+    if (!api || !guestTable || draft.length === 0 || sendInFlightRef.current) {
       return;
     }
-    const lines = draft.map((line) => ({ ...line, addons: line.addons.map((addon) => ({ ...addon })) }));
+    const lines = draft.map((line) => ({
+      ...line,
+      addons: line.addons.map((addon) => ({ ...addon })),
+    }));
     const items = lines.map((line) => cartItemToOrderItem(line));
     const notes = orderNotes.trim();
     const signature = JSON.stringify([guestTable.id, items, notes]);
@@ -1145,7 +1127,7 @@ export default function ServerStandalonePage() {
       // since KOT and bill can share a default printer and race its socket connection.
       void (async () => {
         await printKotForOrder(orderId, { ...enrichedOrder, items: newItems });
-        await printOrderSlip(orderId, enrichedOrder);
+        if ((await printOrderSlip(orderId)) === 'failed') toast.error(t('billPrintFailed'));
       })();
     } catch (error: unknown) {
       toastApiError(error, t('couldNotSendOrder'), apiErrorT);
@@ -1434,7 +1416,10 @@ export default function ServerStandalonePage() {
             className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground"
           >
             <span>{t('sentToKitchen')}</span>
-            <Ltr as="span" className="rounded bg-muted px-1.5 py-0.5 font-mono normal-case text-foreground">
+            <Ltr
+              as="span"
+              className="rounded bg-muted px-1.5 py-0.5 font-mono normal-case text-foreground"
+            >
               #{currentOrder.order_number}
             </Ltr>
           </p>
@@ -1451,42 +1436,45 @@ export default function ServerStandalonePage() {
 
       {/* The total and send button stay in view however long the sent list grows. */}
       <div className="sticky bottom-0 z-10 -mx-3 mt-4 bg-card px-3 pb-3">
-      <div className="flex items-center justify-between border-t border-border pt-3">
-        <span className="text-sm text-muted-foreground">{t('draftTotal')}</span>
-        <span className="text-lg font-bold">
-          <Ltr>{money(draftTotal, regional)}</Ltr>
-        </span>
-      </div>
-      {!selectedTableId && user ? (
-        <button
-          type="button"
-          data-testid="server-app-choose-table"
-          onClick={() => {
-            setMobileCartOpen(false);
-            setTablePickerOpen(true);
-            // Below the three-column layout the table list sits above the menu, out of view from here.
-            window.setTimeout(() => tablePickerRef.current?.scrollIntoView({ block: 'start' }), 350);
-          }}
-          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-amber-400 bg-amber-50 font-semibold text-amber-700"
-        >
-          <UtensilsCrossed size={17} />
-          {t('chooseTableFirst')}
-        </button>
-      ) : (
-        <button
-          onClick={sendDraft}
-          disabled={
-            !selectedTableId ||
-            orderLoadedTableId !== selectedTableId ||
-            draft.length === 0 ||
-            sending
-          }
-          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white disabled:opacity-50"
-        >
-          <Send size={17} />
-          {sending ? t('sending') : currentOrder ? t('addToOrder') : t('sendToKitchen')}
-        </button>
-      )}
+        <div className="flex items-center justify-between border-t border-border pt-3">
+          <span className="text-sm text-muted-foreground">{t('draftTotal')}</span>
+          <span className="text-lg font-bold">
+            <Ltr>{money(draftTotal, regional)}</Ltr>
+          </span>
+        </div>
+        {!selectedTableId && user ? (
+          <button
+            type="button"
+            data-testid="server-app-choose-table"
+            onClick={() => {
+              setMobileCartOpen(false);
+              setTablePickerOpen(true);
+              // Below the three-column layout the table list sits above the menu, out of view from here.
+              window.setTimeout(
+                () => tablePickerRef.current?.scrollIntoView({ block: 'start' }),
+                350,
+              );
+            }}
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-amber-400 bg-amber-50 font-semibold text-amber-700"
+          >
+            <UtensilsCrossed size={17} />
+            {t('chooseTableFirst')}
+          </button>
+        ) : (
+          <button
+            onClick={sendDraft}
+            disabled={
+              !selectedTableId ||
+              orderLoadedTableId !== selectedTableId ||
+              draft.length === 0 ||
+              sending
+            }
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white disabled:opacity-50"
+          >
+            <Send size={17} />
+            {sending ? t('sending') : currentOrder ? t('addToOrder') : t('sendToKitchen')}
+          </button>
+        )}
       </div>
     </>
   );
@@ -1512,7 +1500,10 @@ export default function ServerStandalonePage() {
               <span className="block truncate text-base font-semibold">{t('title')}</span>
               <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                 <span className="truncate">{headerTableText}</span>
-                <ChevronDown size={14} className={`shrink-0 transition-transform ${showTablePicker ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={14}
+                  className={`shrink-0 transition-transform ${showTablePicker ? 'rotate-180' : ''}`}
+                />
               </span>
             </button>
           ) : (
@@ -1531,7 +1522,10 @@ export default function ServerStandalonePage() {
               </span>
             </>
           ) : (
-            <span data-testid="server-app-guest-name" className="text-sm font-medium text-muted-foreground">
+            <span
+              data-testid="server-app-guest-name"
+              className="text-sm font-medium text-muted-foreground"
+            >
               {t('guestLabel')}
             </span>
           )}
@@ -1570,55 +1564,64 @@ export default function ServerStandalonePage() {
           className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
           {showTablePicker && (
-          <section ref={tablePickerRef} data-testid="server-app-table-picker" className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-card p-3">
-            <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-              {t('tables')}
-            </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              {ownedOrAllTables(tables, user?.id).map((table) => {
-                const selected = table.id === selectedTableId;
-                const order = table.activeOrder || table.current_order;
-                // Serving tables are light green, cleaning ones light yellow, free ones white.
-                const tone = order ? 'serving' : table.status === 'cleaning' ? 'cleaning' : 'available';
-                const toneClass = {
-                  serving: 'border-green-300 bg-green-100',
-                  cleaning: 'border-yellow-300 bg-yellow-100',
-                  available: 'border-gray-200 bg-white',
-                }[tone];
-                return (
-                  <button
-                    key={table.id}
-                    disabled={sending}
-                    // The picker stays open so the table's actions show before adding food.
-                    onClick={() => selectTable(table.id)}
-                    data-table-tone={tone}
-                    className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
-                  >
-                    <span className="block truncate text-sm font-semibold">
-                      {table.name || table.number}
-                    </span>
-                    <span className="text-xs text-gray-600">
-                      {order
-                        ? t('openOrder')
-                        : tone === 'cleaning'
-                          ? tTables('statusCleaning')
-                          : tTables('statusAvailable')}
-                      {order?.kitchen_counts && (
-                        <Ltr
-                          as="span"
-                          data-testid="table-kitchen-counts"
-                          title={t('kitchenCountsTitle', order.kitchen_counts)}
-                          className="ms-1 tabular-nums text-gray-500"
-                        >
-                          {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-{order.kitchen_counts.served}
-                        </Ltr>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+            <section
+              ref={tablePickerRef}
+              data-testid="server-app-table-picker"
+              className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-card p-3"
+            >
+              <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                {t('tables')}
+              </h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                {ownedOrAllTables(tables, user?.id).map((table) => {
+                  const selected = table.id === selectedTableId;
+                  const order = table.activeOrder || table.current_order;
+                  // Serving tables are light green, cleaning ones light yellow, free ones white.
+                  const tone = order
+                    ? 'serving'
+                    : table.status === 'cleaning'
+                      ? 'cleaning'
+                      : 'available';
+                  const toneClass = {
+                    serving: 'border-green-300 bg-green-100',
+                    cleaning: 'border-yellow-300 bg-yellow-100',
+                    available: 'border-gray-200 bg-white',
+                  }[tone];
+                  return (
+                    <button
+                      key={table.id}
+                      disabled={sending}
+                      // The picker stays open so the table's actions show before adding food.
+                      onClick={() => selectTable(table.id)}
+                      data-table-tone={tone}
+                      className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
+                    >
+                      <span className="block truncate text-sm font-semibold">
+                        {table.name || table.number}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        {order
+                          ? t('openOrder')
+                          : tone === 'cleaning'
+                            ? tTables('statusCleaning')
+                            : tTables('statusAvailable')}
+                        {order?.kitchen_counts && (
+                          <Ltr
+                            as="span"
+                            data-testid="table-kitchen-counts"
+                            title={t('kitchenCountsTitle', order.kitchen_counts)}
+                            className="ms-1 tabular-nums text-gray-500"
+                          >
+                            {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-
+                            {order.kitchen_counts.served}
+                          </Ltr>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
           )}
 
           <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
