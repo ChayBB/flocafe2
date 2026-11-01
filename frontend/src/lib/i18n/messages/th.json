@@ -961,7 +961,7 @@
     "externalOrderIdPlaceholder": "หมายเลขคำสั่งซื้อภายนอก",
     "orderHeld": "พักคำสั่งซื้อไว้สำหรับ {tableName}",
     "orderHeldFor": "พักคำสั่งซื้อไว้สำหรับ {table}",
-    "orderNotesPlaceholder": "หมายเหตุงานบริการ เช่น มีการประชุม มีเด็กเล็ก (ไม่บังคับ)",
+    "orderNotesPlaceholder": "หมายเหตุ (ไม่บังคับ)",
     "orderNumber": "คำสั่งซื้อ #{number}",
     "orderPaid": "ชำระคำสั่งซื้อ #{number} แล้ว!",
     "orderPaidWithPoints": "ชำระคำสั่งซื้อ #{number} แล้ว! เพิ่มคะแนนสะสม {points} คะแนน",
