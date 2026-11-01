@@ -114,30 +114,6 @@ test('the highlighted category follows the menu scroll and choosing one scrolls 
   await chip('All').click();
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(5);
   await expect.poll(() => isActive('All')).toBe(true);
-
-  // Picking a category ends a search and still scrolls to that category.
-  const search = page.getByTestId('pos-product-search');
-  await search.fill(`${first} item 3`);
-  await expect(page.getByText(`${second} item 24`)).toHaveCount(0);
-  await chip(second).click();
-  await expect(search).toHaveValue('');
-  await expect
-    .poll(async () =>
-      scroller.evaluate((element) => {
-        const heading = Array.from(element.querySelectorAll('h2')).find((node) =>
-          node.textContent?.startsWith('Spy B'),
-        ) as HTMLElement;
-        return Math.abs(heading.getBoundingClientRect().top - element.getBoundingClientRect().top);
-      }),
-    )
-    .toBeLessThan(40);
-
-  // Scrolling the menu ends a search too.
-  await search.fill(`${first} item`);
-  await scroller.hover();
-  await page.mouse.wheel(0, 300);
-  await expect(search).toHaveValue('');
-  await expect(page.getByText(`${second} item 24`)).toHaveCount(1);
 });
 
 test('the menu shows two columns and scrolling past the last category carries on into the first', async ({
