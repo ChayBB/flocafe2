@@ -218,15 +218,19 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       .filter((order) => order.items.length > 0);
   }, [conn.orders, stationId]);
 
-  // Items already on this display when it opens are not announced again, nor are items already ready.
+  // Items already in the kitchen when this display receives its orders are not announced, nor are items
+  // already ready. Every station counts, so switching station never reads out what was already there.
   const knownItemIdsRef = useRef<Set<number> | null>(null);
   const knownStatusesRef = useRef<Map<number, string>>(new Map());
   const lastReadyAtRef = useRef<Map<string, number>>(new Map());
   const readAloudEndedAtRef = useRef(-Infinity);
   const readyAlertEndedAtRef = useRef(-Infinity);
   const readyChainRef = useRef<Promise<void>>(Promise.resolve());
+  const ordersSynced = conn.ordersSynced;
   useEffect(() => {
-    const itemIds = new Set(orders.flatMap((order) => liveItems(order).map((item) => item.id)));
+    if (!ordersSynced) return;
+    const allLive = conn.orders.flatMap((order) => liveItems(order));
+    const itemIds = new Set(allLive.map((item) => item.id));
     const knownItems = knownItemIdsRef.current;
     const knownStatuses = knownStatusesRef.current;
     if (knownItems && soundSettingsRef.current.readAloud) {
@@ -302,10 +306,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       }
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
-    knownStatusesRef.current = new Map(
-      orders.flatMap((order) => liveItems(order).map((item) => [item.id, item.status || ''] as const)),
-    );
-  }, [orders, t]);
+    knownStatusesRef.current = new Map(allLive.map((item) => [item.id, item.status || ''] as const));
+  }, [orders, conn.orders, ordersSynced, t]);
 
   return (
     <div data-testid="kds-workspace" className="relative h-full flex-1 flex flex-col">

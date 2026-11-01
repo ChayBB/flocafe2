@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type SetStateAction } from 'react';
 import toast from 'react-hot-toast';
 import type { AxiosInstance } from 'axios';
 import { useTranslations, type AppConfig } from 'use-intl';
@@ -207,6 +207,8 @@ export interface KdsAlert {
 export interface UseKdsConnectionResult {
   user: KdsUser | null;
   orders: KdsOrder[];
+  /** False until the server has sent this session's orders; the empty list before that is not the kitchen. */
+  ordersSynced: boolean;
   alerts: KdsAlert[];
   stations: KdsStation[];
   counts: Record<string, number>;
@@ -274,7 +276,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   const statusLabel = (s: KitchenStatus) => t(STATUS_CONFIG[normalizeKitchenStatus(s)].labelKey);
 
   const [user, setUser] = useState<KdsUser | null>(null);
-  const [orders, setOrders] = useState<KdsOrder[]>([]);
+  const [orders, setOrdersState] = useState<KdsOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   // Keep initial render deterministic with static server output;
   // cleared asynchronously when no stored session exists.
@@ -288,6 +290,12 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   const [loginLoading, setLoginLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [alerts, setAlerts] = useState<KdsAlert[]>([]);
+  const [ordersSynced, setOrdersSynced] = useState(false);
+  // Server data always arrives as a reconcile function; a plain list only ever clears the board.
+  const setOrders = (next: SetStateAction<KdsOrder[]>) => {
+    setOrdersSynced(typeof next === 'function');
+    setOrdersState(next);
+  };
 
   const wsRef = useRef<WebSocket | null>(null);
   const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -625,7 +633,8 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
               authTimeout = null;
             }
             setUser((prev) => (prev ? { ...prev, ...msg.user, token: prev.token } : null));
-            setOrders((prev) => reconcileKdsOrders(prev, msg.orders || []));
+            const authOrders = msg.orders;
+            if (authOrders) setOrders((prev) => reconcileKdsOrders(prev, authOrders));
             setCounts(msg.counts || {});
             setConnected(true);
             setLoading(false);
@@ -894,6 +903,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   return {
     user,
     orders,
+    ordersSynced,
     alerts,
     stations,
     counts,

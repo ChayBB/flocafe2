@@ -70,6 +70,66 @@ async function recordSounds(page: Page) {
 
 const sounds = (page: Page) => page.evaluate(() => ({ ...(window as unknown as SoundLog) }));
 
+test('orders already in the kitchen when the display signs in or switches station are not read out again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
+  const run = Math.random().toString(36).slice(2, 7);
+  const categoryName = `Old ${run}`;
+  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, { headers, data: { name: categoryName } });
+  expect(category.status()).toBe(201);
+  const productName = `Soup ${run}`;
+  const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
+    headers,
+    data: {
+      name: productName,
+      category_id: (await category.json()).category.id,
+      price: 40,
+      tax_category_id: null,
+      tax_behavior: 'exempt',
+    },
+  });
+  expect(product.status()).toBe(201);
+  const productId = (await product.json()).product.id as string;
+  const placeOrder = async () => {
+    const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+      headers,
+      data: { type: 'takeaway', items: [{ product_id: productId, quantity: 1 }] },
+    });
+    expect(order.status()).toBe(201);
+    return (await order.json()).order as { order_number: string };
+  };
+  const old = await placeOrder();
+
+  await recordSounds(page);
+  await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  if (await page.getByTestId('kds-login-form').isVisible()) {
+    await page.getByTestId('kds-login-email').fill('manager@flo.local');
+    await page.getByTestId('kds-login-password').fill('E2ePass123!');
+    await page.getByTestId('kds-login-submit').click();
+  }
+  await expect(page.getByTestId('kds-workspace')).toBeVisible();
+  await expect(page.getByText(`#${old.order_number}`).first()).toBeVisible({ timeout: 15000 });
+  await page.getByTestId('kds-station-select').selectOption({ label: categoryName });
+  await page.getByTestId('kds-station-select').selectOption({ index: 0 });
+  await page.waitForTimeout(2000);
+  const spokenAboutProduct = async () =>
+    (await sounds(page)).__spoken.filter((text) => text.includes(productName));
+  expect(await spokenAboutProduct()).toEqual([]);
+
+  // A new order is read out once, by its items and without its order number.
+  const fresh = await placeOrder();
+  await expect.poll(spokenAboutProduct, { timeout: 15000 }).toHaveLength(1);
+  const [spoken] = await spokenAboutProduct();
+  expect(spoken).toContain(`New order: 1 ${productName}`);
+  expect(spoken).not.toContain(fresh.order_number);
+  expect(spoken).not.toContain(old.order_number);
+  await page.waitForTimeout(1500);
+  expect(await spokenAboutProduct()).toHaveLength(1);
+});
+
 test('KDS sound switches turn reading new items aloud and the ready-to-serve announcement on and off', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = { Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}` };
@@ -151,17 +211,17 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
-  expect((await sounds(page)).__spoken.join(' | ')).toContain(`Order ${first.order_number}: 2 ${productName}`);
+  expect((await sounds(page)).__spoken.join(' | ')).toContain(`New order: 2 ${productName}`);
   const bellsBefore = (await sounds(page)).__bells;
   await markReady(first.items[0].id);
   await expect.poll(async () => (await sounds(page)).__bells, { timeout: 15000 }).toBe(bellsBefore + 1);
   await expect
     .poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 })
-    .toContain(`Order ${first.order_number} is ready to serve`);
+    .toContain('An order is ready to serve');
   // The new order is read out first, and the ready announcement waits at least 3 seconds after it.
   const log = await sounds(page);
-  const readAt = log.__spokenAt[log.__spoken.findIndex((text) => text.includes(`Order ${first.order_number}: 2`))];
-  const readyAt = log.__spokenAt[log.__spoken.indexOf(`Order ${first.order_number} is ready to serve`)];
+  const readAt = log.__spokenAt[log.__spoken.findIndex((text) => text.includes(`New order: 2 ${productName}`))];
+  const readyAt = log.__spokenAt[log.__spoken.indexOf('An order is ready to serve')];
   expect(readyAt - readAt).toBeGreaterThanOrEqual(2900);
   // The rest of the order turning ready within 10 seconds is not announced again.
   const afterFirst = await sounds(page);
