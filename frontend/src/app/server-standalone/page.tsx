@@ -277,6 +277,8 @@ export default function ServerStandalonePage() {
   } | null>(null);
   const sendSeqRef = useRef(0);
   const addonModalSendSeqRef = useRef(0);
+  // The phone's ticket sheet would cover the edit dialog, so it steps aside and comes back after.
+  const reopenCartAfterEditRef = useRef(false);
   const editingDraftSendSeqRef = useRef(0);
   const selectedTableIdRef = useRef('');
   // The linked table is applied once; after an order is sent the table is cleared for the next one.
@@ -703,6 +705,8 @@ export default function ServerStandalonePage() {
   function openEditDraftModal(line: DraftLine) {
     if (sendInFlightRef.current) return;
     editingDraftSendSeqRef.current = sendSeqRef.current;
+    reopenCartAfterEditRef.current = mobileCartOpen;
+    setMobileCartOpen(false);
     setEditingDraftLine(line);
   }
 
@@ -1775,7 +1779,11 @@ export default function ServerStandalonePage() {
             }
             updateDraftLine(editingDraftLine.id, quantity, addons, instructions, variant);
           }}
-          onClose={() => setEditingDraftLine(null)}
+          onClose={() => {
+            setEditingDraftLine(null);
+            if (reopenCartAfterEditRef.current) setMobileCartOpen(true);
+            reopenCartAfterEditRef.current = false;
+          }}
         />
       )}
     </div>

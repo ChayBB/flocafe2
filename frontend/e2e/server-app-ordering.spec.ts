@@ -177,6 +177,44 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
   });
 
+  test('on a phone, editing an item from the ticket sheet shows the edit dialog on top and returns to the sheet', async ({
+    page,
+  }) => {
+    const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+    const serverToken = getE2eToken('e2e-server', 'server@flo.local', 'server');
+    const tableName = `Edit sheet ${Date.now()}`;
+    const created = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers: { Authorization: `Bearer ${managerToken}` },
+      data: { number: tableName, capacity: 2 },
+    });
+    expect(created.ok()).toBeTruthy();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openServerApp(page, serverToken);
+    await pickTable(page, tableName);
+    await page.getByTestId('server-app-add-food').click();
+    const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
+    await search.fill('E2E Coffee');
+    await search.press('Enter');
+    await page.getByTestId('server-app-cart-button').click();
+    const sheet = page.getByRole('dialog');
+    await sheet.getByRole('button', { name: 'Edit', exact: true }).click();
+
+    const instructions = page.getByPlaceholder('e.g., no onions, extra spicy...');
+    await expect(instructions).toBeVisible();
+    const onTop = () =>
+      instructions.evaluate((input) => {
+        const box = input.getBoundingClientRect();
+        return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input;
+      });
+    await expect.poll(onTop).toBe(true);
+    await instructions.fill('extra spicy');
+    await page.getByRole('button', { name: /^Save/ }).click();
+
+    await expect(instructions).toHaveCount(0);
+    await expect(page.getByRole('dialog').getByText('extra spicy')).toBeVisible();
+  });
+
   test('freezes draft controls, pre-opened customizer, and table switching during a delayed send without blocking on printing', async ({
     page,
   }) => {
