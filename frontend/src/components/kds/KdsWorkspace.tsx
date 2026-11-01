@@ -45,6 +45,8 @@ import {
   type KdsMessage,
 } from '@/lib/kds-messages';
 import { TERMINAL_ITEM_STATUSES } from '@shared/order-item-status';
+import { optionsNote, spokenItemName, withoutOptionsNote } from '@/lib/item-options-note';
+import { parseVariantSelection } from '@/lib/printer/item-heading';
 
 const INACTIVE_STAGES_KEY = 'flocafe:kds-inactive-stages';
 type InactiveStages = Record<string, KitchenStatus[]>;
@@ -69,10 +71,10 @@ const READ_ALOUD_PAUSE_MS = 700;
 // Items switched to take-away are still cooked, so they are read out and announced; cancelled ones are not.
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   return (order.items || []).filter(
-    (item) => !TERMINAL_ITEM_STATUSES.includes(item.status || '') && item.service_change !== 'cancelled',
+    (item) =>
+      !TERMINAL_ITEM_STATUSES.includes(item.status || '') && item.service_change !== 'cancelled',
   );
 }
-
 
 /** Adds new notices to the message bar; each beeps (take-away already beeps on its own) and is read out. */
 function announceKdsMessages(fresh: KdsMessage[]) {
@@ -85,18 +87,30 @@ function announceKdsMessages(fresh: KdsMessage[]) {
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
   return new Map(
-    orders.flatMap((order) => (order.items || []).map((item) => [item.id, item.service_change ?? null] as const)),
+    orders.flatMap((order) =>
+      (order.items || []).map((item) => [item.id, item.service_change ?? null] as const),
+    ),
   );
 }
 
-export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionResult; serverDefault: 'tabs' | 'kanban' | null }) {
+export function KdsWorkspace({
+  conn,
+  serverDefault,
+}: {
+  conn: UseKdsConnectionResult;
+  serverDefault: 'tabs' | 'kanban' | null;
+}) {
   const t = useTranslations('kds');
   const { viewMode, setViewMode } = useKdsView(serverDefault);
   const screen = useKdsScreenMode();
 
   // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
   // so it disappearing on that tap never shifts the board under the finger.
-  const soundLocked = useSyncExternalStore(subscribeKdsAlertSound, isKdsAlertSoundLocked, () => false);
+  const soundLocked = useSyncExternalStore(
+    subscribeKdsAlertSound,
+    isKdsAlertSoundLocked,
+    () => false,
+  );
   useEffect(() => {
     window.addEventListener('pointerdown', unlockKdsAlertSound);
     window.addEventListener('keydown', unlockKdsAlertSound);
@@ -143,7 +157,9 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   const knownPlacesRef = useRef<Map<number, KdsItemPlace> | null>(null);
   useEffect(() => {
     const places = kdsItemPlaces(conn.orders, (order) =>
-      order.table?.name ? t('tableLabel', { name: order.table.name }) : t('messageOrder', { number: order.order_number }),
+      order.table?.name
+        ? t('tableLabel', { name: order.table.name })
+        : t('messageOrder', { number: order.order_number }),
     );
     const known = knownPlacesRef.current;
     knownPlacesRef.current = places;
@@ -159,12 +175,18 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
               place: change.place,
               item: change.item,
             })
-          : t(change.kind === 'move' ? 'messageMove' : 'messageMerge', { from: change.from, to: change.to }),
+          : t(change.kind === 'move' ? 'messageMove' : 'messageMerge', {
+              from: change.from,
+              to: change.to,
+            }),
     }));
     announceKdsMessages(notices.filter((notice) => notice.kind !== 'cancelled'));
     // A cancellation only updates an item's take-away notice; the card already beeps for it.
-    const cancelled = cancelKdsTakeawayMessages(notices.filter((notice) => notice.kind === 'cancelled'));
-    if (cancelled.length > 0) speakKds(cancelled.map((notice) => notice.text).join('. '), kdsSpeechLang());
+    const cancelled = cancelKdsTakeawayMessages(
+      notices.filter((notice) => notice.kind === 'cancelled'),
+    );
+    if (cancelled.length > 0)
+      speakKds(cancelled.map((notice) => notice.text).join('. '), kdsSpeechLang());
   }, [conn.orders, t]);
   useEffect(() => {
     const seen = readSeenKdsAlerts();
@@ -190,7 +212,9 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   }, [conn.alerts, t]);
   // Every display opens on all stations; picking one narrows the board to that category.
   const [selectedStation, setSelectedStation] = useState('');
-  const stationId = conn.stations.some((station) => station.id === selectedStation) ? selectedStation : '';
+  const stationId = conn.stations.some((station) => station.id === selectedStation)
+    ? selectedStation
+    : '';
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inactiveStages, setInactiveStages] = useState<InactiveStages>(readInactiveStages);
   const inactiveStatuses = inactiveStages[stationId] ?? NONE_INACTIVE;
@@ -247,9 +271,14 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
         const chunks: string[] = [];
         let chunk = '';
         for (const item of fresh) {
-          const text = t('readAloudItem', { name: item.product_name, quantity: item.quantity });
+          const variantName = parseVariantSelection(item.variant_selection)?.name;
+          const name = spokenItemName(item.product_name, variantName, item.addons);
+          const text = t('readAloudItem', { name, quantity: item.quantity });
           chunk = chunk ? `${chunk}, ${text}` : text;
-          const note = item.special_instructions?.trim();
+          const note = withoutOptionsNote(
+            item.special_instructions,
+            optionsNote(variantName, item.addons),
+          );
           if (note) {
             chunks.push(chunk, note);
             chunk = '';
@@ -285,7 +314,10 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     const readyPhrases = new Map<string, string>();
     for (const order of orders) {
       const turnedReady = liveItems(order).some(
-        (item) => item.status === 'ready' && knownStatuses.has(item.id) && knownStatuses.get(item.id) !== 'ready',
+        (item) =>
+          item.status === 'ready' &&
+          knownStatuses.has(item.id) &&
+          knownStatuses.get(item.id) !== 'ready',
       );
       if (!turnedReady) continue;
       const key = order.table?.name ? `table:${order.table.name}` : `order:${order.id}`;
@@ -302,8 +334,10 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       const lang = kdsSpeechLang();
       const gapMs = readKdsReadyDelay('gap') * 1000;
       // With a delay between tables each table waits its turn; without one they share a bell.
-      const announcements = gapMs > 0 ? [...readyPhrases.values()] : [[...readyPhrases.values()].join('. ')];
-      const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : undefined);
+      const announcements =
+        gapMs > 0 ? [...readyPhrases.values()] : [[...readyPhrases.values()].join('. ')];
+      const sleep = (ms: number) =>
+        ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : undefined;
       for (const announcement of announcements) {
         // The wait between tables happens outside the speech queue, so new orders are still read out.
         readyChainRef.current = readyChainRef.current
@@ -331,7 +365,9 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       const note = order.special_instructions?.trim();
       if (note) readOrderNotes.set(order.id, note);
     }
-    knownStatusesRef.current = new Map(allLive.map((item) => [item.id, item.status || ''] as const));
+    knownStatusesRef.current = new Map(
+      allLive.map((item) => [item.id, item.status || ''] as const),
+    );
   }, [orders, conn.orders, ordersSynced, t]);
 
   return (

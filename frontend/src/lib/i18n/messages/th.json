@@ -924,7 +924,7 @@
     "failedToUpdateDiscount": "อัปเดตส่วนลดไม่สำเร็จ",
     "flatAmount": "จำนวนเงินคงที่",
     "free": "ฟรี",
-    "freeAddon": "ฟรี",
+    "freeAddon": "ไม่บวกเพิ่ม",
     "generateBillFailed": "สร้างบิลไม่สำเร็จ",
     "generating": "กำลังสร้าง…",
     "hold": "พัก",
