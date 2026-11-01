@@ -1450,6 +1450,7 @@
     "csvImporting": "กำลังนำเข้า…",
     "csvMissingFields": "บางแถวไม่มีข้อมูล - นำเข้าโดยใช้ค่าเริ่มต้น",
     "csvModalTitle": "นำเข้า / ส่งออก CSV - {type}",
+    "searchProductsTab": "ค้น ชื่อเมนู หมวดหมู่ ราคา",
     "csvProductsHelp": "คอลัมน์: id (เว้นว่างสำหรับสินค้าใหม่), sku, name, category, price, description, cost, tax_category, tax_behavior, cashback_percent, tags (veg/non_veg/...), is_active (yes/no) เว้น tax_category ว่างหากไม่มีภาษี ใส่ราคา \"ตามน้ำหนัก\" ได้ สินค้าใหม่จะนำเข้าที่ราคา 0 แล้วค่อยตั้งราคาภายหลัง - ดาวน์โหลด \"ข้อมูลปัจจุบัน\" เพื่อรับรหัสสินค้า แก้ไข แล้วอัปโหลดอีกครั้งเพื่ออัปเดตสินค้าเดิม",
     "csvSkippedErrors": "ข้ามแถวที่มีข้อผิดพลาด",
     "defaultCategoryTag": "{name} (ค่าเริ่มต้น)",

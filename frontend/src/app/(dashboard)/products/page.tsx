@@ -933,6 +933,7 @@ export default function ProductsPage() {
             categories.find(
               (c) => String(c.id) === String(product.category_id || product.category?.id),
             )?.name,
+            String(Number(product.price)),
           ]),
         );
   const visibleCategories =
@@ -1027,8 +1028,8 @@ export default function ProductsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={tCommon('search')}
-              aria-label={tCommon('search')}
+              placeholder={activeTab === 'products' ? t('searchProductsTab') : tCommon('search')}
+              aria-label={activeTab === 'products' ? t('searchProductsTab') : tCommon('search')}
               className="w-full rounded-lg border border-border bg-card py-2 ps-9 pe-9 text-sm outline-none focus:ring-2 focus:ring-brand"
             />
             {search !== '' && (
