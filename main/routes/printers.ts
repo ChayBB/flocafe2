@@ -32,6 +32,8 @@ import {
   printKOTDetailed,
   printDeliverySlipDetailed,
   printPaymentRequestSlip,
+  buildPaymentRequestSlipHtml,
+  WINDOWS_DOCUMENT_PRINTER_MARKER,
   detectConnectedPrinters,
   prepareReceipt,
   escPosToText,
@@ -1547,7 +1549,9 @@ router.post(
       }
       if (orderHasWeightPending(db, order.id)) return sendWeightPendingError(res);
       const billTotals = (
-        db.prepare('SELECT total FROM bills WHERE order_id = ?').all(order.id) as { total: number }[]
+        db.prepare('SELECT total FROM bills WHERE order_id = ?').all(order.id) as {
+          total: number;
+        }[]
       ).map((bill) => Number(bill.total || 0));
       const ceiling = Math.max(Number(order.total || 0), ...billTotals);
       if (amount > ceiling + 0.005) {
@@ -1561,6 +1565,34 @@ router.post(
           .status(404)
           .json({ error: 'No QR payment account is set up', code: missingQrAccountCode(qrKind) });
       }
+      const rounded = Number(amount.toFixed(2));
+      const slip = {
+        orderNumber: String(order.order_number ?? ''),
+        tableName: String(order.table?.name ?? ''),
+        createdAt: String(order.created_at ?? ''),
+        amount: rounded,
+        orderTotal: Number(order.total || 0),
+        items: getEffectiveOrderItems(db, String(order.id))
+          .filter((item) => !isTerminalItemStatus(item.status))
+          .map((item) => ({
+            name: formatVariantItemHeading(
+              String(item.product_name ?? ''),
+              parseVariantSelection(item.variant_selection),
+            ),
+            quantity: Number(item.quantity) || 0,
+            total: Number(item.total) || 0,
+            addons: (Array.isArray(item.addons) ? item.addons : [])
+              .map((addon: { name?: unknown }) => String(addon?.name ?? ''))
+              .filter(Boolean),
+          })),
+        qrPayload: buildPromptPayPayload(target, rounded),
+      };
+      const language = resolveTenantReceiptLanguages(db).primary;
+      // A document printer or no printer at all prints this page through the system print dialog.
+      if (req.body?.format === 'html') {
+        return res.json({ html: await buildPaymentRequestSlipHtml(slip, language) });
+      }
+
       const printer = db
         .prepare(
           `SELECT * FROM printers
@@ -1575,39 +1607,20 @@ router.post(
           code: 'no_printer',
         });
       }
-
-      const rounded = Number(amount.toFixed(2));
       const result = await printPaymentRequestSlip(
-        {
-          orderNumber: String(order.order_number ?? ''),
-          tableName: String(order.table?.name ?? ''),
-          createdAt: String(order.created_at ?? ''),
-          amount: rounded,
-          orderTotal: Number(order.total || 0),
-          items: getEffectiveOrderItems(db, String(order.id))
-            .filter((item) => !isTerminalItemStatus(item.status))
-            .map((item) => ({
-              name: formatVariantItemHeading(
-                String(item.product_name ?? ''),
-                parseVariantSelection(item.variant_selection),
-              ),
-              quantity: Number(item.quantity) || 0,
-              total: Number(item.total) || 0,
-              addons: (Array.isArray(item.addons) ? item.addons : [])
-                .map((addon: { name?: unknown }) => String(addon?.name ?? ''))
-                .filter(Boolean),
-            })),
-          qrPayload: buildPromptPayPayload(target, rounded),
-        },
+        slip,
         printer as any,
         getHttpRequestSignal(req),
-        resolveTenantReceiptLanguages(db).primary,
+        language,
       );
       if (result.ok) return res.json({ success: true, warnings: result.warnings || [] });
       return res.status(502).json({
         error: result.detail || 'Payment request print failed. Check printer connection.',
         detail: result.detail,
         failure_class: result.failureClass,
+        ...(result.detail?.includes(WINDOWS_DOCUMENT_PRINTER_MARKER)
+          ? { code: 'document_printer' }
+          : {}),
       });
     } catch (error: unknown) {
       console.error('[Print Payment Request] Error:', error);

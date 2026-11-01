@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from 'use-intl';
 import api from '@/lib/api';
+import { printHtmlInFrame } from '@/lib/printer/print-html-frame';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 type QrState = 'loading' | 'ready' | 'missing' | 'failed';
@@ -34,6 +35,19 @@ export default function QrPaymentPanel({
       toast.success(t('qrPrintSent'));
     } catch (error) {
       const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'document_printer') {
+        try {
+          const { data } = await api.post('/printers/print-payment-request', {
+            orderId,
+            amount,
+            kind,
+            format: 'html',
+          });
+          toast(t('qrPrintSystemDialog'), { icon: 'ℹ️' });
+          printHtmlInFrame(data.html);
+          return;
+        } catch {}
+      }
       toast.error(code === 'no_printer' ? t('qrPrintNoPrinter') : t('qrPrintFailed'));
     } finally {
       setPrinting(false);
@@ -55,7 +69,9 @@ export default function QrPaymentPanel({
           if (cancelled) return;
           const code = error?.response?.data?.code;
           setState(
-            code === 'qr_account_missing' || code === 'bank_qr_account_missing' ? 'missing' : 'failed',
+            code === 'qr_account_missing' || code === 'bank_qr_account_missing'
+              ? 'missing'
+              : 'failed',
           );
         });
     }, 300);

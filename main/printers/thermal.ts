@@ -1,4 +1,8 @@
-import { renderPaymentRequestSlip, type PaymentRequestSlipData } from './payment-request-slip';
+import {
+  renderPaymentRequestSlip,
+  renderPaymentRequestSlipHtml,
+  type PaymentRequestSlipData,
+} from './payment-request-slip';
 import * as net from 'net';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1306,11 +1310,54 @@ export async function printDeliverySlip(
   }
 }
 
+type PaymentRequestSlipOrder = Omit<
+  PaymentRequestSlipData,
+  'businessName' | 'businessAddress' | 'businessPhone' | 'taxId'
+>;
+
+function paymentRequestSlipContext(slip: PaymentRequestSlipOrder, language?: string) {
+  const countryCode = getSettingValue('country') ?? '';
+  const currencyDisplayValue = getSettingValue('currency_display');
+  return {
+    slip: {
+      ...slip,
+      businessName:
+        getSettingValue('bill_show_name') === 'false'
+          ? ''
+          : (getSettingValue('business_name') ?? ''),
+      businessAddress:
+        getSettingValue('bill_show_address') === 'false'
+          ? ''
+          : (getSettingValue('business_address') ?? ''),
+      businessPhone:
+        getSettingValue('bill_show_phone') === 'false'
+          ? ''
+          : (getSettingValue('business_phone') ?? ''),
+      taxId:
+        getSettingValue('bill_show_tax_id') === 'true'
+          ? (getSettingValue('tax_registration_number') ?? '')
+          : '',
+    },
+    language: normalizePrintLanguage(language ?? getSettingValue('language') ?? undefined),
+    locale: countryCode ? (getCountryByCode(countryCode)?.locale ?? 'en-US') : 'en-US',
+    currency: resolveTenantCurrency(getSettingValue('currency') ?? '', countryCode),
+    currencyDisplay: ['rial', 'toman', 'toman_short'].includes(currencyDisplayValue ?? '')
+      ? (currencyDisplayValue as CurrencyDisplay)
+      : undefined,
+    digits: (getSettingValue('number_digits') === 'latin' ? 'latin' : 'locale') as DigitMode,
+  };
+}
+
+export function buildPaymentRequestSlipHtml(
+  slip: PaymentRequestSlipOrder,
+  language?: string,
+): Promise<string> {
+  const context = paymentRequestSlipContext(slip, language);
+  return renderPaymentRequestSlipHtml(context.slip, context);
+}
+
 export async function printPaymentRequestSlip(
-  slip: Omit<
-    PaymentRequestSlipData,
-    'businessName' | 'businessAddress' | 'businessPhone' | 'taxId'
-  >,
+  slip: PaymentRequestSlipOrder,
   targetPrinter?: {
     readonly id?: unknown;
     readonly name?: unknown;
@@ -1327,55 +1374,25 @@ export async function printPaymentRequestSlip(
     if (!printer) return { ok: false, detail: 'No printer configured' };
 
     const { profile, columns, capabilities } = resolvePrinterContext(printer);
-    const countryCode = getSettingValue('country') ?? '';
-    const locale = countryCode ? (getCountryByCode(countryCode)?.locale ?? 'en-US') : 'en-US';
-    const currency = resolveTenantCurrency(getSettingValue('currency') ?? '', countryCode);
-    const currencyDisplayValue = getSettingValue('currency_display');
-    const currencyDisplay = ['rial', 'toman', 'toman_short'].includes(currencyDisplayValue ?? '')
-      ? (currencyDisplayValue as CurrencyDisplay)
-      : undefined;
-    const digits: DigitMode = getSettingValue('number_digits') === 'latin' ? 'latin' : 'locale';
-    const slipLanguage = normalizePrintLanguage(
-      language ?? getSettingValue('language') ?? undefined,
-    );
+    const context = paymentRequestSlipContext(slip, language);
+    const { locale, currency, currencyDisplay, digits, language: slipLanguage } = context;
     const widthDots = capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576);
     const maxBandHeight = capabilities.raster?.maxBandHeight ?? 200;
     const renderWith = (caps: ThermalPrinterCapabilities) =>
-      renderPaymentRequestSlip(
-        {
-          ...slip,
-          businessName:
-            getSettingValue('bill_show_name') === 'false'
-              ? ''
-              : (getSettingValue('business_name') ?? ''),
-          businessAddress:
-            getSettingValue('bill_show_address') === 'false'
-              ? ''
-              : (getSettingValue('business_address') ?? ''),
-          businessPhone:
-            getSettingValue('bill_show_phone') === 'false'
-              ? ''
-              : (getSettingValue('business_phone') ?? ''),
-          taxId:
-            getSettingValue('bill_show_tax_id') === 'true'
-              ? (getSettingValue('tax_registration_number') ?? '')
-              : '',
-        },
-        {
-          columns,
-          language: slipLanguage,
-          locale,
-          currency,
-          currencyDisplay,
-          digits,
-          useUnicode: false,
-          arabicShaping: caps.shaping.arabic,
-          cutMode: profile.cutMode,
-          capabilities: caps,
-          widthDots,
-          maxBandHeight,
-        },
-      );
+      renderPaymentRequestSlip(context.slip, {
+        columns,
+        language: slipLanguage,
+        locale,
+        currency,
+        currencyDisplay,
+        digits,
+        useUnicode: false,
+        arabicShaping: caps.shaping.arabic,
+        cutMode: profile.cutMode,
+        capabilities: caps,
+        widthDots,
+        maxBandHeight,
+      });
 
     let data: Buffer;
     const warnings: PrintWarning[] = [];

@@ -4,12 +4,7 @@ import type { PrinterCutMode } from './profiles';
 import type { ThermalPrinterCapabilities } from '../../shared/print/thermal-capabilities';
 import { encodeGsV0Band, type RasterBand } from '../../shared/print/raster';
 import { displayCellWidth } from '../../shared/print/width';
-import {
-  buildEscPos,
-  truncateShapedLine,
-  wrapText,
-  type PrintWarning,
-} from './formatting-helpers';
+import { buildEscPos, truncateShapedLine, wrapText, type PrintWarning } from './formatting-helpers';
 
 const QR_QUIET_MODULES = 2;
 const QR_MODULE_DOTS = 7;
@@ -85,6 +80,71 @@ const LABELS: Record<
   },
 };
 
+export interface PaymentRequestSlipHtmlOptions {
+  readonly language: string;
+  readonly locale: string;
+  readonly currency: string;
+  readonly currencyDisplay?: CurrencyDisplay;
+  readonly digits?: DigitMode;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+/** The same slip as a page, for document printers (PDF, XPS) that cannot take ESC/POS. */
+export async function renderPaymentRequestSlipHtml(
+  slip: PaymentRequestSlipData,
+  opts: PaymentRequestSlipHtmlOptions,
+): Promise<string> {
+  const labels = LABELS[opts.language] ?? LABELS.en;
+  const money = (value: number) =>
+    escapeHtml(
+      formatMoney(value, opts.currency, opts.locale, {
+        currencyDisplay: opts.currencyDisplay,
+        digits: opts.digits,
+      }),
+    );
+  const qr = await QRCode.toDataURL(slip.qrPayload, {
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 480,
+  });
+  const row = (left: string, right: string) =>
+    `<tr><td>${left}</td><td class="num">${right}</td></tr>`;
+  const header = [
+    slip.businessName ? `<div class="shop">${escapeHtml(slip.businessName)}</div>` : '',
+    slip.businessAddress ? `<div>${escapeHtml(slip.businessAddress)}</div>` : '',
+    slip.businessPhone ? `<div>${escapeHtml(`${labels.tel}: ${slip.businessPhone}`)}</div>` : '',
+    slip.taxId ? `<div>${escapeHtml(`${labels.taxId}: ${slip.taxId}`)}</div>` : '',
+  ].join('');
+  const items = slip.items
+    .map((item) =>
+      row(
+        escapeHtml(`${item.quantity}x ${item.name}`) +
+          item.addons.map((addon) => `<div class="addon">+ ${escapeHtml(addon)}</div>`).join(''),
+        money(item.total),
+      ),
+    )
+    .join('');
+  const totals =
+    row(escapeHtml(labels.total), money(slip.orderTotal)) +
+    (Math.abs(slip.orderTotal - slip.amount) > 0.005
+      ? row(escapeHtml(labels.payByQr), money(slip.amount))
+      : '');
+  return `<!doctype html><html lang="${escapeHtml(opts.language)}"><head><meta charset="utf-8"><title>${escapeHtml(labels.title)}</title><style>
+    body{font-family:sans-serif;font-size:12px;max-width:80mm;margin:0 auto;padding:4mm;color:#000}
+    .center{text-align:center}.shop{font-size:16px;font-weight:700}
+    h1{font-size:15px;margin:10px 0;text-align:center}
+    table{width:100%;border-collapse:collapse}td{padding:2px 0;vertical-align:top}.num{text-align:end;white-space:nowrap}
+    .addon{color:#555;font-size:11px}.totals td{border-top:1px solid #000;font-weight:700}
+    .amount{font-size:22px;font-weight:700;text-align:center;margin:10px 0}img{display:block;width:60mm;max-width:100%;margin:0 auto}
+  </style></head><body><div class="center">${header}</div><h1>${escapeHtml(labels.title)}</h1>
+  <div>${escapeHtml(`${labels.order}: ${slip.orderNumber}`)}</div>${slip.tableName ? `<div>${escapeHtml(`${labels.table}: ${slip.tableName}`)}</div>` : ''}${slip.createdAt ? `<div>${escapeHtml(slip.createdAt)}</div>` : ''}
+  <table>${items}</table><table class="totals">${totals}</table>
+  <div class="amount">${money(slip.amount)}</div><img src="${qr}" alt="QR"><div class="center">${escapeHtml(labels.scan)}</div></body></html>`;
+}
+
 function truncateToWidth(text: string, width: number): string {
   let out = '';
   for (const char of text) {
@@ -150,7 +210,9 @@ export function renderPaymentRequestSlip(
     });
   const row = (left: string, right: string) => {
     const room = Math.max(1, cols - displayCellWidth(right) - 1);
-    const label = fit(left.length > 0 && displayCellWidth(left) > room ? truncateToWidth(left, room) : left);
+    const label = fit(
+      left.length > 0 && displayCellWidth(left) > room ? truncateToWidth(left, room) : left,
+    );
     const gap = Math.max(1, cols - displayCellWidth(label) - displayCellWidth(right));
     return label + ' '.repeat(gap) + right;
   };
@@ -159,7 +221,8 @@ export function renderPaymentRequestSlip(
   for (const part of wrapText(slip.businessAddress, cols)) {
     if (part.trim()) lines.push('{CENTER}' + part + '{/CENTER}');
   }
-  if (slip.businessPhone) lines.push('{CENTER}' + fit(`${labels.tel}: ${slip.businessPhone}`) + '{/CENTER}');
+  if (slip.businessPhone)
+    lines.push('{CENTER}' + fit(`${labels.tel}: ${slip.businessPhone}`) + '{/CENTER}');
   if (slip.taxId) lines.push('{CENTER}' + fit(`${labels.taxId}: ${slip.taxId}`) + '{/CENTER}');
   lines.push('');
   lines.push('{CENTER}{BOLD}' + fit(labels.title) + '{/BOLD}{/CENTER}');
@@ -178,7 +241,9 @@ export function renderPaymentRequestSlip(
     lines.push(row(labels.payByQr, money(slip.amount)));
   }
   lines.push('');
-  lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}' + fit(amountText) + '{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
+  lines.push(
+    '{CENTER}{BOLD}{DOUBLE_HEIGHT}' + fit(amountText) + '{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}',
+  );
   lines.push('');
   const qrBytes = buildQrRasterBytes(slip.qrPayload, opts.widthDots, opts.maxBandHeight);
   lines.push(`{RAW_BYTES:${Buffer.from(qrBytes).toString('base64')}}`);

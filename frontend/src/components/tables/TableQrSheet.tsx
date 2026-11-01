@@ -6,6 +6,7 @@ import { useTranslations } from 'use-intl';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { downloadBlob } from '@/lib/download';
+import { printHtmlInFrame } from '@/lib/printer/print-html-frame';
 
 interface TableQr {
   id: string;
@@ -69,22 +70,13 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
 
   const printSheet = () => {
     if (!qrs || qrs.length === 0) return;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument;
-    if (!doc) {
-      frame.remove();
-      return;
-    }
     const cards = qrs
       .map(
         (qr) =>
           `<div class="card"><div class="name">${escapeHtml(qr.name)}</div><img src="${qr.data_url}" alt="QR"><div class="menu">${escapeHtml(t('tableQrMenu'))}</div>${zoneName ? `<div class="zone">${escapeHtml(zoneName)}</div>` : ''}</div>`,
       )
       .join('');
-    doc.open();
-    doc.write(
+    printHtmlInFrame(
       `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(t('tableQrTitle'))}</title><style>
         body{font-family:sans-serif;margin:12mm}
         .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72mm,1fr));gap:8mm}
@@ -95,15 +87,6 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
         .zone{font-size:10pt;color:#555}
       </style></head><body><div class="grid">${cards}</div></body></html>`,
     );
-    doc.close();
-    const win = frame.contentWindow;
-    if (!win) {
-      frame.remove();
-      return;
-    }
-    win.onafterprint = () => frame.remove();
-    win.focus();
-    win.print();
   };
 
   // One PNG holds every card: a save dialog per table would be one dialog per QR code.

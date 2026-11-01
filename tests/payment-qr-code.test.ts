@@ -20,20 +20,26 @@ const {
   createApp,
   startServer,
   seedOwnerUser,
+  seedCategory,
+  seedProduct,
   api,
   assertOrThrow,
   assertEqualOrThrow,
   closeDatabase,
 } = require('./helpers/test-setup');
 const { paymentMethodRoutes } = require('../main/routes/payment-methods');
+const { printerRoutes } = require('../main/routes/printers');
 const { crc16Ccitt } = require('../main/lib/promptpay');
 
 async function main() {
   console.log('QR payment account and code');
   console.log('='.repeat(60));
   const db = initTestDb();
-  const { authHeader } = seedOwnerUser(db);
-  const app = createApp({ '/api/payment-methods': paymentMethodRoutes });
+  const { authHeader, userId } = seedOwnerUser(db);
+  const app = createApp({
+    '/api/payment-methods': paymentMethodRoutes,
+    '/api/printers': printerRoutes,
+  });
   const { baseUrl, server } = await startServer(app);
   const qr = (amount: unknown) =>
     api(baseUrl, `/api/payment-methods/qr-code?amount=${amount}`, { headers: authHeader });
@@ -62,7 +68,10 @@ async function main() {
 
     const ok = await qr(267.5);
     assertEqualOrThrow(ok.status, 200, 'QR is created once an account exists');
-    assertOrThrow(String(ok.data.data_url).startsWith('data:image/png;base64,'), 'QR is a PNG data URL');
+    assertOrThrow(
+      String(ok.data.data_url).startsWith('data:image/png;base64,'),
+      'QR is a PNG data URL',
+    );
     assertOrThrow(ok.data.payload.includes('5406267.50'), 'payload carries the bill amount');
     assertEqualOrThrow(
       ok.data.payload.slice(-4),
@@ -74,6 +83,27 @@ async function main() {
       const response = await qr(amount);
       assertEqualOrThrow(response.status, 400, `amount ${amount} is rejected`);
     }
+
+    // A document printer cannot take the slip, so the POS prints this page instead.
+    seedCategory(db, 'drinks', 'Drinks');
+    seedProduct(db, 'latte', 'drinks', 'Latte', 250);
+    const stamp = new Date().toISOString();
+    const orderId = db
+      .prepare(`INSERT INTO orders (order_number, user_id, status, subtotal, total, created_at, updated_at)
+        VALUES ('ORD-QR-1', ?, 'pending', 250, 250, ?, ?)`)
+      .run(userId, stamp, stamp).lastInsertRowid;
+    db.prepare(`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, total, created_at, updated_at)
+      VALUES (?, 'latte', 'Latte <b>', 250, 1, 250, 250, ?, ?)`).run(orderId, stamp, stamp);
+    const page = await api(baseUrl, '/api/printers/print-payment-request', {
+      method: 'POST',
+      headers: authHeader,
+      body: { orderId, amount: 250, format: 'html' },
+    });
+    assertEqualOrThrow(page.status, 200, 'the payment request page is built without a printer');
+    const html = String(page.data.html);
+    assertOrThrow(html.includes('ORD-QR-1'), 'the page names the order');
+    assertOrThrow(html.includes('Latte &#60;b&#62;'), 'item names are escaped');
+    assertOrThrow(/<img src="data:image\/png;base64,/.test(html), 'the page carries the QR image');
 
     const cleared = await api(baseUrl, '/api/payment-methods/qr-account', {
       method: 'PUT',

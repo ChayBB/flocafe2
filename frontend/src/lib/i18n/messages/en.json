@@ -1081,6 +1081,7 @@
     "qrPrintSent": "Payment request sent to the printer",
     "qrPrintFailed": "Could not print the payment request",
     "qrPrintNoPrinter": "No printer is set up. Add one in Settings > Printers.",
+    "qrPrintSystemDialog": "The printer saves documents, so the payment request opens in the print dialog",
     "sendViaWhatsApp": "Send receipt via WhatsApp",
     "specialInstructions": "Special Instructions",
     "specialInstructionsPlaceholder": "e.g., no onions, extra spicy...",
