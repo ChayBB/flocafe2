@@ -123,14 +123,22 @@ test('orders already in the kitchen when the display signs in or switches statio
     (await sounds(page)).__spoken.filter((text) => text.includes(productName));
   expect(await spokenAboutProduct()).toEqual([]);
 
-  // A new order is read out once, by its items, item note and order note, without its order number.
+  // A new order is read out once without its order number: the item, its special instructions
+  // 0.7 seconds later, then the order note once the last item has been read.
   const fresh = await placeOrder(`rush ${run}`, 'extra coconut');
   await expect.poll(spokenAboutProduct, { timeout: 15000 }).toHaveLength(1);
   const [spoken] = await spokenAboutProduct();
-  expect(spoken).toContain(`New order: 1 ${productName}, extra coconut. Order note: rush ${run}`);
-  expect(spoken).not.toContain('old note');
+  expect(spoken).toBe(`New order: 1 ${productName}`);
   expect(spoken).not.toContain(fresh.order_number);
-  expect(spoken).not.toContain(old.order_number);
+  await expect
+    .poll(async () => (await sounds(page)).__spoken.includes(`Order note: rush ${run}`), { timeout: 15000 })
+    .toBe(true);
+  const log = await sounds(page);
+  const at = log.__spoken.indexOf(spoken);
+  expect(log.__spoken.slice(at, at + 3)).toEqual([spoken, 'extra coconut', `Order note: rush ${run}`]);
+  expect(log.__spokenAt[at + 1] - log.__spokenAt[at]).toBeGreaterThanOrEqual(650);
+  expect(log.__spokenAt[at + 2] - log.__spokenAt[at + 1]).toBeGreaterThanOrEqual(650);
+  expect(log.__spoken.join(' | ')).not.toContain('old note');
   await page.waitForTimeout(1500);
   expect(await spokenAboutProduct()).toHaveLength(1);
 });
@@ -216,7 +224,10 @@ test('KDS sound switches turn reading new items aloud and the ready-to-serve ann
   const first = await placeOrder();
   await expect.poll(async () => (await sounds(page)).__spoken.join(' | '), { timeout: 15000 }).toContain(productName);
   expect((await sounds(page)).__voices.at(-1)).toBe('Microsoft Fake Online (Natural) - English');
-  expect((await sounds(page)).__spoken.join(' | ')).toContain(`New order: 2 ${productName}, 1 ${productName}, later`);
+  await expect.poll(async () => (await sounds(page)).__spoken.includes('later'), { timeout: 15000 }).toBe(true);
+  const readOut = await sounds(page);
+  const readIndex = readOut.__spoken.indexOf(`New order: 2 ${productName}, 1 ${productName}`);
+  expect(readOut.__spoken[readIndex + 1]).toBe('later');
   const bellsBefore = (await sounds(page)).__bells;
   await markReady(first.items[0].id);
   await expect.poll(async () => (await sounds(page)).__bells, { timeout: 15000 }).toBe(bellsBefore + 1);

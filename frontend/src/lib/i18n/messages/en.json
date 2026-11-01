@@ -569,7 +569,6 @@
     "readAloudOrder": "New order: {items}",
     "readAloudItem": "{quantity} {name}",
     "readAloudOrderNote": "Order note: {note}",
-    "readAloudItemNote": "{quantity} {name}, {note}",
     "readyToServeTable": "Table {table} is ready to serve",
     "readyToServeOrder": "An order is ready to serve",
     "screenModeTitle": "Screen",

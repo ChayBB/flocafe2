@@ -63,6 +63,8 @@ function readInactiveStages(): InactiveStages {
 const NONE_INACTIVE: KitchenStatus[] = [];
 // A ready announcement waits this long after new items have been read out.
 const AFTER_READ_ALOUD_MS = 3000;
+// The pause between the parts of a read-out: an item and its special instructions, tables, the order note.
+const READ_ALOUD_PAUSE_MS = 700;
 
 // Items switched to take-away are still cooked, so they are read out and announced; cancelled ones are not.
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
@@ -237,33 +239,39 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     const knownStatuses = knownStatusesRef.current;
     const readOrderNotes = readOrderNotesRef.current;
     if (knownItems && soundSettingsRef.current.readAloud) {
-      const phrases = orders
-        .map((order) => {
-          const fresh = liveItems(order).filter((item) => !knownItems.has(item.id));
-          if (fresh.length === 0) return null;
-          const items = fresh
-            .map((item) => {
-              const note = item.special_instructions?.trim();
-              return note
-                ? t('readAloudItemNote', { name: item.product_name, quantity: item.quantity, note })
-                : t('readAloudItem', { name: item.product_name, quantity: item.quantity });
-            })
-            .join(', ');
-          const orderNote = order.special_instructions?.trim() || '';
-          const withNote =
-            orderNote && readOrderNotes.get(order.id) !== orderNote
-              ? `${items}. ${t('readAloudOrderNote', { note: orderNote })}`
-              : items;
-          return order.table?.name
-            ? t('readAloudTable', { table: order.table.name, items: withNote })
-            : t('readAloudOrder', { number: order.order_number, items: withNote });
-        })
-        .filter(Boolean);
-      if (phrases.length > 0) {
-        const text = phrases.join('. ');
+      // Each table is read in parts: special instructions follow their item after a short pause, and
+      // the order note comes once the table's last item has been read.
+      const parts = orders.flatMap((order) => {
+        const fresh = liveItems(order).filter((item) => !knownItems.has(item.id));
+        if (fresh.length === 0) return [];
+        const chunks: string[] = [];
+        let chunk = '';
+        for (const item of fresh) {
+          const text = t('readAloudItem', { name: item.product_name, quantity: item.quantity });
+          chunk = chunk ? `${chunk}, ${text}` : text;
+          const note = item.special_instructions?.trim();
+          if (note) {
+            chunks.push(chunk, note);
+            chunk = '';
+          }
+        }
+        if (chunk) chunks.push(chunk);
+        chunks[0] = order.table?.name
+          ? t('readAloudTable', { table: order.table.name, items: chunks[0] })
+          : t('readAloudOrder', { number: order.order_number, items: chunks[0] });
+        const orderNote = order.special_instructions?.trim() || '';
+        if (orderNote && readOrderNotes.get(order.id) !== orderNote) {
+          chunks.push(t('readAloudOrderNote', { note: orderNote }));
+        }
+        return chunks;
+      });
+      if (parts.length > 0) {
         const lang = kdsSpeechLang();
         queueKdsSound(async () => {
-          await speakKdsNow(text, lang);
+          for (const [index, part] of parts.entries()) {
+            if (index > 0) await new Promise((resolve) => setTimeout(resolve, READ_ALOUD_PAUSE_MS));
+            await speakKdsNow(part, lang);
+          }
           readAloudEndedAtRef.current = Date.now();
         });
       }

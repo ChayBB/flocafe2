@@ -569,7 +569,6 @@
     "readAloudOrder": "ออเดอร์ใหม่ {items}",
     "readAloudItem": "{name} {quantity}",
     "readAloudOrderNote": "หมายเหตุ {note}",
-    "readAloudItemNote": "{name} {quantity} {note}",
     "readyToServeTable": "โต๊ะ {table} พร้อมเสิร์ฟ",
     "readyToServeOrder": "ออเดอร์พร้อมเสิร์ฟ",
     "screenModeTitle": "หน้าจอ",
