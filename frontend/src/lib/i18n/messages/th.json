@@ -1640,6 +1640,7 @@
     "economicCode": "รหัสกิจกรรมเศรษฐกิจ",
     "grandTotal": "ยอดรวมทั้งสิ้น",
     "item": "สินค้า",
+    "lineNumber": "รายการ",
     "onlineOrder": "คำสั่งซื้อออนไลน์",
     "payments": "การชำระเงิน",
     "phone": "โทร",

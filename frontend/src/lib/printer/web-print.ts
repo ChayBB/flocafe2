@@ -305,6 +305,7 @@ export function generateBillHtml(
     customer: documentLabel(customer?.nameLabel, 'pos.customer', lang),
     customerNo: documentLabel(customer?.phoneLabel, 'print.numberShort', lang),
     deliveryAddress: documentLabel(customer?.addressLabel, 'print.deliverySlip.address', lang),
+    lineNumber: printLabelResolver('receipt.lineNumber', lang),
     rate: itemsBlock?.header.rate.primary ?? printLabelResolver('receipt.rate', lang),
     totalTax: surfaceLabel(totals?.tax?.label, 'pos.tax', 'receipt.totalTax', lang),
     deliveryCharge: surfaceLabel(
@@ -384,6 +385,7 @@ export function generateBillHtml(
     <table class="items-table">
       <thead>
         <tr>
+          <th class="line-no">${escapeHtml(L.lineNumber)}</th>
           <th>${escapeHtml(itemsBlock?.header.item.primary ?? '')}</th>
           <th class="text-end">${escapeHtml(itemsBlock?.header.quantity.primary ?? '')}</th>
           <th class="text-end">${escapeHtml(L.rate)}</th>
@@ -393,8 +395,9 @@ export function generateBillHtml(
       <tbody>
         ${items
           .map(
-            (row) => `
+            (row, index) => `
           <tr>
+            <td class="line-no num">${index + 1}</td>
             <td>
               ${escapeHtml(row.name.text)}
               ${row.addons.length > 0 ? `<br><small class="text-muted">${row.addons.map((a) => `+ ${escapeHtml(a.name.text)}${(a.quantity ?? 1) > 1 ? ` ×${escapeHtml(a.quantity)}` : ''}${a.price > 0 ? ` (${fmtAmount(a.price)})` : ''}`).join(', ')}</small>` : ''}
@@ -555,10 +558,11 @@ function getPaperStyles(size: PaperSize): string {
     .bill-details table { width: 100%; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .items-table th, .items-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: start; }
-    .items-table th { background: #f5f5f5; font-weight: bold; }
+    .items-table th { font-weight: bold; }
+    .items-table .line-no { width: 1%; white-space: nowrap; text-align: center; }
     .tax-table, .payments-table { width: 50%; margin-inline-start: 50%; border-collapse: collapse; margin-bottom: 15px; }
     .tax-table th, .tax-table td, .payments-table th, .payments-table td { padding: 6px 8px; }
-    .tax-table th, .payments-table th { background: #f9f9f9; text-align: start; }
+    .tax-table th, .payments-table th { text-align: start; }
     .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .totals-table td { padding: 6px 8px; }
     .total-row { border-top: 2px solid #333; font-size: 16px; }

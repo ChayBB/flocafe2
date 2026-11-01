@@ -1640,6 +1640,7 @@
     "economicCode": "Economic Code",
     "grandTotal": "Grand Total",
     "item": "Item",
+    "lineNumber": "No.",
     "onlineOrder": "ONLINE ORDER",
     "payments": "Payments",
     "phone": "Ph",
