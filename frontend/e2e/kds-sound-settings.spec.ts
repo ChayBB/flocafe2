@@ -704,5 +704,5 @@ test('a spoken order on a POS-computer voice starts after a short lead so quiet 
   expect(order.status()).toBe(201);
   const starts = () => page.evaluate(() => (window as unknown as { __starts: number[] }).__starts);
   await expect.poll(async () => (await starts()).length, { timeout: 15000 }).toBeGreaterThan(0);
-  expect((await starts())[0]).toBeGreaterThanOrEqual(0.4);
+  expect((await starts())[0]).toBeGreaterThanOrEqual(0.7);
 });

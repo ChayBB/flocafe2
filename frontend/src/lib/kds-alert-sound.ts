@@ -67,7 +67,7 @@ export function playKdsAlert(beeps = 3): boolean {
 }
 
 // Speakers that have been quiet take a moment to wake, which swallowed the first word ("table").
-const AUDIO_WAKE_LEAD_S = 0.4;
+const AUDIO_WAKE_LEAD_S = 0.7;
 const AUDIO_IDLE_MS = 1500;
 let lastAudioEndedAt = -Infinity;
 
