@@ -256,6 +256,13 @@ function toObjects(rows: string[][]): Record<string, string>[] {
 
 type NumericParseResult = { ok: true; value: number } | { ok: false; error: string };
 
+// Priced by weight later: the product comes in at 0 and the price is set afterwards.
+const PRICE_BY_WEIGHT_MARKERS = new Set(['ตามน้ำหนัก', 'by weight']);
+
+function isPriceByWeight(raw: string | undefined | null): boolean {
+  return PRICE_BY_WEIGHT_MARKERS.has((raw ?? '').trim().toLowerCase());
+}
+
 function parseNumericField(
   raw: string | undefined | null,
   fieldName: string,
@@ -677,6 +684,7 @@ router.post(
         failed = 0,
         changedRows = 0;
       const errors: string[] = [];
+      const warnings: string[] = [];
 
       const findExistingProduct = db.prepare(
         `SELECT p.id, p.name, p.sku, p.description, p.tags, p.is_active, c.name AS category_name
@@ -757,10 +765,13 @@ router.post(
             continue;
           }
 
-          const priceResult = parseNumericField(r.price, 'price', {
-            min: 0,
-            localized: regionalSnapshot,
-          });
+          const priceByWeight = isPriceByWeight(r.price);
+          const priceResult = priceByWeight
+            ? ({ ok: true, value: 0 } as const)
+            : parseNumericField(r.price, 'price', {
+                min: 0,
+                localized: regionalSnapshot,
+              });
           if (!priceResult.ok) {
             failed++;
             errors.push(`Row ${i + 2} (${r.name}): ${priceResult.error}`);
@@ -857,7 +868,7 @@ router.post(
           // If an id is provided and matches an existing product, update it.
           if (existingProduct) {
             db.prepare(
-              `UPDATE products SET name=?, category_id=?, price=?, description=?, cost=?,
+              `UPDATE products SET name=?, category_id=?, price=CASE WHEN ? = 1 THEN price ELSE ? END, description=?, cost=?,
            tax_type=?, tax_rate=?,
            tax_category_id=CASE WHEN ? = 1 THEN ? ELSE tax_category_id END,
            tax_behavior=CASE WHEN ? = 1 THEN ? ELSE tax_behavior END,
@@ -866,6 +877,7 @@ router.post(
             ).run(
               r.name,
               categoryId,
+              priceByWeight ? 1 : 0,
               price,
               r.description || null,
               cost,
@@ -923,11 +935,13 @@ router.post(
           );
           created++;
           changedRows++;
+          if (priceByWeight)
+            warnings.push(`Row ${i + 2} (${r.name}): price "${r.price.trim()}" imported as 0`);
         }
       })();
 
       captureMenuCsvRowRejections(failed, changedRows);
-      res.json({ created, updated, reactivated, skipped, failed, errors });
+      res.json({ created, updated, reactivated, skipped, failed, errors, warnings });
     } catch (err: any) {
       return csvImportErrorResponse(res, err);
     }

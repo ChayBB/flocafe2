@@ -219,6 +219,47 @@ async function main() {
       'rejected row did not persist',
     );
 
+    console.log('\n─── Price by weight ───');
+    const keptPriceProduct = db
+      .prepare('SELECT id FROM products WHERE name = ?')
+      .get('Valid Beside Failure') as { id: string };
+    const byWeight = await api(baseUrl, '/api/menu/csv/import/products', {
+      method: 'POST',
+      body: {
+        csv: productCsv(
+          ',,Weighed Fish,CSV Category,ตามน้ำหนัก,Description,0,,,,,yes',
+          `${keptPriceProduct.id},,Valid Beside Failure,CSV Category,by weight,Description,2,,,,,yes`,
+        ),
+      },
+      headers: authHeader,
+    });
+    assertEqual(byWeight.data.failed, 0, 'a price by weight is not a row error');
+    assertEqual(byWeight.data.created, 1, 'a new product priced by weight is created');
+    assertEqual(
+      (
+        db.prepare('SELECT price FROM products WHERE name = ?').get('Weighed Fish') as {
+          price: number;
+        }
+      ).price,
+      0,
+      'a new product priced by weight comes in at 0',
+    );
+    assertEqual(
+      (
+        db.prepare('SELECT price FROM products WHERE id = ?').get(keptPriceProduct.id) as {
+          price: number;
+        }
+      ).price,
+      13,
+      'an existing product priced by weight keeps its current price',
+    );
+    assert(
+      byWeight.data.warnings.some((warning: string) =>
+        warning.includes('(Weighed Fish): price "ตามน้ำหนัก" imported as 0'),
+      ),
+      'the import lists the product that needs its price set later',
+    );
+
     console.log('\n─── Invalid monetary values ───');
     const invalidMoney = await api(baseUrl, '/api/menu/csv/import/products', {
       method: 'POST',

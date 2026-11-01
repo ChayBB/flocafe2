@@ -1450,7 +1450,7 @@
     "csvImporting": "Importing…",
     "csvMissingFields": "Some rows had missing fields — imported with defaults",
     "csvModalTitle": "CSV Import / Export — {type}",
-    "csvProductsHelp": "Columns: id (leave blank for new items), sku, name, category, price, description, cost, tax_category, tax_behavior, cashback_percent, tags (veg/non_veg/...), is_active (yes/no). Leave tax_category blank for no tax — download \"Current data\" to get item IDs, edit, then re-upload to update existing items",
+    "csvProductsHelp": "Columns: id (leave blank for new items), sku, name, category, price, description, cost, tax_category, tax_behavior, cashback_percent, tags (veg/non_veg/...), is_active (yes/no). Leave tax_category blank for no tax. A price of \"by weight\" or \"ตามน้ำหนัก\" imports a new item at 0 so you can set its price later — download \"Current data\" to get item IDs, edit, then re-upload to update existing items",
     "csvSkippedErrors": "Rows skipped due to errors",
     "defaultCategoryTag": "{name} (default)",
     "deleteAddonGroupConfirm": "Delete this addon group?",
