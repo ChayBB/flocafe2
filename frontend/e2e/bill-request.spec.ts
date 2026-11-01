@@ -18,12 +18,14 @@ async function countBeeps(page: Page) {
         return Promise.resolve();
       }
       createOscillator() {
-        w.__beeps += 1;
+        // The quiet sine hum that wakes a speaker is not an alert beep.
         return {
           type: '',
           frequency: { value: 0 },
           connect: (node: unknown) => node,
-          start() {},
+          start(this: { type: string }) {
+            if (this.type !== 'sine') w.__beeps += 1;
+          },
           stop() {},
         };
       }

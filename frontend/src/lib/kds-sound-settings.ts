@@ -1,5 +1,5 @@
 import api from '@/lib/api';
-import { playKdsAudio } from '@/lib/kds-alert-sound';
+import { noteKdsSpeechEnded, playKdsAudio, wakeKdsSpeaker } from '@/lib/kds-alert-sound';
 
 /** Which sounds this KDS display plays; kept per display like its stage switches. */
 export interface KdsSoundSettings {
@@ -103,7 +103,13 @@ export async function kdsVoicesFor(lang: string): Promise<SpeechSynthesisVoice[]
     .sort((a, b) => Number(isNaturalVoice(b)) - Number(isNaturalVoice(a)));
 }
 
-function speakOnDevice(text: string, lang: string, voice: SpeechSynthesisVoice): Promise<boolean> {
+async function speakOnDevice(
+  text: string,
+  lang: string,
+  voice: SpeechSynthesisVoice,
+): Promise<boolean> {
+  // A browser voice also starts cold, so the speaker is woken first or it swallows the first word.
+  await wakeKdsSpeaker();
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -112,6 +118,7 @@ function speakOnDevice(text: string, lang: string, voice: SpeechSynthesisVoice):
     const timer = window.setTimeout(() => resolve(true), SPEECH_TIMEOUT_MS);
     const done = (spoke: boolean) => {
       window.clearTimeout(timer);
+      noteKdsSpeechEnded();
       resolve(spoke);
     };
     utterance.onend = () => done(true);
@@ -149,13 +156,17 @@ export const KDS_SERVER_VOICE_PREFIX = 'server:';
 let serverInfo: Promise<{ engine: string; voices: KdsServerVoice[] }> | null = null;
 
 /** Whether the POS computer runs local voice services ('local') and which ones answer. */
-export function kdsServerVoices(refresh = false): Promise<{ engine: string; voices: KdsServerVoice[] }> {
+export function kdsServerVoices(
+  refresh = false,
+): Promise<{ engine: string; voices: KdsServerVoice[] }> {
   if (refresh || !serverInfo) {
     serverInfo = api
       .get('/kds/speech')
       .then((response) => ({
         engine: String(response.data?.engine || 'system'),
-        voices: Array.isArray(response.data?.voices) ? (response.data.voices as KdsServerVoice[]) : [],
+        voices: Array.isArray(response.data?.voices)
+          ? (response.data.voices as KdsServerVoice[])
+          : [],
       }))
       .catch(() => ({ engine: 'system', voices: [] }));
   }
@@ -171,11 +182,16 @@ async function speakNow(text: string, lang: string): Promise<void> {
   const chosenName = readKdsVoiceName();
   if (chosenName.startsWith(KDS_SERVER_VOICE_PREFIX)) {
     if (await speakFromServer(text, lang, chosenName.slice(KDS_SERVER_VOICE_PREFIX.length))) return;
-  } else if (!chosenName && (await kdsServerVoices()).engine === 'local' && (await speakFromServer(text, lang))) {
+  } else if (
+    !chosenName &&
+    (await kdsServerVoices()).engine === 'local' &&
+    (await speakFromServer(text, lang))
+  ) {
     return;
   }
   const voices = await kdsVoicesFor(lang);
-  const preferred = voices.find((voice) => voice.name === chosenName) ?? voices.find(isNaturalVoice);
+  const preferred =
+    voices.find((voice) => voice.name === chosenName) ?? voices.find(isNaturalVoice);
   if (preferred && (await speakOnDevice(text, lang, preferred))) return;
   if (await speakFromServer(text, lang)) return;
   const local = voices.find((voice) => voice !== preferred && voice.localService !== false);

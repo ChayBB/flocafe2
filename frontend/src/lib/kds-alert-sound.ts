@@ -180,6 +180,30 @@ function playWakeSignal(audio: AudioContext, seconds: number): void {
   oscillator.stop(audio.currentTime + seconds);
 }
 
+/**
+ * Before a device voice speaks after a quiet spell: plays the wake hum for the lead, overlapping the
+ * start of speech, and resolves once the lead has passed.
+ */
+export async function wakeKdsSpeaker(): Promise<void> {
+  if (Date.now() - lastAudioEndedAt <= AUDIO_IDLE_MS) return;
+  const audio = getContext();
+  if (!audio) return;
+  if (audio.state !== 'running') {
+    await Promise.race([
+      audio.resume().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 500)),
+    ]);
+    if ((audio.state as AudioContextState) !== 'running') return;
+  }
+  playWakeSignal(audio, AUDIO_WAKE_LEAD_S + 0.5);
+  await new Promise((resolve) => setTimeout(resolve, AUDIO_WAKE_LEAD_S * 1000));
+}
+
+/** Records that a device voice has just finished, so speech right after needs no wake lead. */
+export function noteKdsSpeechEnded(): void {
+  lastAudioEndedAt = Date.now();
+}
+
 /** Plays encoded audio (such as a spoken announcement) and resolves when it ends. False when sound is blocked. */
 export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
   const audio = getContext();

@@ -4,6 +4,7 @@ import { getE2eToken } from './helpers/test-auth';
 
 type SoundLog = {
   __beeps: number;
+  __hums: number;
   __bells: number;
   __spoken: string[];
   __spokenAt: number[];
@@ -14,6 +15,7 @@ async function recordSounds(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as SoundLog & Record<string, unknown>;
     w.__beeps = 0;
+    w.__hums = 0;
     w.__bells = 0;
     w.__spoken = [];
     w.__spokenAt = [];
@@ -27,12 +29,15 @@ async function recordSounds(page: Page) {
         return Promise.resolve();
       }
       createOscillator() {
-        w.__beeps += 1;
+        // The quiet sine hum that wakes a speaker is not an alert beep.
         return {
           type: '',
           frequency: { value: 0 },
           connect: (node: unknown) => node,
-          start() {},
+          start(this: { type: string }) {
+            if (this.type === 'sine') w.__hums += 1;
+            else w.__beeps += 1;
+          },
           stop() {},
         };
       }
@@ -150,6 +155,8 @@ test('orders already in the kitchen when the display signs in or switches statio
   await expect.poll(spokenAboutProduct, { timeout: 15000 }).toHaveLength(1);
   const [spoken] = await spokenAboutProduct();
   expect(spoken).toBe(`New order: 1 ${productName}`);
+  // A browser voice is woken first too, so the first word is not swallowed.
+  expect((await sounds(page)).__hums).toBeGreaterThan(0);
   expect(spoken).not.toContain(fresh.order_number);
   await expect
     .poll(async () => (await sounds(page)).__spoken.includes(`Order note: rush ${run}`), {
@@ -692,9 +699,15 @@ test('a spoken order on a POS-computer voice first wakes the speaker so it does 
     await page.getByTestId('kds-login-submit').click();
   }
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
-  await page.waitForTimeout(2500);
+  const starts = () => page.evaluate(() => (window as unknown as { __starts: number[] }).__starts);
+  // Let anything the display reads on sign-in finish, then stay quiet long enough to count as idle.
+  let seen = -1;
+  while (seen !== (await starts()).length) {
+    seen = (await starts()).length;
+    await page.waitForTimeout(2500);
+  }
 
-  const beepsBefore = (await sounds(page)).__beeps;
+  const humsBefore = (await sounds(page)).__hums;
   const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
     headers,
     data: {
@@ -703,9 +716,8 @@ test('a spoken order on a POS-computer voice first wakes the speaker so it does 
     },
   });
   expect(order.status()).toBe(201);
-  const starts = () => page.evaluate(() => (window as unknown as { __starts: number[] }).__starts);
-  await expect.poll(async () => (await starts()).length, { timeout: 15000 }).toBeGreaterThan(0);
-  expect((await starts())[0]).toBeGreaterThanOrEqual(0.7);
+  await expect.poll(async () => (await starts()).length, { timeout: 15000 }).toBeGreaterThan(seen);
+  expect((await starts())[seen]).toBeGreaterThanOrEqual(0.7);
   // A quiet hum plays during that lead, since silence alone does not wake a sleeping speaker.
-  expect((await sounds(page)).__beeps).toBe(beepsBefore + 1);
+  expect((await sounds(page)).__hums).toBe(humsBefore + 1);
 });
