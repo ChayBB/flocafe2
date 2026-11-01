@@ -1160,6 +1160,15 @@ export default function ServerStandalonePage() {
     return quantities;
   }, [draft]);
   const draftItemCount = draft.reduce((sum, line) => sum + line.quantity, 0);
+
+  /** Opens the table list to pick where the ticket goes; the cart comes back once a table is picked. */
+  function chooseTableToSend(reopenCart: boolean) {
+    reopenCartAfterTableRef.current = reopenCart;
+    setMobileCartOpen(false);
+    setTablePickerOpen(true);
+    // Below the three-column layout the table list sits above the menu, out of view from here.
+    window.setTimeout(() => tablePickerRef.current?.scrollIntoView({ block: 'start' }), 350);
+  }
   useReloadOnNewBuild('/api/server-app/info', draft.length === 0 && !sending);
 
   const guestMode = !user && !!guestTable && !showLogin;
@@ -1448,16 +1457,7 @@ export default function ServerStandalonePage() {
           <button
             type="button"
             data-testid="server-app-choose-table"
-            onClick={() => {
-              reopenCartAfterTableRef.current = mobileCartOpen;
-              setMobileCartOpen(false);
-              setTablePickerOpen(true);
-              // Below the three-column layout the table list sits above the menu, out of view from here.
-              window.setTimeout(
-                () => tablePickerRef.current?.scrollIntoView({ block: 'start' }),
-                350,
-              );
-            }}
+            onClick={() => chooseTableToSend(mobileCartOpen)}
             className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-amber-400 bg-amber-50 font-semibold text-amber-700"
           >
             <UtensilsCrossed size={17} />
@@ -1727,7 +1727,14 @@ export default function ServerStandalonePage() {
         />
       )}
 
-      <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+      <Drawer
+        open={mobileCartOpen}
+        onOpenChange={(open) => {
+          // With food waiting and no table yet, the cart button goes straight to the tables.
+          if (open && user && !selectedTableId && draftItemCount > 0) chooseTableToSend(true);
+          else setMobileCartOpen(open);
+        }}
+      >
         <DrawerTrigger asChild>
           <button
             data-testid="server-app-cart-button"

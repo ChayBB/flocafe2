@@ -42,11 +42,16 @@ for (const screenSize of SCREENS) {
     await grid.getByTestId('pos-product-card').first().click();
     // Staff usually scroll down the menu before opening the ticket.
     await page.mouse.wheel(0, 1500);
-    if (screenSize.phone) await page.getByTestId('server-app-cart-button').click();
-    const chooseTable = page.getByTestId('server-app-choose-table').last();
-    await chooseTable.scrollIntoViewIfNeeded();
-    await expect(chooseTable).toHaveText('Choose a table to send');
-    await chooseTable.click();
+    if (screenSize.phone) {
+      // With no table yet, the cart button goes straight to the table list.
+      await page.getByTestId('server-app-cart-button').click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    } else {
+      const chooseTable = page.getByTestId('server-app-choose-table').last();
+      await chooseTable.scrollIntoViewIfNeeded();
+      await expect(chooseTable).toHaveText('Choose a table to send');
+      await chooseTable.click();
+    }
 
     const picker = page.getByTestId('server-app-table-picker');
     await expect(picker).toBeInViewport();
