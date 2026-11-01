@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { BellRing } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
@@ -12,12 +11,10 @@ import { useKdsView } from '@/hooks/useKdsView';
 import { useKdsScreenMode } from '@/lib/kds-screen-mode';
 import type { KitchenStatus, UseKdsConnectionResult } from '@/hooks/useKdsConnection';
 import {
-  isKdsAlertSoundLocked,
   playKdsAlert,
   playKdsReadyBell,
   readKdsReadyBell,
   readKdsReadyDelay,
-  subscribeKdsAlertSound,
   unlockKdsAlertSound,
 } from '@/lib/kds-alert-sound';
 import {
@@ -104,13 +101,7 @@ export function KdsWorkspace({
   const { viewMode, setViewMode } = useKdsView(serverDefault);
   const screen = useKdsScreenMode();
 
-  // Sound needs one tap per page in a browser; any tap on the display unlocks it. The prompt floats,
-  // so it disappearing on that tap never shifts the board under the finger.
-  const soundLocked = useSyncExternalStore(
-    subscribeKdsAlertSound,
-    isKdsAlertSoundLocked,
-    () => false,
-  );
+  // Sound needs one tap per page in a browser; any tap or key press on the display unlocks it.
   useEffect(() => {
     window.addEventListener('pointerdown', unlockKdsAlertSound);
     window.addEventListener('keydown', unlockKdsAlertSound);
@@ -387,17 +378,6 @@ export function KdsWorkspace({
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-50 border-[12px] border-orange-500 bg-orange-400/30 opacity-0"
       />
-      {soundLocked && (
-        <button
-          type="button"
-          data-testid="kds-sound-banner"
-          onClick={unlockKdsAlertSound}
-          className="fixed bottom-24 start-1/2 z-40 flex min-h-11 -translate-x-1/2 rtl:translate-x-1/2 items-center justify-center gap-2 rounded-full border border-amber-400 bg-amber-50 px-4 text-sm font-semibold text-amber-800 shadow-lg"
-        >
-          <BellRing size={18} />
-          {t('enableAlertSound')}
-        </button>
-      )}
       <KdsHeader
         userName={conn.user!.name}
         userRole={conn.user!.role}

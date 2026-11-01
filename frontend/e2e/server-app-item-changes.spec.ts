@@ -186,10 +186,8 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
     .poll(() => kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps))
     .toBe(0);
 
-  // A fresh page has not been tapped: the display offers to turn sound on, and flashes instead.
+  // A fresh page has not been tapped: sound stays off and the display flashes instead.
   await kds.reload();
-  const banner = kds.getByTestId('kds-sound-banner');
-  await expect(banner).toHaveText('Tap to turn on alert sounds');
   // The board has the item before it changes; an item first seen already changed does not alert.
   await expect(card(4)).toBeVisible();
   await expect(card(4).getByTestId('kds-service-notice')).toHaveCount(0);
@@ -209,9 +207,8 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
     .toBeGreaterThan(0);
   expect(await kds.evaluate(() => (window as unknown as { __beeps: number }).__beeps)).toBe(0);
 
-  // One tap turns sound on; the next change beeps.
-  await banner.click();
-  await expect(banner).toHaveCount(0);
+  // Any key press or tap on the display turns sound on; the next change beeps.
+  await kds.keyboard.press('Shift');
   const cancel = await kds.request.patch(
     `${E2E_SERVER_APP_BASE_URL}/api/orders/${order.id}/items/${order.items[4].id}/cancel`,
     { headers: asServer, data: {} },

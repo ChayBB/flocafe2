@@ -1,17 +1,11 @@
 /**
  * One shared audio context for KDS alerts. Browsers keep it suspended until the page has been
- * tapped, so the display unlocks it on the first touch and reports whether sound is available.
+ * tapped, so the display unlocks it on the first touch.
  * The desktop app's KDS window starts it running.
  */
 type AudioContextClass = typeof AudioContext;
 
 let context: AudioContext | null = null;
-const listeners = new Set<() => void>();
-
-function notify(): void {
-  for (const listener of listeners) listener();
-}
-
 function getContext(): AudioContext | null {
   if (context || typeof window === 'undefined') return context;
   const AudioCtx: AudioContextClass | undefined =
@@ -20,32 +14,17 @@ function getContext(): AudioContext | null {
   if (!AudioCtx) return null;
   try {
     context = new AudioCtx();
-    context.onstatechange = notify;
   } catch {
     context = null;
   }
   return context;
 }
 
-/** True while the browser still blocks sound for this page. */
-export function isKdsAlertSoundLocked(): boolean {
-  const audio = getContext();
-  return Boolean(audio) && audio!.state !== 'running';
-}
-
-export function subscribeKdsAlertSound(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
 /** Call from a tap or key press: that user gesture is what lets the browser play sound. */
 export function unlockKdsAlertSound(): void {
   const audio = getContext();
   if (!audio || audio.state === 'running') return;
-  void audio
-    .resume()
-    .then(notify)
-    .catch(() => {});
+  void audio.resume().catch(() => {});
 }
 
 /** Short beeps (three by default). Returns false when the browser blocked them, so the caller can alert visually. */
