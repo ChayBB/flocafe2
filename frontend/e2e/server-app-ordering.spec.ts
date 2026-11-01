@@ -106,12 +106,16 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
     await expect(picker).toContainText(tableName);
+    // Picking a table folds the list away.
+    await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+    await expect(picker).toHaveAttribute('aria-expanded', 'false');
 
-    // Tapping the title hides the list and brings it back.
+    // Tapping the title brings the list back and hides it again.
+    await picker.click();
+    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await picker.click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
     await picker.click();
-    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
 
     // A tablet shows the tables beside the menu with no Select Table or emergency button.
     for (const size of [
@@ -164,7 +168,9 @@ test.describe('Server App tableside ordering', () => {
     // A tablet keeps only the session button in the header and still fits.
     await page.setViewportSize({ width: 768, height: 1024 });
     await expect(page.locator('header').getByRole('button')).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBeFalsy();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+    ).toBeFalsy();
 
     await page.setViewportSize({ width: 390, height: 844 });
     const header = page.locator('header');
@@ -189,7 +195,6 @@ test.describe('Server App tableside ordering', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openServerApp(page, serverToken);
     await pickTable(page, tableName);
-    await page.getByTestId('server-app-add-food').click();
     const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
     await search.fill('E2E Coffee');
     await search.press('Enter');
@@ -202,7 +207,9 @@ test.describe('Server App tableside ordering', () => {
     const onTop = () =>
       instructions.evaluate((input) => {
         const box = input.getBoundingClientRect();
-        return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input;
+        return (
+          document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === input
+        );
       });
     await expect.poll(onTop).toBe(true);
     await instructions.fill('extra spicy');

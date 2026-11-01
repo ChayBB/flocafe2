@@ -1591,8 +1591,11 @@ export default function ServerStandalonePage() {
                     <button
                       key={table.id}
                       disabled={sending}
-                      // The picker stays open so the table's actions show before adding food.
-                      onClick={() => selectTable(table.id)}
+                      // A phone folds the list away once a table is picked, leaving the menu.
+                      onClick={() => {
+                        selectTable(table.id);
+                        if (!isWide) setTablePickerOpen(false);
+                      }}
                       data-table-tone={tone}
                       className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
                     >
@@ -1627,17 +1630,8 @@ export default function ServerStandalonePage() {
           {/* svh, not dvh: the menu keeps its height while a phone browser's toolbar slides in and out.
               On a phone the menu has no frame of its own, so the photos get the full width. */}
           <section className="flex h-[calc(100svh-5rem)] min-h-96 min-w-0 flex-col md:rounded-lg md:border md:border-border md:bg-card md:p-3">
-            {user && tablePickerOpen && activeTable && !isWide && (
-              <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
-                <button
-                  type="button"
-                  data-testid="server-app-add-food"
-                  onClick={() => setTablePickerOpen(false)}
-                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand"
-                >
-                  <Plus size={17} />
-                  {t('addFoodItems')}
-                </button>
+            {user && !tablePickerOpen && activeTable && !isWide && (
+              <div data-testid="server-app-table-actions" className="mb-3">
                 <TableKitchenSummary
                   items={(currentOrder?.items ?? []) as OrderedItem[]}
                   onOpenDetails={() => setOrderedItemsOpen(true)}
