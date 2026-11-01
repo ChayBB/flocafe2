@@ -467,6 +467,17 @@ div:hover > .flo-toast-drain,
   --kds-served-text: #5b4e7e;
   --kds-served-tint: #dcd8e2;
   --kds-served-line: #c4bcd5;
+  --kds-note-bg: #fffbeb;
+  --kds-note-line: #fde68a;
+  --kds-note-text: #b45309;
+  --kds-alert-bg: #ffedd5;
+  --kds-alert-line: #fb923c;
+  --kds-alert-chip: #fed7aa;
+  --kds-alert-text: #9a3412;
+  --kds-instruction: #dc2626;
+  --kds-confirmed-bg: #ecfdf5;
+  --kds-confirmed-line: #6ee7b7;
+  --kds-confirmed-text: #047857;
 }
 
 .dark {
@@ -506,40 +517,51 @@ div:hover > .flo-toast-drain,
 }
 
 .theme-kds.dark {
-  /* Night: near-black neutral surfaces with one calm blue accent, easy on the eyes in a dark kitchen. */
-  --background: #0b0b0d;
-  --foreground: #e8e8ec;
-  --card: #151518;
-  --card-foreground: #e8e8ec;
-  --popover: #151518;
-  --popover-foreground: #e8e8ec;
-  --panel: #151518;
-  --secondary: #1d1d21;
-  --secondary-foreground: #c8c8cf;
-  --muted: #1d1d21;
-  --muted-foreground: #8c8c95;
-  --border: #26262b;
-  --input: #2c2c32;
-  --color-brand: #4a6cf7;
-  --color-brand-light: #1a2040;
-  --color-brand-hover: #3d5ce0;
-  --color-brand-ring: #4a6cf780;
-  --kds-pending: #e0b25a;
-  --kds-pending-text: #e0b25a;
-  --kds-pending-tint: #2d2820;
-  --kds-pending-line: #4e412a;
-  --kds-preparing: #e0906f;
-  --kds-preparing-text: #e0906f;
-  --kds-preparing-tint: #2d2422;
-  --kds-preparing-line: #4e3730;
-  --kds-ready: #8fc483;
-  --kds-ready-text: #8fc483;
-  --kds-ready-tint: #242a25;
-  --kds-ready-line: #374636;
-  --kds-served: #ab9dd6;
-  --kds-served-text: #ab9dd6;
-  --kds-served-tint: #27252f;
-  --kds-served-line: #3f3b4d;
+  /* Night: warm charcoal with cream text and muted colours, so nothing glares in a dark kitchen. */
+  --background: #1b1a18;
+  --foreground: #d4cfc5;
+  --card: #23211e;
+  --card-foreground: #d4cfc5;
+  --popover: #23211e;
+  --popover-foreground: #d4cfc5;
+  --panel: #23211e;
+  --secondary: #2b2925;
+  --secondary-foreground: #bdb7ab;
+  --muted: #2b2925;
+  --muted-foreground: #8f8a80;
+  --border: #302d29;
+  --input: #3a3732;
+  --color-brand: #5f7aa3;
+  --color-brand-light: #2a2f38;
+  --color-brand-hover: #526a90;
+  --color-brand-ring: #5f7aa380;
+  --kds-pending: #c9a35e;
+  --kds-pending-text: #c9a35e;
+  --kds-pending-tint: #3a3327;
+  --kds-pending-line: #584b32;
+  --kds-preparing: #c98a72;
+  --kds-preparing-text: #c98a72;
+  --kds-preparing-tint: #3a302a;
+  --kds-preparing-line: #584339;
+  --kds-ready: #93b386;
+  --kds-ready-text: #93b386;
+  --kds-ready-tint: #33352d;
+  --kds-ready-line: #47503f;
+  --kds-served: #a99cc4;
+  --kds-served-text: #a99cc4;
+  --kds-served-tint: #363235;
+  --kds-served-line: #4e4853;
+  --kds-note-bg: #3a3122;
+  --kds-note-line: #5a4a2e;
+  --kds-note-text: #d8bf8a;
+  --kds-alert-bg: #3a2420;
+  --kds-alert-line: #6b3a2e;
+  --kds-alert-chip: #5a3026;
+  --kds-alert-text: #e0b3a2;
+  --kds-instruction: #d98a7e;
+  --kds-confirmed-bg: #232c25;
+  --kds-confirmed-line: #3c5a48;
+  --kds-confirmed-text: #9cc4a8;
 }
 
 html.dark::-webkit-scrollbar-thumb,

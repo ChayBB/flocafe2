@@ -26,10 +26,19 @@ export interface KdsTabsViewProps {
   updating: number | null;
   /** Stages this display has switched off; their tabs leave the view. */
   inactiveStatuses: readonly KitchenStatus[];
-  updateItemStatus: (itemId: number, status: KitchenStatus, opts?: { expectedStatus?: KitchenStatus }) => Promise<boolean>;
+  updateItemStatus: (
+    itemId: number,
+    status: KitchenStatus,
+    opts?: { expectedStatus?: KitchenStatus },
+  ) => Promise<boolean>;
 }
 
-export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStatus }: KdsTabsViewProps) {
+export function KdsTabsView({
+  orders,
+  updating,
+  inactiveStatuses,
+  updateItemStatus,
+}: KdsTabsViewProps) {
   const t = useTranslations('kds');
   const tOrders = useTranslations('orders');
   const [selectedTab, setSelectedTab] = useState<KitchenStatus>('pending');
@@ -89,28 +98,37 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
             >
               <div className="flex justify-between items-center mb-3 gap-2">
                 <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                  <Ltr as="span" className="font-bold text-base shrink-0">#{order.order_number}</Ltr>
+                  <Ltr as="span" className="font-bold text-base shrink-0">
+                    #{order.order_number}
+                  </Ltr>
                   <Badge
                     variant="outline"
-                    className={ORDER_TYPE_BADGE_STYLES[order.type] || 'bg-muted text-foreground border-border'}
+                    className={
+                      ORDER_TYPE_BADGE_STYLES[order.type] ||
+                      'bg-muted text-foreground border-border'
+                    }
                   >
                     {ORDER_TYPE_LABEL_KEYS[order.type as OrderType]
                       ? tOrders(ORDER_TYPE_LABEL_KEYS[order.type as OrderType])
                       : order.type}
                   </Badge>
                   {order.table?.name && (
-                    <Badge variant="secondary" className="bg-muted text-foreground">{t('tableLabel', { name: order.table.name })}</Badge>
+                    <Badge variant="secondary" className="bg-muted text-foreground">
+                      {t('tableLabel', { name: order.table.name })}
+                    </Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-sm text-gray-400 font-mono shrink-0">
                   <Clock size={12} />
-                  <Ltr><ElapsedTime dateStr={order.created_at} /></Ltr>
+                  <Ltr>
+                    <ElapsedTime dateStr={order.created_at} />
+                  </Ltr>
                 </div>
               </div>
 
               {order.special_instructions && (
-                <div className="mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-700 font-medium break-words">
+                <div className="mb-2 px-2 py-1.5 bg-(--kds-note-bg) border border-(--kds-note-line) rounded-lg">
+                  <p className="text-sm text-(--kds-note-text) font-medium break-words">
                     📝 {order.special_instructions}
                   </p>
                 </div>
@@ -129,45 +147,52 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
                       data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
                       className={`flex items-center gap-1 pe-1.5 ${noticeRowClass(item)}`}
                     >
-                    {/* Only the toggle changes status; tapping the row does nothing. */}
-                    <div className="flex-1 min-w-0 px-3 py-2.5">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
-                        <span className={`font-bold text-base w-6 shrink-0 ${config.text}`}>{item.quantity}×</span>
-                        <span className={`text-lg font-semibold flex-1 min-w-32 truncate ${isVoided || item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
-                          {formatItemHeading(item.product_name, item.variant_selection)}
-                        </span>
-                        <KdsServiceNotice item={item} />
-                      </div>
-                      {item.addons && item.addons.length > 0 && (
-                        <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
-                          {item.addons.map((addon, i) => (
-                            <span
-                              key={`${addon.id ?? addon.name}-${i}`}
-                              className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
-                            >
-                              + {addon.name}{(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
-                            </span>
-                          ))}
+                      {/* Only the toggle changes status; tapping the row does nothing. */}
+                      <div className="flex-1 min-w-0 px-3 py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
+                          <span className={`font-bold text-base w-6 shrink-0 ${config.text}`}>
+                            {item.quantity}×
+                          </span>
+                          <span
+                            className={`text-lg font-semibold flex-1 min-w-32 truncate ${isVoided || item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}
+                          >
+                            {formatItemHeading(item.product_name, item.variant_selection)}
+                          </span>
+                          <KdsServiceNotice item={item} />
                         </div>
+                        {item.addons && item.addons.length > 0 && (
+                          <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
+                            {item.addons.map((addon, i) => (
+                              <span
+                                key={`${addon.id ?? addon.name}-${i}`}
+                                className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
+                              >
+                                + {addon.name}
+                                {(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
+                        {item.special_instructions && (
+                          <p className="ms-[26px] text-sm text-(--kds-instruction) italic mt-0.5 font-medium break-words">
+                            {`"${item.special_instructions}"`}
+                          </p>
+                        )}
+                      </div>
+                      {item.status !== 'cancelled' && (
+                        <KdsStatusToggle
+                          status={activeTab}
+                          skipped={inactiveStatuses}
+                          disabled={updating === item.id}
+                          onAdvance={(nextStatus) => {
+                            void updateItemStatus(item.id, nextStatus, {
+                              expectedStatus: itemStatus,
+                            });
+                          }}
+                        />
                       )}
-                      <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
-                      {item.special_instructions && (
-                        <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
-                          {`"${item.special_instructions}"`}
-                        </p>
-                      )}
-                    </div>
-                    {item.status !== 'cancelled' && (
-                      <KdsStatusToggle
-                        status={activeTab}
-                        skipped={inactiveStatuses}
-                        disabled={updating === item.id}
-                        onAdvance={(nextStatus) => {
-                          void updateItemStatus(item.id, nextStatus, { expectedStatus: itemStatus });
-                        }}
-                      />
-                    )}
                     </div>
                   );
                 })}
@@ -178,7 +203,9 @@ export function KdsTabsView({ orders, updating, inactiveStatuses, updateItemStat
 
         {filteredOrders.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <p className="text-lg">{t('emptyItems', { status: statusLabel(activeTab).toLowerCase() })}</p>
+            <p className="text-lg">
+              {t('emptyItems', { status: statusLabel(activeTab).toLowerCase() })}
+            </p>
             <p className="text-sm">{t('emptyHint')}</p>
           </div>
         )}

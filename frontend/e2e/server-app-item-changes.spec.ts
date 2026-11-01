@@ -165,7 +165,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   const card = (line: number) =>
     kds.getByTestId('kds-item-row').filter({ hasText: `${label}-${line}"` });
   await expect(card(1)).toContainText('Cancelled');
-  await expect(card(1)).toHaveClass(/bg-orange-100/);
+  await expect(card(1)).toHaveClass(/bg-\(--kds-alert-bg\)/);
   await expect(card(1).getByTestId('kds-status-toggle')).toHaveCount(0);
   await expect(card(2)).toContainText('Changed to takeaway');
   // A confirmed line turns green and shows, beside the menu name, when and by whom.
@@ -178,7 +178,7 @@ test('the item menu offers takeaway until served and cancel only while waiting; 
   ).toBeLessThan(12);
   await expect(card(3)).not.toHaveClass(/border-s-4/);
   await expect(card(3)).toHaveAttribute('data-served-confirmed', 'true');
-  await expect(card(3)).toHaveClass(/bg-emerald-50/);
+  await expect(card(3)).toHaveClass(/bg-\(--kds-confirmed-bg\)/);
   await expect(card(2).getByTestId('kds-served-confirmed')).toHaveCount(0);
   const takeawayPill = card(2).getByTestId('kds-service-notice');
   await expect(takeawayPill).toHaveText('Changed to takeaway');

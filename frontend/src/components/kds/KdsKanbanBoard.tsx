@@ -165,9 +165,7 @@ export function KdsKanbanBoard({
             );
           })}
 
-          {voidedGroups.length > 0 && (
-            <VoidedColumn groups={voidedGroups} />
-          )}
+          {voidedGroups.length > 0 && <VoidedColumn groups={voidedGroups} />}
         </div>
       </DragDropProvider>
 
@@ -185,7 +183,10 @@ type KanbanOrderCardProps = {
   updateItemStatus: KdsKanbanBoardProps['updateItemStatus'];
 };
 
-function kanbanOrderCardPropsEqual(prev: KanbanOrderCardProps, next: KanbanOrderCardProps): boolean {
+function kanbanOrderCardPropsEqual(
+  prev: KanbanOrderCardProps,
+  next: KanbanOrderCardProps,
+): boolean {
   return (
     prev.order === next.order &&
     prev.updateItemStatus === next.updateItemStatus &&
@@ -209,7 +210,9 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
   const tOrders = useTranslations('orders');
   const config = STATUS_CONFIG[status];
   // A cancelled item only stays to tell the kitchen; it never moves.
-  const dragItems = items.filter((i) => i.status !== 'cancelled').map((i) => ({ id: i.id, status: statusOf(i) }));
+  const dragItems = items
+    .filter((i) => i.status !== 'cancelled')
+    .map((i) => ({ id: i.id, status: statusOf(i) }));
   const busy = items.some((i) => updating === i.id);
   const { ref, isDragging } = useDraggable({
     id: `order-${order.id}-${status}`,
@@ -240,7 +243,9 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
                 : order.type}
             </Badge>
             {order.table?.name && (
-              <Badge variant="secondary" className="bg-muted text-foreground">{t('tableLabel', { name: order.table.name })}</Badge>
+              <Badge variant="secondary" className="bg-muted text-foreground">
+                {t('tableLabel', { name: order.table.name })}
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-1 text-sm text-gray-400 font-mono shrink-0">
@@ -252,7 +257,7 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
         </div>
 
         {order.special_instructions && (
-          <p className="mb-2 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700 font-medium break-words">
+          <p className="mb-2 px-2 py-1 bg-(--kds-note-bg) border border-(--kds-note-line) rounded text-sm text-(--kds-note-text) font-medium break-words">
             📝 {order.special_instructions}
           </p>
         )}
@@ -265,46 +270,49 @@ const KanbanOrderCard = memo(function KanbanOrderCard({
               data-served-confirmed={item.served_confirmed_at ? 'true' : undefined}
               className={`flex items-center gap-1 pe-1 ${noticeRowClass(item)}`}
             >
-            {/* Only the toggle changes status; tapping the row does nothing. */}
-            <div className="flex-1 min-w-0 px-2 py-1.5">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
-                  {item.quantity}×
-                </span>
-                <span className={`text-lg font-medium flex-1 min-w-32 truncate ${item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}>
-                  {formatItemHeading(item.product_name, item.variant_selection)}
-                </span>
-                <KdsServiceNotice item={item} />
-              </div>
-              {item.addons && item.addons.length > 0 && (
-                <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
-                  {item.addons.map((addon, i) => (
-                    <span
-                      key={`${addon.id ?? addon.name}-${i}`}
-                      className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
-                    >
-                      + {addon.name}{(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
-                    </span>
-                  ))}
+              {/* Only the toggle changes status; tapping the row does nothing. */}
+              <div className="flex-1 min-w-0 px-2 py-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
+                    {item.quantity}×
+                  </span>
+                  <span
+                    className={`text-lg font-medium flex-1 min-w-32 truncate ${item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}
+                  >
+                    {formatItemHeading(item.product_name, item.variant_selection)}
+                  </span>
+                  <KdsServiceNotice item={item} />
                 </div>
+                {item.addons && item.addons.length > 0 && (
+                  <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
+                    {item.addons.map((addon, i) => (
+                      <span
+                        key={`${addon.id ?? addon.name}-${i}`}
+                        className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
+                      >
+                        + {addon.name}
+                        {(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
+                {item.special_instructions && (
+                  <p className="ms-[26px] text-sm text-(--kds-instruction) italic mt-0.5 font-medium break-words">
+                    {`"${item.special_instructions}"`}
+                  </p>
+                )}
+              </div>
+              {item.status !== 'cancelled' && (
+                <KdsStatusToggle
+                  status={status}
+                  skipped={inactive}
+                  disabled={updating === item.id}
+                  onAdvance={(nextStatus) => {
+                    void updateItemStatus(item.id, nextStatus, { expectedStatus: statusOf(item) });
+                  }}
+                />
               )}
-              <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
-              {item.special_instructions && (
-                <p className="ms-[26px] text-sm text-red-600 italic mt-0.5 font-medium break-words">
-                  {`"${item.special_instructions}"`}
-                </p>
-              )}
-            </div>
-            {item.status !== 'cancelled' && (
-              <KdsStatusToggle
-                status={status}
-                skipped={inactive}
-                disabled={updating === item.id}
-                onAdvance={(nextStatus) => {
-                  void updateItemStatus(item.id, nextStatus, { expectedStatus: statusOf(item) });
-                }}
-              />
-            )}
             </div>
           ))}
         </div>
@@ -344,15 +352,14 @@ function VoidedColumn({ groups }: { groups: Array<{ order: KdsOrder; items: KdsO
                 #{order.order_number}
               </Ltr>
               {order.table?.name && (
-                <Badge variant="secondary" className="bg-muted text-foreground">{t('tableLabel', { name: order.table.name })}</Badge>
+                <Badge variant="secondary" className="bg-muted text-foreground">
+                  {t('tableLabel', { name: order.table.name })}
+                </Badge>
               )}
             </div>
             <div className="space-y-1">
               {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="w-full text-start px-2 py-1.5"
-                >
+                <div key={item.id} className="w-full text-start px-2 py-1.5">
                   <div className="flex items-center gap-2">
                     <span className={`text-base font-bold w-6 shrink-0 ${config.text}`}>
                       {item.quantity}×

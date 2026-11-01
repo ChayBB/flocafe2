@@ -11,10 +11,10 @@ import { parseDbTimestamp } from '@/lib/utils';
  */
 export function serviceNoticeRowClass(item: KdsOrderItem): string | null {
   if (item.service_change) {
-    return 'border-orange-400 bg-orange-100 dark:border-orange-600 dark:bg-orange-950/60 border-s-4';
+    return 'border-(--kds-alert-line) bg-(--kds-alert-bg) border-s-4';
   }
   if (item.served_confirmed_at) {
-    return 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/50';
+    return 'border-(--kds-confirmed-line) bg-(--kds-confirmed-bg)';
   }
   return null;
 }
@@ -50,7 +50,7 @@ export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
       {item.service_change && (
         <span
           data-testid="kds-service-notice"
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-orange-200 px-2 py-0.5 text-xs font-bold text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-(--kds-alert-chip) px-2 py-0.5 text-xs font-bold text-(--kds-alert-text)"
         >
           <AlertTriangle size={12} aria-hidden="true" />
           {item.service_change === 'cancelled' ? t('noticeCancelled') : t('noticeTakeaway')}
@@ -60,7 +60,7 @@ export function KdsServiceNotice({ item }: { item: KdsOrderItem }) {
         <span
           data-testid="kds-served-confirmed"
           title={t('servedConfirmedMark')}
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-semibold text-(--kds-confirmed-text)"
         >
           <CheckCheck size={16} strokeWidth={2.5} aria-label={t('servedConfirmedMark')} />
           {[confirmedTime(item), item.served_confirmed_by_name].filter(Boolean).join(' · ')}
