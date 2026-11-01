@@ -385,8 +385,8 @@ test('table QR links use the public address, and cancelling QR codes in OrderFlo
       .locator('div', { has: page.getByRole('img', { name: 'QR' }) })
       .filter({ hasText: table.name })
       .last();
-    await expect(card.getByText(table.name, { exact: true })).toHaveCSS('font-size', '18px');
-    await expect(card.getByText('Menu', { exact: true })).toHaveCSS('font-size', '16px');
+    await expect(card.getByText(table.name, { exact: true })).toHaveCSS('font-size', '23.4px');
+    await expect(card.getByText('Menu', { exact: true })).toHaveCSS('font-size', '20.8px');
     await expect(card.getByRole('img', { name: 'QR' })).toHaveCSS('width', '166px');
     await expect(card.getByText(`Table ${table.name}`)).toHaveCount(0);
     await expect(sheet.getByText('https://order.example.com/server-standalone/')).toBeVisible();
