@@ -92,15 +92,19 @@ test('orders already in the kitchen when the display signs in or switches statio
   });
   expect(product.status()).toBe(201);
   const productId = (await product.json()).product.id as string;
-  const placeOrder = async () => {
+  const placeOrder = async (orderNote: string, itemNote?: string) => {
     const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
       headers,
-      data: { type: 'takeaway', items: [{ product_id: productId, quantity: 1 }] },
+      data: {
+        type: 'takeaway',
+        special_instructions: orderNote,
+        items: [{ product_id: productId, quantity: 1, special_instructions: itemNote }],
+      },
     });
     expect(order.status()).toBe(201);
     return (await order.json()).order as { order_number: string };
   };
-  const old = await placeOrder();
+  const old = await placeOrder(`old note ${run}`);
 
   await recordSounds(page);
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
@@ -119,11 +123,12 @@ test('orders already in the kitchen when the display signs in or switches statio
     (await sounds(page)).__spoken.filter((text) => text.includes(productName));
   expect(await spokenAboutProduct()).toEqual([]);
 
-  // A new order is read out once, by its items and without its order number.
-  const fresh = await placeOrder();
+  // A new order is read out once, by its items, item note and order note, without its order number.
+  const fresh = await placeOrder(`rush ${run}`, 'extra coconut');
   await expect.poll(spokenAboutProduct, { timeout: 15000 }).toHaveLength(1);
   const [spoken] = await spokenAboutProduct();
-  expect(spoken).toContain(`New order: 1 ${productName}`);
+  expect(spoken).toContain(`New order: 1 ${productName}, extra coconut. Order note: rush ${run}`);
+  expect(spoken).not.toContain('old note');
   expect(spoken).not.toContain(fresh.order_number);
   expect(spoken).not.toContain(old.order_number);
   await page.waitForTimeout(1500);

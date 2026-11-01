@@ -222,6 +222,8 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
   // already ready. Every station counts, so switching station never reads out what was already there.
   const knownItemIdsRef = useRef<Set<number> | null>(null);
   const knownStatusesRef = useRef<Map<number, string>>(new Map());
+  // An order note is read with the order's new items, once per wording.
+  const readOrderNotesRef = useRef<Map<number, string>>(new Map());
   const lastReadyAtRef = useRef<Map<string, number>>(new Map());
   const readAloudEndedAtRef = useRef(-Infinity);
   const readyAlertEndedAtRef = useRef(-Infinity);
@@ -233,6 +235,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
     const itemIds = new Set(allLive.map((item) => item.id));
     const knownItems = knownItemIdsRef.current;
     const knownStatuses = knownStatusesRef.current;
+    const readOrderNotes = readOrderNotesRef.current;
     if (knownItems && soundSettingsRef.current.readAloud) {
       const phrases = orders
         .map((order) => {
@@ -246,9 +249,14 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
                 : t('readAloudItem', { name: item.product_name, quantity: item.quantity });
             })
             .join(', ');
+          const orderNote = order.special_instructions?.trim() || '';
+          const withNote =
+            orderNote && readOrderNotes.get(order.id) !== orderNote
+              ? `${items}. ${t('readAloudOrderNote', { note: orderNote })}`
+              : items;
           return order.table?.name
-            ? t('readAloudTable', { table: order.table.name, items })
-            : t('readAloudOrder', { number: order.order_number, items });
+            ? t('readAloudTable', { table: order.table.name, items: withNote })
+            : t('readAloudOrder', { number: order.order_number, items: withNote });
         })
         .filter(Boolean);
       if (phrases.length > 0) {
@@ -311,6 +319,10 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
       }
     }
     knownItemIdsRef.current = new Set([...(knownItems ?? []), ...itemIds]);
+    for (const order of conn.orders) {
+      const note = order.special_instructions?.trim();
+      if (note) readOrderNotes.set(order.id, note);
+    }
     knownStatusesRef.current = new Map(allLive.map((item) => [item.id, item.status || ''] as const));
   }, [orders, conn.orders, ordersSynced, t]);
 
