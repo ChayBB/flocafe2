@@ -24,6 +24,7 @@ import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { parsePhone } from '@/lib/phone';
 import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
+import { useReloadOnNewBuild } from '@/hooks/useReloadOnNewBuild';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
@@ -1174,6 +1175,7 @@ export default function ServerStandalonePage() {
     return quantities;
   }, [draft]);
   const draftItemCount = draft.reduce((sum, line) => sum + line.quantity, 0);
+  useReloadOnNewBuild('/api/server-app/info', draft.length === 0 && !sending);
 
   const guestMode = !user && !!guestTable && !showLogin;
   const waitingForGuest =

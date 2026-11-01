@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   closeServerResources,
   createShutdownCancellationError,
@@ -98,6 +98,26 @@ function getStaticDir(): string | null {
     if (fs.existsSync(path.join(dir, 'index.html'))) return dir;
   }
   return null;
+}
+
+let frontendBuildCache: { key: string; build: string } | null = null;
+
+/** Identifies the exported Server App page, so open pages can tell when a new frontend was installed. */
+function frontendBuild(): string | null {
+  const dir = getStaticDir();
+  if (!dir) return null;
+  try {
+    const file = path.join(dir, 'server-standalone', 'index.html');
+    const stat = fs.statSync(file);
+    const key = `${file}:${stat.mtimeMs}:${stat.size}`;
+    if (frontendBuildCache?.key !== key) {
+      const build = createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12);
+      frontendBuildCache = { key, build };
+    }
+    return frontendBuildCache.build;
+  } catch {
+    return null;
+  }
 }
 
 function rewriteNextExportPath(reqPath: string): string {
@@ -341,6 +361,7 @@ export function startServerApp(): Promise<void> {
         kds_enabled: settings.kds_enabled !== 'false',
         timezone: snapshot.timezone,
         server_time: clockNow().toISOString(),
+        frontend_build: frontendBuild(),
       });
     });
 

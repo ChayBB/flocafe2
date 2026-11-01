@@ -106,6 +106,48 @@ test.describe('Server App guest from a table QR', () => {
     expect(candidates.staff.some((member: { name: string }) => member.name === 'Guest')).toBeFalsy();
   });
 
+  test('an open page reloads itself when the POS serves a newer frontend, but not over unsent items', async ({
+    page,
+  }) => {
+    const info = await page.request.get(`${E2E_SERVER_APP_BASE_URL}/api/server-app/info`);
+    expect((await info.json()).frontend_build).toMatch(/^[0-9a-f]{12}$/);
+
+    let build = 'build-a';
+    await page.route('**/api/server-app/info', async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), frontend_build: build } });
+    });
+    const table = await createTable(page);
+    await setEnglish(page);
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?${table.query}`);
+    await expect(page.locator('header').getByTestId('server-app-guest-name')).toBeVisible();
+    const mark = () => page.evaluate(() => ((window as unknown as { __mark: number }).__mark = 1));
+    const marked = () => page.evaluate(() => (window as unknown as { __mark?: number }).__mark === 1);
+    const comeBack = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForTimeout(500);
+    await mark();
+
+    // The same build leaves the page alone; a new one reloads it.
+    await comeBack();
+    await page.waitForTimeout(1000);
+    expect(await marked()).toBe(true);
+    build = 'build-b';
+    await comeBack();
+    await expect.poll(marked, { timeout: 10000 }).toBe(false);
+    await expect(page.locator('header').getByTestId('server-app-guest-name')).toBeVisible();
+
+    // With items waiting to be sent it holds off.
+    const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
+    await search.fill('E2E Coffee');
+    await search.press('Enter');
+    await expect(page.getByRole('button', { name: 'Send to kitchen' }).first()).toBeEnabled();
+    await mark();
+    build = 'build-c';
+    await comeBack();
+    await page.waitForTimeout(1500);
+    expect(await marked()).toBe(true);
+  });
+
   test('the guest label reads ลูกค้า in Thai', async ({ page }) => {
     const table = await createTable(page);
     const setServerLanguage = (value: string) =>
