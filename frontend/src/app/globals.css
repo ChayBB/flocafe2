@@ -506,40 +506,40 @@ div:hover > .flo-toast-drain,
 }
 
 .theme-kds.dark {
-  /* Night: the deep navy and steel blue of a medical imaging console, easy on the eyes in a dark kitchen. */
-  --background: #060d1c;
-  --foreground: #e3ecf8;
-  --card: #0d1b33;
-  --card-foreground: #e3ecf8;
-  --popover: #0d1b33;
-  --popover-foreground: #e3ecf8;
-  --panel: #0d1b33;
-  --secondary: #16294b;
-  --secondary-foreground: #c9d8ee;
-  --muted: #16294b;
-  --muted-foreground: #8fa6c6;
-  --border: #22406c;
-  --input: #2a4b7d;
-  --color-brand: #3f7fd0;
-  --color-brand-light: #13284a;
-  --color-brand-hover: #3269b0;
-  --color-brand-ring: #3f7fd080;
-  --kds-pending: #e3b55e;
-  --kds-pending-text: #e3b55e;
-  --kds-pending-tint: #2b3139;
-  --kds-pending-line: #514c41;
-  --kds-preparing: #e8936f;
-  --kds-preparing-text: #e8936f;
-  --kds-preparing-tint: #2c2c3b;
-  --kds-preparing-line: #534146;
-  --kds-ready: #8fd08a;
-  --kds-ready-text: #8fd08a;
-  --kds-ready-tint: #1f343f;
-  --kds-ready-line: #37554f;
-  --kds-served: #c0a8f0;
-  --kds-served-text: #c0a8f0;
-  --kds-served-tint: #262f4d;
-  --kds-served-line: #46486f;
+  /* Night: near-black neutral surfaces with one calm blue accent, easy on the eyes in a dark kitchen. */
+  --background: #0b0b0d;
+  --foreground: #e8e8ec;
+  --card: #151518;
+  --card-foreground: #e8e8ec;
+  --popover: #151518;
+  --popover-foreground: #e8e8ec;
+  --panel: #151518;
+  --secondary: #1d1d21;
+  --secondary-foreground: #c8c8cf;
+  --muted: #1d1d21;
+  --muted-foreground: #8c8c95;
+  --border: #26262b;
+  --input: #2c2c32;
+  --color-brand: #4a6cf7;
+  --color-brand-light: #1a2040;
+  --color-brand-hover: #3d5ce0;
+  --color-brand-ring: #4a6cf780;
+  --kds-pending: #e0b25a;
+  --kds-pending-text: #e0b25a;
+  --kds-pending-tint: #2d2820;
+  --kds-pending-line: #4e412a;
+  --kds-preparing: #e0906f;
+  --kds-preparing-text: #e0906f;
+  --kds-preparing-tint: #2d2422;
+  --kds-preparing-line: #4e3730;
+  --kds-ready: #8fc483;
+  --kds-ready-text: #8fc483;
+  --kds-ready-tint: #242a25;
+  --kds-ready-line: #374636;
+  --kds-served: #ab9dd6;
+  --kds-served-text: #ab9dd6;
+  --kds-served-tint: #27252f;
+  --kds-served-line: #3f3b4d;
 }
 
 html.dark::-webkit-scrollbar-thumb,
