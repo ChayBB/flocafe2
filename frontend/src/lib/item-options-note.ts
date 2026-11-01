@@ -28,20 +28,34 @@ export function withoutOptionsNote(instructions: string | null | undefined, note
   return rest.startsWith(NOTE_SEPARATOR) ? rest.slice(NOTE_SEPARATOR.length).trim() : text;
 }
 
+// Zero-width, bidi and other invisible characters (often pasted in with imported names) are read
+// differently by each voice, and some voices drop the word around them.
+const INVISIBLE =
+  /[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\u3164\u2800]/g;
+const ODD_SPACE = /[\u00A0\u2000-\u200A\u202F\u3000]/g;
+
+function cleanForSpeech(text: string): string {
+  return text.replace(INVISIBLE, '').replace(ODD_SPACE, ' ').trim();
+}
+
 /**
- * The menu name to read aloud: bracketed text is dropped, and once options are chosen a listed
- * choice such as "หมู/กุ้ง/ไก่" gives way to the chosen ones, followed by the size.
+ * The menu name to read aloud, built from what was chosen rather than from the displayed name:
+ * bracketed text is dropped, and once options are chosen a listed choice such as "หมู/กุ้ง/ไก่"
+ * gives way to the chosen one joined onto the dish ("ข้าวต้มหมู"), followed by the size.
  */
 export function spokenItemName(
   productName: string,
   variantName: string | null | undefined,
   addons: NamedOption[] | null | undefined,
 ): string {
-  const chosen = (addons ?? []).map((addon) => addon.name.trim()).filter(Boolean);
-  let words = productName
+  const chosen = (addons ?? []).map((addon) => cleanForSpeech(addon.name)).filter(Boolean);
+  let words = cleanForSpeech(productName)
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
   if (chosen.length > 0) words = words.filter((word) => !word.includes('/'));
-  return [...words, ...chosen, String(variantName ?? '').trim()].filter(Boolean).join(' ');
+  const dish = words.join(' ') + (chosen[0] ?? '');
+  return [dish, ...chosen.slice(1), cleanForSpeech(String(variantName ?? ''))]
+    .filter(Boolean)
+    .join(' ');
 }

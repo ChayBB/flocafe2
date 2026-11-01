@@ -7,9 +7,13 @@ const TOKEN_KEY = 'flocafe:server-app-token';
 
 test('the KDS reads the chosen option and size instead of the listed choices and brackets', () => {
   const addons = [{ name: 'หมู' }];
-  expect(spokenItemName('ข้าวต้ม หมู/กุ้ง/ไก่/ปลาหมึก', 'จานเล็ก', addons)).toBe('ข้าวต้ม หมู จานเล็ก');
-  expect(spokenItemName('ข้าวต้ม (หมู/กุ้ง)', 'ชามใหญ่', addons)).toBe('ข้าวต้ม หมู ชามใหญ่');
+  expect(spokenItemName('ข้าวต้ม หมู/กุ้ง/ไก่/ปลาหมึก', 'จานเล็ก', addons)).toBe('ข้าวต้มหมู จานเล็ก');
+  expect(spokenItemName('ข้าวต้ม (หมู/กุ้ง)', 'ชามใหญ่', addons)).toBe('ข้าวต้มหมู ชามใหญ่');
   expect(spokenItemName('ข้าวต้ม หมู/กุ้ง', null, [])).toBe('ข้าวต้ม หมู/กุ้ง');
+  // Invisible characters from imported names never reach the voice.
+  expect(spokenItemName('ข้าวไข่เจียว\u200B หมู/กุ้ง/ไก่', null, [{ name: 'กุ้ง\uFEFF' }])).toBe(
+    'ข้าวไข่เจียวกุ้ง',
+  );
   const note = optionsNote('จานเล็ก', addons);
   expect(note).toBe('จานเล็ก หมู');
   expect(withoutOptionsNote('จานเล็ก หมู', note)).toBe('');
