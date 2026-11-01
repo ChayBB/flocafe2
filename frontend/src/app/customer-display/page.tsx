@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'use-intl';
 import api from '@/lib/api';
+import { holdDarkClass } from '@/lib/kds-screen-mode';
 import { useAuthStore } from '@/store/auth';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import type { Order } from '@/lib/types';
@@ -134,7 +135,7 @@ function OrderBoardRow({
       ref={measureRef}
       data-testid="customer-display-order-row"
       data-order-id={getOrderId(order)}
-      className={`min-w-0 rounded-2xl border bg-slate-900/80 px-4 py-3 text-center md:px-6 md:py-4 ${accent === 'blue' ? 'border-blue-900/60' : 'border-emerald-900/60'}`}
+      className={`min-w-0 rounded-2xl border bg-white px-4 py-3 text-center md:px-6 md:py-4 ${accent === 'blue' ? 'border-blue-200' : 'border-emerald-200'}`}
     >
       <span className="block min-w-0 break-all text-[clamp(1.875rem,1.5vw,3.75rem)] font-black leading-tight">
         {order.number}
@@ -470,16 +471,16 @@ function OrderBoardSection({
 
   return (
     <section
-      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border ${accent === 'blue' ? 'border-blue-900/70 bg-blue-950/60' : 'border-emerald-900/70 bg-emerald-950/60'}`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border ${accent === 'blue' ? 'border-blue-200 bg-blue-50' : 'border-emerald-200 bg-emerald-50'}`}
     >
       <div
-        className={`shrink-0 border-b px-5 py-4 md:px-6 md:py-5 ${accent === 'blue' ? 'border-blue-800/60 bg-blue-900/50' : 'border-emerald-800/60 bg-emerald-900/50'}`}
+        className={`shrink-0 border-b px-5 py-4 md:px-6 md:py-5 ${accent === 'blue' ? 'border-blue-200 bg-blue-100 text-blue-950' : 'border-emerald-200 bg-emerald-100 text-emerald-950'}`}
       >
         <h2 className="text-[clamp(1.875rem,1.5vw,3.75rem)] font-extrabold uppercase tracking-wide">
           {title}
         </h2>
         <p
-          className={`mt-1 text-[clamp(1rem,0.8vw,2rem)] ${accent === 'blue' ? 'text-blue-200/70' : 'text-emerald-200/70'}`}
+          className={`mt-1 text-[clamp(1rem,0.8vw,2rem)] ${accent === 'blue' ? 'text-blue-700/80' : 'text-emerald-700/80'}`}
         >
           {hint}
         </p>
@@ -539,6 +540,8 @@ export default function CustomerDisplayPage() {
   const router = useRouter();
   const t = useTranslations('customerDisplay');
   const tc = useTranslations('common');
+  // The display faces customers, so it always uses the day theme.
+  useEffect(() => holdDarkClass(false), []);
   const { formatTime } = useFormatDate();
   const { user, currentTenant, loading: authLoading, loadFromStorage } = useAuthStore();
   const userId = user?.id ?? null;
@@ -875,9 +878,9 @@ export default function CustomerDisplayPage() {
 
   if (unpaired) {
     return (
-      <main className="flex h-screen min-h-0 flex-col items-center justify-center gap-2 bg-slate-950 p-6 text-center text-white">
+      <main className="flex h-screen min-h-0 flex-col items-center justify-center gap-2 bg-slate-50 p-6 text-center text-slate-900">
         <h1 className="text-2xl font-bold">{t('unpairedTitle')}</h1>
-        <p className="text-slate-400">{t('unpairedHint')}</p>
+        <p className="text-slate-500">{t('unpairedHint')}</p>
       </main>
     );
   }
@@ -887,20 +890,20 @@ export default function CustomerDisplayPage() {
     (pairedToken === null && (authLoading || !user || !currentTenant))
   ) {
     return (
-      <main className="flex h-screen min-h-0 flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="text-slate-400">{tc('loading')}</div>
+      <main className="flex h-screen min-h-0 flex-col items-center justify-center bg-slate-50 text-slate-900">
+        <div className="text-slate-500">{tc('loading')}</div>
       </main>
     );
   }
 
   return (
-    <main className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden bg-slate-950 p-4 text-white md:p-10 select-none">
+    <main className="flex h-screen min-h-0 min-w-0 flex-col overflow-hidden bg-slate-50 p-4 text-slate-900 md:p-10 select-none">
       <header className="mx-auto mb-5 flex w-full shrink-0 min-w-0 items-end justify-between gap-4 md:mb-8">
         <div className="min-w-0">
           <div className="break-all text-[clamp(1.875rem,1.5vw,3.75rem)] font-bold tracking-tight">
             {pairedToken ? businessName : currentTenant?.business_name}
           </div>
-          <div className="mt-1 text-[clamp(1rem,0.8vw,2rem)] text-slate-400">
+          <div className="mt-1 text-[clamp(1rem,0.8vw,2rem)] text-slate-500">
             {t('orderStatus')}
           </div>
         </div>
@@ -918,7 +921,7 @@ export default function CustomerDisplayPage() {
       </header>
 
       {loading ? (
-        <div className="mx-auto max-w-7xl py-20 text-center text-slate-400">
+        <div className="mx-auto max-w-7xl py-20 text-center text-slate-500">
           {t('loadingOrders')}
         </div>
       ) : (

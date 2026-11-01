@@ -170,6 +170,11 @@ test.describe('Customer display pairing and clipboard safety', () => {
         readyOrder.order_number,
       );
 
+      // The board faces customers, so it keeps the day theme even when the app switches to night.
+      await displayPage.evaluate(() => document.documentElement.classList.add('dark'));
+      await expect(displayPage.locator('html')).not.toHaveClass(/(^|\s)dark(\s|$)/);
+      await expect(displayPage.locator('main')).toHaveClass(/bg-slate-50/);
+
       // Reloading the display without the URL fragment keeps the board paired via stored token.
       await displayPage.reload();
       await expect(displayPage).toHaveURL(/\/customer-display\/?$/);
