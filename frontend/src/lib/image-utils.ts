@@ -22,7 +22,28 @@ export function compressCroppedImage(image: HTMLImageElement, crop: CropArea): s
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
-      ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+      // The crop may reach past the picture when zoomed out; that part stays white.
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, size, size);
+      const scaleX = size / crop.width;
+      const scaleY = size / crop.height;
+      const sx = Math.max(0, crop.x);
+      const sy = Math.max(0, crop.y);
+      const sw = Math.min(image.naturalWidth || image.width, crop.x + crop.width) - sx;
+      const sh = Math.min(image.naturalHeight || image.height, crop.y + crop.height) - sy;
+      if (sw > 0 && sh > 0) {
+        ctx.drawImage(
+          image,
+          sx,
+          sy,
+          sw,
+          sh,
+          (sx - crop.x) * scaleX,
+          (sy - crop.y) * scaleY,
+          sw * scaleX,
+          sh * scaleY,
+        );
+      }
       const dataUri = canvas.toDataURL('image/webp', quality);
       if (dataUri !== 'data:,' && dataUri.length <= MAX_BASE64_LENGTH) return dataUri;
     }
@@ -51,7 +72,10 @@ export function compressImage(file: File, quality = 0.8): Promise<string | null>
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(null); return; }
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
 
       ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, size, size);
 
