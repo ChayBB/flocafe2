@@ -53,9 +53,11 @@ for (const screenSize of SCREENS) {
     await picker.getByRole('button', { name: new RegExp(tableName) }).click();
     await expect(page.locator('header')).toContainText(tableName);
 
-    // The ticket keeps its food and can now be sent to the chosen table.
-    if (screenSize.phone) await page.getByTestId('server-app-cart-button').click();
+    // The ticket keeps its food and is back on screen, ready to send to the chosen table; a phone
+    // reopens its cart without another tap.
     await expect(page.getByTestId('server-app-choose-table')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Send to kitchen' }).last()).toBeEnabled();
+    const send = page.getByRole('button', { name: 'Send to kitchen' }).last();
+    await expect(send).toBeVisible();
+    await expect(send).toBeEnabled();
   });
 }

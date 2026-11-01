@@ -261,6 +261,8 @@ export default function ServerStandalonePage() {
   const [, setCustomerSearched] = useState(false);
   const phoneDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tablePickerRef = useRef<HTMLElement>(null);
+  // Set when the cart sent the server to pick a table, so the cart comes back ready to send.
+  const reopenCartAfterTableRef = useRef(false);
   const phoneAbortRef = useRef<AbortController | null>(null);
   const [sending, setSending] = useState(false);
   // Synchronous re-entry guard: `sending` state updates too late to stop a second click fired before the first render.
@@ -1447,6 +1449,7 @@ export default function ServerStandalonePage() {
             type="button"
             data-testid="server-app-choose-table"
             onClick={() => {
+              reopenCartAfterTableRef.current = mobileCartOpen;
               setMobileCartOpen(false);
               setTablePickerOpen(true);
               // Below the three-column layout the table list sits above the menu, out of view from here.
@@ -1595,6 +1598,10 @@ export default function ServerStandalonePage() {
                       onClick={() => {
                         selectTable(table.id);
                         if (!isWide) setTablePickerOpen(false);
+                        if (reopenCartAfterTableRef.current) {
+                          reopenCartAfterTableRef.current = false;
+                          if (!isWide) setMobileCartOpen(true);
+                        }
                       }}
                       data-table-tone={tone}
                       className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
