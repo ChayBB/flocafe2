@@ -382,7 +382,9 @@ export default function ProductGrid({
         items: filtered.filter((product) => product.category_id === category.id),
       }))
       .filter((group) => group.items.length > 0);
-    const other = filtered.filter((product) => !product.category_id || !known.has(product.category_id));
+    const other = filtered.filter(
+      (product) => !product.category_id || !known.has(product.category_id),
+    );
     if (other.length > 0) groups.push({ id: null, name: '', items: other });
     return groups;
   }, [scrollSpy, categories, filtered]);
@@ -423,7 +425,8 @@ export default function ProductGrid({
     const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-category-section]'));
     if (nodes.length < 2) return;
     const box = container.getBoundingClientRect();
-    const span = (node: HTMLElement) => node.offsetHeight + parseFloat(getComputedStyle(node).marginBottom || '0');
+    const span = (node: HTMLElement) =>
+      node.offsetHeight + parseFloat(getComputedStyle(node).marginBottom || '0');
     if (direction > 0 && scrollHeight - scrollTop - clientHeight < clientHeight) {
       const first = nodes[0];
       if (first.getBoundingClientRect().bottom >= box.top) return;
@@ -447,18 +450,21 @@ export default function ProductGrid({
     let active: string | null = null;
     if (container.scrollTop > 4 && headings.length > 0) {
       const top = container.getBoundingClientRect().top;
-      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
+      // A looping list never really ends, so its bottom edge says nothing about the category.
+      const atBottom =
+        !looping && container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
       if (atBottom) {
         active = headings[headings.length - 1].dataset.categorySection ?? null;
       } else {
         active = headings[0].dataset.categorySection ?? null;
         for (const node of headings) {
-          if (node.getBoundingClientRect().top - top <= 12) active = node.dataset.categorySection ?? null;
+          if (node.getBoundingClientRect().top - top <= 12)
+            active = node.dataset.categorySection ?? null;
         }
       }
     }
     if (active !== (selectedCategory ?? null)) setSelectedCategory(active);
-  }, [scrollSpy, selectedCategory, setSelectedCategory]);
+  }, [scrollSpy, looping, selectedCategory, setSelectedCategory]);
 
   const onCatalogScroll = () => {
     if (loopSections) loopSectionsOnScroll();
@@ -481,9 +487,7 @@ export default function ProductGrid({
     if (!scrollSpy) return;
     const root = gridRootRef.current;
     const row = root?.querySelector<HTMLElement>('[data-testid="pos-category-row"]');
-    const chip = row?.querySelector<HTMLElement>(
-      `[data-chip-key="${selectedCategory ?? 'all'}"]`,
-    );
+    const chip = row?.querySelector<HTMLElement>(`[data-chip-key="${selectedCategory ?? 'all'}"]`);
     if (!row || !chip) return;
     const left = chip.offsetLeft - row.offsetLeft;
     if (left < row.scrollLeft) row.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' });
@@ -511,7 +515,9 @@ export default function ProductGrid({
       container.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    const target = container.querySelector<HTMLElement>(`[data-category-section="${CSS.escape(id)}"]`);
+    const target = container.querySelector<HTMLElement>(
+      `[data-category-section="${CSS.escape(id)}"]`,
+    );
     if (target) {
       const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
       container.scrollTo({ top: container.scrollTop + offset, behavior: 'smooth' });
@@ -534,77 +540,77 @@ export default function ProductGrid({
         }}
         className="min-h-36 bg-card rounded-xl p-2.5 border border-border hover:border-brand/40 active:border-brand active:bg-muted/40 hover:shadow-md transition-all text-start relative cursor-pointer overflow-hidden touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
       >
-          {!!product.track_inventory && (
-            <>
-              {product.stock_quantity <= 0 ? (
-                <span className="absolute top-2 start-2 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 dark:border-red-800/40 pointer-events-none">
-                  {t('outOfStock')}
-                </span>
-              ) : product.stock_quantity <= (product.low_stock_threshold || 0) ? (
-                <span className="absolute top-2 start-2 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 dark:border-orange-800/40 pointer-events-none">
-                  {t('lowStock')}
-                </span>
-              ) : null}
-            </>
-          )}
-          {inCartQty > 0 && (
-            <span className="absolute top-0 end-0 bg-brand text-white text-xs w-6 h-6 rounded-es-lg flex items-center justify-center font-bold z-10">
-              {inCartQty}
-            </span>
-          )}
+        {!!product.track_inventory && (
+          <>
+            {product.stock_quantity <= 0 ? (
+              <span className="absolute top-2 start-2 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 dark:border-red-800/40 pointer-events-none">
+                {t('outOfStock')}
+              </span>
+            ) : product.stock_quantity <= (product.low_stock_threshold || 0) ? (
+              <span className="absolute top-2 start-2 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-orange-200 dark:border-orange-800/40 pointer-events-none">
+                {t('lowStock')}
+              </span>
+            ) : null}
+          </>
+        )}
+        {inCartQty > 0 && (
+          <span className="absolute top-0 end-0 bg-brand text-white text-xs w-6 h-6 rounded-es-lg flex items-center justify-center font-bold z-10">
+            {inCartQty}
+          </span>
+        )}
 
-          {showProductImages && (
-            <div className="w-full aspect-square rounded-lg mb-3 relative overflow-hidden">
-              {/* Always-visible background tile — no flash when image loads */}
-              <div
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ backgroundColor: nameToColor(product.name) }}
-              >
-                <span className="text-2xl font-bold text-white/80">
-                  {product.name.substring(0, 2).toUpperCase()}
-                </span>
-              </div>
-
-              {/* Image overlays the tile when available */}
-              {product.has_image && (
-                <img
-                  src={`${api.defaults.baseURL}/products/${product.id}/image?t=${product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0}`}
-                  alt={product.name}
-                  className="absolute inset-0 w-full h-full object-cover rounded-lg"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-
-              {product.tags && product.tags.length > 0 && (
-                <span className="absolute bottom-1.5 end-1.5 z-10">
-                  <TagBadge tag={product.tags[0]} />
-                </span>
-              )}
+        {showProductImages && (
+          <div className="w-full aspect-square rounded-lg mb-3 relative overflow-hidden">
+            {/* Always-visible background tile — no flash when image loads */}
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ backgroundColor: nameToColor(product.name) }}
+            >
+              <span className="text-2xl font-bold text-white/80">
+                {product.name.substring(0, 2).toUpperCase()}
+              </span>
             </div>
-          )}
 
-          <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-snug">
-            {product.name}
-          </h3>
-          <div className="flex items-center justify-between mt-1">
-            <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              {!showProductImages && product.tags && product.tags.length > 0 && (
+            {/* Image overlays the tile when available */}
+            {product.has_image && (
+              <img
+                src={`${api.defaults.baseURL}/products/${product.id}/image?t=${product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0}`}
+                alt={product.name}
+                className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            )}
+
+            {product.tags && product.tags.length > 0 && (
+              <span className="absolute bottom-1.5 end-1.5 z-10">
                 <TagBadge tag={product.tags[0]} />
-              )}
-              {productNeedsCustomizer(product) && (
-                <span
-                  className="touch-target -me-2 -my-2 rounded-lg text-muted-foreground"
-                  title={t('customisable')}
-                  aria-label={t('customisable')}
-                >
-                  <SlidersHorizontal size={16} />
-                </span>
-              )}
-            </div>
+              </span>
+            )}
           </div>
+        )}
+
+        <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-snug">
+          {product.name}
+        </h3>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-brand font-bold">{fmt(Number(product.price))}</p>
+          <div className="flex items-center gap-1 shrink-0">
+            {!showProductImages && product.tags && product.tags.length > 0 && (
+              <TagBadge tag={product.tags[0]} />
+            )}
+            {productNeedsCustomizer(product) && (
+              <span
+                className="touch-target -me-2 -my-2 rounded-lg text-muted-foreground"
+                title={t('customisable')}
+                aria-label={t('customisable')}
+              >
+                <SlidersHorizontal size={16} />
+              </span>
+            )}
+          </div>
+        </div>
       </button>
     );
   };
@@ -702,34 +708,33 @@ export default function ProductGrid({
         ref={scrollRef}
         onScroll={onCatalogScroll}
         data-testid="pos-catalog-scroll"
-        className="flex-1 min-h-0 overflow-y-auto pb-20 md:pb-0"
+        // Looping shifts the scroll itself; the browser's own scroll anchoring would shift it twice.
+        className={`flex-1 min-h-0 overflow-y-auto overscroll-contain pb-20 md:pb-0 ${looping ? '[overflow-anchor:none]' : ''}`}
       >
-          {scrollSpy ? (
-            shownSections.map((section) => (
-              <section
-                key={section.id ?? 'other'}
-                data-category-section={section.id ?? ''}
-                className="mb-4"
-              >
-                {section.name && (
-                  <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
-                    {section.name}
-                  </h2>
-                )}
-                <div
-                  className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
-                >
-                  {section.items.map(renderProductCard)}
-                </div>
-              </section>
-            ))
-          ) : (
-            <div
-              className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+        {scrollSpy ? (
+          shownSections.map((section) => (
+            <section
+              key={section.id ?? 'other'}
+              data-category-section={section.id ?? ''}
+              className="mb-4"
             >
-              {filtered.map(renderProductCard)}
-            </div>
-          )}
+              {section.name && (
+                <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{section.name}</h2>
+              )}
+              <div
+                className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+              >
+                {section.items.map(renderProductCard)}
+              </div>
+            </section>
+          ))
+        ) : (
+          <div
+            className={`grid gap-3 ${gridClassName ?? (sidebarOpen ? 'grid-cols-4' : 'grid-cols-5')}`}
+          >
+            {filtered.map(renderProductCard)}
+          </div>
+        )}
       </div>
     </div>
   );

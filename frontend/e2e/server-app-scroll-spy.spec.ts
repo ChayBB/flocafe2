@@ -88,7 +88,10 @@ test('the highlighted category follows the menu scroll and choosing one scrolls 
     const heading = Array.from(element.querySelectorAll('h2')).find((node) =>
       node.textContent?.startsWith('Spy A'),
     ) as HTMLElement;
-    element.scrollTo(0, element.scrollTop + heading.getBoundingClientRect().top - element.getBoundingClientRect().top);
+    element.scrollTo(
+      0,
+      element.scrollTop + heading.getBoundingClientRect().top - element.getBoundingClientRect().top,
+    );
   });
   await expect.poll(() => isActive(first)).toBe(true);
 
@@ -113,7 +116,9 @@ test('the highlighted category follows the menu scroll and choosing one scrolls 
   await expect.poll(() => isActive('All')).toBe(true);
 });
 
-test('the menu shows two columns and scrolling past the last category carries on into the first', async ({ page }) => {
+test('the menu shows two columns and scrolling past the last category carries on into the first', async ({
+  page,
+}) => {
   const run = Math.random().toString(36).slice(2, 6);
   await createCategoryWithProducts(page, `Loop ${run}`, 6);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -149,6 +154,29 @@ test('the menu shows two columns and scrolling past the last category carries on
   expect(total).toBeGreaterThan(2);
   const cardCount = await scroller.getByTestId('pos-product-card').count();
 
+  // The browser must not re-anchor the scroll on top of the loop's own shift, or the menu jumps.
+  expect(await scroller.evaluate((element) => getComputedStyle(element).overflowAnchor)).toBe(
+    'none',
+  );
+  await scroller.evaluate((element) => {
+    const log: { top: number; heads: [string, number][] }[] = [];
+    (window as unknown as { __menuFrames: typeof log }).__menuFrames = log;
+    const tick = () => {
+      const box = element.getBoundingClientRect();
+      log.push({
+        top: element.scrollTop,
+        heads: Array.from(element.querySelectorAll<HTMLElement>('[data-category-section]')).map(
+          (node) => [
+            node.dataset.categorySection ?? '',
+            node.getBoundingClientRect().top - box.top,
+          ],
+        ),
+      });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
   // Scrolling on and on wraps round: the first category comes back after the last, nothing is duplicated.
   await scroller.hover();
   await expect
@@ -165,6 +193,30 @@ test('the menu shows two columns and scrolling past the last category carries on
   const shift = rotated.indexOf(start[0]);
   expect(rotated).toEqual([...start.slice(total - shift), ...start.slice(0, total - shift)]);
   await expect(scroller.getByTestId('pos-product-card')).toHaveCount(cardCount);
+
+  // While wrapping, a category on screen never jumps: it moves only by what the wheel scrolled.
+  const jumps = await page.evaluate(() => {
+    const frames = (
+      window as unknown as { __menuFrames: { top: number; heads: [string, number][] }[] }
+    ).__menuFrames;
+    const found: string[] = [];
+    const height = (heads: [string, number][]) => Math.max(...heads.map(([, top]) => top));
+    for (let index = 1; index < frames.length; index += 1) {
+      const before = new Map(frames[index - 1].heads);
+      const scrolled = frames[index].top - frames[index - 1].top;
+      for (const [id, top] of frames[index].heads) {
+        const previous = before.get(id);
+        if (previous === undefined) continue;
+        const moved = top - previous;
+        const onScreen = previous > -50 && previous < window.innerHeight;
+        const relocated = Math.abs(moved) > height(frames[index].heads) / 2;
+        if (onScreen && !relocated && Math.abs(moved + scrolled) > 2)
+          found.push(`${id}: ${moved} vs ${-scrolled}`);
+      }
+    }
+    return found;
+  });
+  expect(jumps).toEqual([]);
 
   // Scrolling back up wraps the other way.
   await expect

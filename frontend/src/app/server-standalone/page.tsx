@@ -1624,7 +1624,8 @@ export default function ServerStandalonePage() {
             </section>
           )}
 
-          <section className="flex h-[calc(100dvh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
+          {/* svh, not dvh: the menu keeps its height while a phone browser's toolbar slides in and out. */}
+          <section className="flex h-[calc(100svh-5rem)] min-h-96 min-w-0 flex-col rounded-lg border border-border bg-card p-3">
             {user && tablePickerOpen && activeTable && !isWide && (
               <div data-testid="server-app-table-actions" className="mb-3 space-y-2">
                 <button
