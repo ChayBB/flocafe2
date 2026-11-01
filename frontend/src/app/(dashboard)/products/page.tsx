@@ -2619,9 +2619,14 @@ export default function ProductsPage() {
       )}
 
       {showCsvModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-2xl p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-5">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          {/* A long import error list scrolls inside the dialog so the close button stays on screen. */}
+          <div
+            className="bg-card rounded-2xl p-6 w-full max-w-lg max-h-full flex flex-col"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex justify-between items-center mb-5 shrink-0">
               <h2 className="text-lg font-bold">
                 {t('csvModalTitle', {
                   type:
@@ -2641,7 +2646,7 @@ export default function ProductsPage() {
               </button>
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-5 min-h-0 overflow-y-auto">
               {/* Download section */}
               <div className="bg-muted rounded-xl p-4 space-y-3">
                 <p className="text-sm font-medium text-foreground">{t('download')}</p>
