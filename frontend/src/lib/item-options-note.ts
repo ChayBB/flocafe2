@@ -1,3 +1,5 @@
+import { formatItemHeading, parseVariantSelection } from '@/lib/printer/item-heading';
+
 /** Joins the parts of an item's special instructions the way the kitchen reads them. */
 export const NOTE_SEPARATOR = ' | ';
 
@@ -49,13 +51,57 @@ export function spokenItemName(
   addons: NamedOption[] | null | undefined,
 ): string {
   const chosen = (addons ?? []).map((addon) => cleanForSpeech(addon.name)).filter(Boolean);
+  return [
+    joinedDish(productName, chosen[0]),
+    ...chosen.slice(1),
+    cleanForSpeech(String(variantName ?? '')),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function joinedDish(productName: string, firstChoice: string | undefined): string {
   let words = cleanForSpeech(productName)
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
-  if (chosen.length > 0) words = words.filter((word) => !word.includes('/'));
-  const dish = words.join(' ') + (chosen[0] ?? '');
-  return [dish, ...chosen.slice(1), cleanForSpeech(String(variantName ?? ''))]
-    .filter(Boolean)
-    .join(' ');
+  if (firstChoice) words = words.filter((word) => !word.includes('/'));
+  return words.join(' ') + (firstChoice ?? '');
+}
+
+interface KdsLineItem {
+  product_name: string;
+  variant_selection?: unknown;
+  addons?: NamedOption[] | null;
+  special_instructions?: string | null;
+}
+
+/**
+ * The menu line a kitchen screen shows: once options are chosen they join the dish the way it is
+ * read aloud, with the size in brackets ("ข้าวต้มหมู (จานเล็ก)"), and the options note the order
+ * screen wrote into the special instructions is left out as already said.
+ */
+export function kdsItemLine(item: KdsLineItem): { name: string; instructions: string } {
+  const variant = parseVariantSelection(item.variant_selection);
+  const variantName = String(variant?.name ?? '').trim();
+  const instructions = withoutOptionsNote(
+    item.special_instructions,
+    optionsNote(variantName, item.addons),
+  );
+  const options = (item.addons ?? [])
+    .map((addon) => ({ name: cleanForSpeech(addon.name), quantity: addon.quantity ?? 1 }))
+    .filter((option) => option.name);
+  if (options.length === 0) {
+    return { name: formatItemHeading(item.product_name, item.variant_selection), instructions };
+  }
+  const times = (quantity: number) => (quantity > 1 ? ` ×${quantity}` : '');
+  const sku = String(variant?.sku ?? '').trim();
+  const name = [
+    joinedDish(item.product_name, options[0].name) + times(options[0].quantity),
+    ...options.slice(1).map((option) => option.name + times(option.quantity)),
+  ].join(' ');
+  return {
+    name: `${name}${variantName ? ` (${variantName})` : ''}${sku ? ` [${sku}]` : ''}`,
+    instructions,
+  };
 }

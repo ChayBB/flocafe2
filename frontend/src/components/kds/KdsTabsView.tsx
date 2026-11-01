@@ -19,7 +19,7 @@ import {
 import { ORDER_TYPE_LABEL_KEYS, type OrderType } from '@/lib/order-types';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
-import { formatItemHeading } from '@/lib/printer/item-heading';
+import { kdsItemLine } from '@/lib/item-options-note';
 
 export interface KdsTabsViewProps {
   orders: KdsOrder[];
@@ -157,27 +157,14 @@ export function KdsTabsView({
                           <span
                             className={`text-lg font-semibold flex-1 min-w-32 truncate ${isVoided || item.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-foreground'}`}
                           >
-                            {formatItemHeading(item.product_name, item.variant_selection)}
+                            {kdsItemLine(item).name}
                           </span>
                           <KdsServiceNotice item={item} />
                         </div>
-                        {item.addons && item.addons.length > 0 && (
-                          <div className="ms-[26px] flex flex-wrap gap-1 mt-1">
-                            {item.addons.map((addon, i) => (
-                              <span
-                                key={`${addon.id ?? addon.name}-${i}`}
-                                className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border"
-                              >
-                                + {addon.name}
-                                {(addon.quantity || 1) > 1 ? ` ×${addon.quantity}` : ''}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                         <KdsSetPrice item={item} className="ms-[26px] mt-0.5" />
-                        {item.special_instructions && (
+                        {kdsItemLine(item).instructions && (
                           <p className="ms-[26px] text-sm text-(--kds-instruction) italic mt-0.5 font-medium break-words">
-                            {`"${item.special_instructions}"`}
+                            {`"${kdsItemLine(item).instructions}"`}
                           </p>
                         )}
                       </div>

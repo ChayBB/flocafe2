@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { getE2eToken } from './helpers/test-auth';
-import { optionsNote, spokenItemName, withoutOptionsNote } from '../src/lib/item-options-note';
+import {
+  kdsItemLine,
+  optionsNote,
+  spokenItemName,
+  withoutOptionsNote,
+} from '../src/lib/item-options-note';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 
@@ -19,6 +24,31 @@ test('the KDS reads the chosen option and size instead of the listed choices and
   expect(withoutOptionsNote('จานเล็ก หมู', note)).toBe('');
   expect(withoutOptionsNote('จานเล็ก หมู | ไม่ใส่ผัก', note)).toBe('ไม่ใส่ผัก');
   expect(withoutOptionsNote('ไม่ใส่ผัก', note)).toBe('ไม่ใส่ผัก');
+});
+
+test('the KDS line shows the chosen option on the dish with the size in brackets', () => {
+  const line = kdsItemLine({
+    product_name: 'ข้าวต้ม หมู/กุ้ง/ไก่/ปลาหมึก',
+    variant_selection: JSON.stringify({ name: 'จานเล็ก' }),
+    addons: [{ name: 'หมู' }],
+    special_instructions: 'จานเล็ก หมู | ไม่ใส่ผัก',
+  });
+  expect(line).toEqual({ name: 'ข้าวต้มหมู (จานเล็ก)', instructions: 'ไม่ใส่ผัก' });
+  expect(
+    kdsItemLine({
+      product_name: 'ข้าวผัด หมู/กุ้ง',
+      addons: [{ name: 'กุ้ง', quantity: 2 }, { name: 'ไข่ดาว' }],
+      special_instructions: 'กุ้ง ×2 ไข่ดาว',
+    }),
+  ).toEqual({ name: 'ข้าวผัดกุ้ง ×2 ไข่ดาว', instructions: '' });
+  // Without options the line is the product and its size, as before.
+  expect(
+    kdsItemLine({
+      product_name: 'ข้าวโพดอ่อนผัดกุ้ง (เผ็ด)',
+      variant_selection: { name: 'จานใหญ่' },
+      special_instructions: 'ไม่เผ็ด',
+    }),
+  ).toEqual({ name: 'ข้าวโพดอ่อนผัดกุ้ง (เผ็ด) (จานใหญ่)', instructions: 'ไม่เผ็ด' });
 });
 
 test('a one-kind option folds once picked, and the size and option go into the special instructions', async ({
@@ -126,6 +156,20 @@ test('a one-kind option folds once picked, and the size and option go into the s
       })
     ).json();
     expect(orders.orders[0].items[0].special_instructions).toBe(`Large plate Shrimp ${run}`);
+
+    // The kitchen screen shows the choice on the dish and the size in brackets, with no repeat below.
+    await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
+    await expect(
+      page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+    ).toBeVisible();
+    if (await page.getByTestId('kds-login-form').isVisible()) {
+      await page.getByTestId('kds-login-email').fill('manager@flo.local');
+      await page.getByTestId('kds-login-password').fill('E2ePass123!');
+      await page.getByTestId('kds-login-submit').click();
+    }
+    await page.getByRole('button', { name: 'Kanban' }).click();
+    const kdsRow = page.getByTestId('kds-item-row').filter({ hasText: productName });
+    await expect(kdsRow).toHaveText(`1×${productName}Shrimp ${run} (Large plate)`);
   } finally {
     await cleanup();
   }
