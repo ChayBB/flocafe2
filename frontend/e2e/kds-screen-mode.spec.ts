@@ -3,7 +3,9 @@ import { E2E_KDS_BASE_URL } from './helpers/urls';
 
 async function openKds(page: Page) {
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -24,7 +26,9 @@ const dimming = (page: Page) =>
     return dimmer ? Number(getComputedStyle(dimmer).opacity) : 0;
   });
 
-test('the KDS header button flips between day and night and the choice is kept', async ({ page }) => {
+test('the KDS header button flips between day and night and the choice is kept', async ({
+  page,
+}) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await openKds(page);
   await page.evaluate(() => localStorage.setItem('flocafe:kds-screen-mode', 'day'));
@@ -32,20 +36,22 @@ test('the KDS header button flips between day and night and the choice is kept',
   const toggle = page.getByTestId('kds-screen-mode-toggle');
   await expect(toggle).toHaveAttribute('aria-label', 'Switch to night');
   await toggle.click();
-  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(28, 29, 33)' });
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(6, 13, 28)' });
   await expect(toggle).toHaveAttribute('aria-label', 'Switch to day');
   expect(await page.evaluate(() => localStorage.getItem('flocafe:kds-screen-mode'))).toBe('night');
   await page.reload();
-  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(28, 29, 33)' });
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(6, 13, 28)' });
   await page.getByTestId('kds-screen-mode-toggle').click();
   await expect.poll(() => screen(page)).toEqual({ dark: false, background: 'rgb(220, 217, 210)' });
 });
 
-test('each KDS display picks day or night and a brightness, and keeps both over the app theme', async ({ page }) => {
+test('each KDS display picks day or night and a brightness, and keeps both over the app theme', async ({
+  page,
+}) => {
   // The app itself is dark on this device, so a display that never chose starts at night.
   await page.emulateMedia({ colorScheme: 'dark' });
   await openKds(page);
-  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(28, 29, 33)' });
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(6, 13, 28)' });
   expect(await dimming(page)).toBe(0);
 
   await page.getByTestId('kds-settings-button').click();
@@ -74,7 +80,7 @@ test('each KDS display picks day or night and a brightness, and keeps both over 
   await page.getByTestId('kds-screen-mode-night').click();
   await page.reload();
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
-  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(28, 29, 33)' });
+  await expect.poll(() => screen(page)).toEqual({ dark: true, background: 'rgb(6, 13, 28)' });
   await expect.poll(() => dimming(page)).toBeCloseTo(0.56);
 
   await page.getByTestId('kds-settings-button').click();
