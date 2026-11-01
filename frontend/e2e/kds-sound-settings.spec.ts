@@ -623,7 +623,7 @@ test('an item switched to take-away still rings the ready bell and is announced 
   expect((await sounds(page)).__bells).toBe(start.__bells + 1);
 });
 
-test('a spoken order on a POS-computer voice starts after a short lead so quiet speakers do not swallow "Table"', async ({
+test('a spoken order on a POS-computer voice first wakes the speaker so it does not swallow "Table"', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -694,6 +694,7 @@ test('a spoken order on a POS-computer voice starts after a short lead so quiet 
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
   await page.waitForTimeout(2500);
 
+  const beepsBefore = (await sounds(page)).__beeps;
   const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
     headers,
     data: {
@@ -705,4 +706,6 @@ test('a spoken order on a POS-computer voice starts after a short lead so quiet 
   const starts = () => page.evaluate(() => (window as unknown as { __starts: number[] }).__starts);
   await expect.poll(async () => (await starts()).length, { timeout: 15000 }).toBeGreaterThan(0);
   expect((await starts())[0]).toBeGreaterThanOrEqual(0.7);
+  // A quiet hum plays during that lead, since silence alone does not wake a sleeping speaker.
+  expect((await sounds(page)).__beeps).toBe(beepsBefore + 1);
 });

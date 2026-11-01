@@ -168,16 +168,37 @@ export async function playKdsReadyBell(bell: KdsReadyBell = readKdsReadyBell()):
   lastAudioEndedAt = Date.now();
 }
 
+// Silence does not wake a sleeping speaker, so a barely audible low hum plays until the speech starts.
+function playWakeSignal(audio: AudioContext, seconds: number): void {
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = 50;
+  gain.gain.value = 0.003;
+  oscillator.connect(gain).connect(audio.destination);
+  oscillator.start(audio.currentTime);
+  oscillator.stop(audio.currentTime + seconds);
+}
+
 /** Plays encoded audio (such as a spoken announcement) and resolves when it ends. False when sound is blocked. */
 export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
   const audio = getContext();
-  if (!audio || audio.state !== 'running') return false;
+  if (!audio) return false;
+  // A display that dozed off may have its audio suspended again; it was unlocked once, so wake it.
+  if (audio.state !== 'running') {
+    await Promise.race([
+      audio.resume().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 500)),
+    ]);
+    if ((audio.state as AudioContextState) !== 'running') return false;
+  }
   try {
     const buffer = await audio.decodeAudioData(data);
     const source = audio.createBufferSource();
     source.buffer = buffer;
     source.connect(audio.destination);
     const lead = Date.now() - lastAudioEndedAt > AUDIO_IDLE_MS ? AUDIO_WAKE_LEAD_S : 0;
+    if (lead > 0) playWakeSignal(audio, lead);
     await new Promise<void>((resolve) => {
       source.onended = () => resolve();
       source.start(audio.currentTime + lead);
