@@ -29,7 +29,6 @@ import {
 } from '../../shared/print/width';
 import {
   addonRows,
-  appendPoweredByFooter,
   buildEscPos,
   financialRows,
   formatCurrency,
@@ -341,7 +340,10 @@ export function renderBillDocumentToClassicLines(
   );
   const fractionDigits = getCurrencyFractionDigits(options.currency);
   const trimDecimals = options.trimDecimals === true;
-  const tzOptions = { hourCycle: 'h23' as const, ...(options.timezone ? { timeZone: options.timezone } : {}) };
+  const tzOptions = {
+    hourCycle: 'h23' as const,
+    ...(options.timezone ? { timeZone: options.timezone } : {}),
+  };
   const dash = '-'.repeat(cols);
   const normalize = (text: string): string => normalizeThermalText(text, options.capabilities);
 
@@ -1212,7 +1214,6 @@ export function renderBillDocumentToClassicLines(
     }
   }
 
-  appendPoweredByFooter(lines, cols);
   lines.push('{CUT}');
 
   return lines;

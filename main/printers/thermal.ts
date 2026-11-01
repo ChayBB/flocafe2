@@ -1,7 +1,4 @@
-import {
-  renderPaymentRequestSlip,
-  type PaymentRequestSlipData,
-} from './payment-request-slip';
+import { renderPaymentRequestSlip, type PaymentRequestSlipData } from './payment-request-slip';
 import * as net from 'net';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -117,7 +114,6 @@ import {
   wrapText,
   pushWrapped,
   pushCenteredWrapped,
-  appendPoweredByFooter,
   normalizeThermalText,
   resolveCurrencyPrefix,
   appendCashDrawerPulse,
@@ -142,7 +138,6 @@ export {
   wrapText,
   pushWrapped,
   pushCenteredWrapped,
-  appendPoweredByFooter,
   normalizeThermalText,
   resolveCurrencyPrefix,
   appendCashDrawerPulse,
@@ -1340,18 +1335,27 @@ export async function printPaymentRequestSlip(
       ? (currencyDisplayValue as CurrencyDisplay)
       : undefined;
     const digits: DigitMode = getSettingValue('number_digits') === 'latin' ? 'latin' : 'locale';
-    const slipLanguage = normalizePrintLanguage(language ?? getSettingValue('language') ?? undefined);
+    const slipLanguage = normalizePrintLanguage(
+      language ?? getSettingValue('language') ?? undefined,
+    );
     const widthDots = capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576);
     const maxBandHeight = capabilities.raster?.maxBandHeight ?? 200;
     const renderWith = (caps: ThermalPrinterCapabilities) =>
       renderPaymentRequestSlip(
         {
           ...slip,
-          businessName: getSettingValue('bill_show_name') === 'false' ? '' : (getSettingValue('business_name') ?? ''),
+          businessName:
+            getSettingValue('bill_show_name') === 'false'
+              ? ''
+              : (getSettingValue('business_name') ?? ''),
           businessAddress:
-            getSettingValue('bill_show_address') === 'false' ? '' : (getSettingValue('business_address') ?? ''),
+            getSettingValue('bill_show_address') === 'false'
+              ? ''
+              : (getSettingValue('business_address') ?? ''),
           businessPhone:
-            getSettingValue('bill_show_phone') === 'false' ? '' : (getSettingValue('business_phone') ?? ''),
+            getSettingValue('bill_show_phone') === 'false'
+              ? ''
+              : (getSettingValue('business_phone') ?? ''),
           taxId:
             getSettingValue('bill_show_tax_id') === 'true'
               ? (getSettingValue('tax_registration_number') ?? '')
@@ -1378,15 +1382,19 @@ export async function printPaymentRequestSlip(
     if (rasterCapabilityEnabled(capabilities)) {
       const documentResult = renderWith(capabilities);
       const nativeResult = renderWith(nativeFallbackCapabilities(capabilities));
-      const rasterized = await rasterizeDocumentLines(documentResult.lines, documentResult.warnings, {
-        useUnicode: false,
-        cutMode: profile.cutMode,
-        arabicShaping: capabilities.shaping.arabic,
-        columns,
-        language: slipLanguage,
-        capabilities,
-        requestPrefix: 'payment-request',
-      });
+      const rasterized = await rasterizeDocumentLines(
+        documentResult.lines,
+        documentResult.warnings,
+        {
+          useUnicode: false,
+          cutMode: profile.cutMode,
+          arabicShaping: capabilities.shaping.arabic,
+          columns,
+          language: slipLanguage,
+          capabilities,
+          requestPrefix: 'payment-request',
+        },
+      );
       if (rasterized.rasterSelected && !rasterized.rasterFailed) {
         data = rasterized.data;
         warnings.push(...rasterized.warnings);
@@ -2378,7 +2386,10 @@ function renderEscposLineTemplateV1(
       fitTemplateLabel(normalize(resolveTemplateLabel(payload?.labels, 'taxInvoice', lang)), cols)
     : fitTemplateLabel(normalize(String(payload?.header?.titleWhenTaxAbsent || '')), cols) ||
       fitTemplateLabel(normalize(resolveTemplateLabel(payload?.labels, 'invoice', lang)), cols);
-  const tzOptions = { hourCycle: 'h23' as const, ...(biz.timezone ? { timeZone: biz.timezone } : {}) };
+  const tzOptions = {
+    hourCycle: 'h23' as const,
+    ...(biz.timezone ? { timeZone: biz.timezone } : {}),
+  };
 
   lines.push('{INIT}');
   if (isReprint)
@@ -2740,7 +2751,6 @@ function renderEscposLineTemplateV1(
           )) +
         '{/CENTER}',
     );
-  if (payload?.footer?.includePoweredByFloPOS !== false) appendPoweredByFooter(lines, cols);
   lines.push('{CUT}');
 
   return buildEscPos(
