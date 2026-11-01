@@ -70,6 +70,14 @@ type OrdersKey = keyof AppConfig['Messages']['orders'];
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
 const ORDERS_PAGE_SIZE = 15;
 
+// Statuses a tab already excludes; picking one of them alongside that tab could only list nothing.
+const tabExcludedStatuses: Record<FilterType, string[]> = {
+  all: [],
+  active: ['completed', 'cancelled'],
+  unpaid: ['cancelled'],
+  held: [],
+};
+
 const tabLabelKey: Record<FilterType, OrdersKey> = {
   all: 'all',
   active: 'active',
@@ -1601,7 +1609,11 @@ export default function OrdersPage() {
           {(['all', 'active', 'unpaid', 'held'] as FilterType[]).map((f) => (
             <button
               key={f}
-              onClick={() => setTabFilter(f)}
+              onClick={() => {
+                setTabFilter(f);
+                if (tabExcludedStatuses[f].includes(filters.status))
+                  setFilters((prev) => ({ ...prev, status: '' }));
+              }}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium ${
                 tabFilter === f
                   ? 'bg-brand text-white'
@@ -1658,7 +1670,11 @@ export default function OrdersPage() {
         {/* Status filter */}
         <select
           value={filters.status}
-          onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+          onChange={(e) => {
+            const status = e.target.value;
+            setFilters((prev) => ({ ...prev, status }));
+            if (tabExcludedStatuses[tabFilter].includes(status)) setTabFilter('all');
+          }}
           className="px-3 py-2 border border-border bg-card rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
           <option value="">{tOrders('allStatuses')}</option>

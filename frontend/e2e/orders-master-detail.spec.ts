@@ -136,6 +136,30 @@ test.describe('orders master/detail is the default layout', () => {
     ).toBeLessThanOrEqual(1);
   });
 
+  test('a status the current tab excludes switches the list to All instead of showing nothing', async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`${BASE}/orders`);
+    const statusFilter = page
+      .locator('select')
+      .filter({ has: page.locator('option[value="completed"]') });
+    const allTab = page.getByRole('button', { name: 'All', exact: true });
+    const activeTab = page.getByRole('button', { name: 'Active', exact: true });
+    await expect(activeTab).toHaveClass(/bg-brand/);
+
+    const completedRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/orders?') && req.url().includes('status=completed'),
+    );
+    await statusFilter.selectOption('completed');
+    expect(new URL((await completedRequest).url()).searchParams.get('view')).toBe('all');
+    await expect(allTab).toHaveClass(/bg-brand/);
+
+    // Going back to Active drops the status it would contradict.
+    await activeTab.click();
+    await expect(statusFilter).toHaveValue('');
+  });
+
   test('keeps a selected order open when a live update removes it from the current view', async ({
     page,
   }) => {
@@ -207,7 +231,9 @@ test.describe('orders master/detail is the default layout', () => {
     });
 
     try {
-      const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
+      const search = page.getByPlaceholder(
+        'Search by order number, name, phone, table, staff, or amount…',
+      );
       await search.fill(slowOrder.order_number);
       await slowRequestStarted;
       await search.fill(fastOrder.order_number);
@@ -515,7 +541,9 @@ test.describe('orders cards layout keeps controls visible while order cards scro
 
   async function expectControlsPinnedWhileCardsScroll(page: Page, label: string): Promise<void> {
     const title = page.getByRole('heading', { name: 'Orders' });
-    const search = page.getByPlaceholder('Search by order number, name, phone, table, staff, or amount…');
+    const search = page.getByPlaceholder(
+      'Search by order number, name, phone, table, staff, or amount…',
+    );
     const statusTab = page.getByRole('button', { name: 'All', exact: true });
     await expect(title, `${label}: title renders`).toBeVisible();
     await expect(search, `${label}: search renders`).toBeVisible();
