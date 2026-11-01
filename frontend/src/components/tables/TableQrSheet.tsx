@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Loader2, Printer } from 'lucide-react';
+import { X, Loader2, Printer, Download } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
+import { downloadBlob } from '@/lib/download';
 
 interface TableQr {
   id: string;
@@ -22,6 +23,20 @@ interface Props {
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 }
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+// Pixels per millimetre of the printed card, so the downloaded image matches the print layout.
+const PX_PER_MM = 600 / 72;
+const mm = (value: number) => Math.round(value * PX_PER_MM);
+const pt = (value: number) => mm((value * 25.4) / 72);
 
 export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
   const t = useTranslations('tables');
@@ -91,6 +106,68 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
     win.print();
   };
 
+  // One PNG holds every card: a save dialog per table would be one dialog per QR code.
+  const downloadSheet = async () => {
+    if (!qrs || qrs.length === 0) return;
+    const images = await Promise.all(qrs.map((qr) => loadImage(qr.data_url)));
+    const cardWidth = mm(72);
+    const padding = mm(4);
+    const nameSize = pt(30.4);
+    const menuSize = pt(27.3);
+    const zoneSize = pt(10);
+    const qrSize = mm(62.4);
+    const cardHeight =
+      padding * 2 +
+      nameSize * 1.2 +
+      mm(2) +
+      qrSize +
+      mm(1) +
+      menuSize * 1.2 +
+      (zoneName ? zoneSize * 1.4 : 0);
+    const columns = Math.min(3, qrs.length);
+    const rows = Math.ceil(qrs.length / columns);
+    const margin = mm(12);
+    const gap = mm(8);
+    const canvas = document.createElement('canvas');
+    canvas.width = margin * 2 + columns * cardWidth + (columns - 1) * gap;
+    canvas.height = Math.ceil(margin * 2 + rows * cardHeight + (rows - 1) * gap);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    qrs.forEach((qr, index) => {
+      const x = margin + (index % columns) * (cardWidth + gap);
+      const top = margin + Math.floor(index / columns) * (cardHeight + gap);
+      const center = x + cardWidth / 2;
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x, top, cardWidth, cardHeight, mm(4));
+      ctx.stroke();
+      ctx.fillStyle = '#000';
+      let y = top + padding;
+      ctx.font = `700 ${nameSize}px sans-serif`;
+      ctx.fillText(qr.name, center, y, cardWidth - padding * 2);
+      y += nameSize * 1.2 + mm(2);
+      ctx.drawImage(images[index], center - qrSize / 2, y, qrSize, qrSize);
+      y += qrSize + mm(1);
+      ctx.font = `700 ${menuSize}px sans-serif`;
+      ctx.fillText(t('tableQrMenu'), center, y, cardWidth - padding * 2);
+      if (zoneName) {
+        y += menuSize * 1.2;
+        ctx.fillStyle = '#555';
+        ctx.font = `${zoneSize}px sans-serif`;
+        ctx.fillText(zoneName, center, y, cardWidth - padding * 2);
+      }
+    });
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) return;
+    const label = (qrs.length === 1 ? qrs[0].name : zoneName) || t('tableQrTitle');
+    downloadBlob(blob, `QR-${label.replace(/[\\/:*?"<>|]+/g, '-')}.png`);
+  };
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
@@ -158,6 +235,16 @@ export default function TableQrSheet({ tableIds, zoneName, onClose }: Props) {
         <div className="mt-4 flex gap-2">
           <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
             {tCommon('close')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => void downloadSheet()}
+            disabled={!qrs || qrs.length === 0}
+          >
+            <Download size={15} className="me-1.5" />
+            {t('tableQrDownload')}
           </Button>
           <Button
             type="button"

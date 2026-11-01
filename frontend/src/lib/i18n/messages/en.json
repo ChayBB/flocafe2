@@ -3113,6 +3113,7 @@
     "tableQrMenu": "Menu",
     "tableQrTable": "Table {name}",
     "tableQrServerAppOff": "The Server App is turned off, so these QR codes will not open until it is enabled in Settings.",
+    "tableQrDownload": "Download",
     "tableQrFailed": "Could not create the QR codes",
     "tableQrPrint": "Print QR codes",
     "tableOwnerNoZone": "No zone",

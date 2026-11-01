@@ -3113,6 +3113,7 @@
     "tableQrMenu": "เมนู",
     "tableQrTable": "โต๊ะ {name}",
     "tableQrServerAppOff": "แอปเสิร์ฟปิดอยู่ QR เหล่านี้จะเปิดไม่ได้จนกว่าจะเปิดใช้ที่ตั้งค่า",
+    "tableQrDownload": "ดาวน์โหลด",
     "tableQrFailed": "สร้าง QR ไม่สำเร็จ",
     "tableQrPrint": "พิมพ์ QR",
     "tableOwnerNoZone": "ไม่ระบุโซน",

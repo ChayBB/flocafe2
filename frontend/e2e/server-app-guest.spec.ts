@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
@@ -390,6 +391,17 @@ test('table QR links use the public address, and cancelling QR codes in OrderFlo
     await expect(card.getByRole('img', { name: 'QR' })).toHaveCSS('width', '166px');
     await expect(card.getByText(`Table ${table.name}`)).toHaveCount(0);
     await expect(sheet.getByText('https://order.example.com/server-standalone/')).toBeVisible();
+
+    // Download saves every card as one PNG image.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      sheet.getByRole('button', { name: 'Download' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^QR-.+\.png$/);
+    const png = await readFile(await download.path());
+    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(png.length).toBeGreaterThan(5000);
+
     await sheet.getByRole('button', { name: 'Close' }).first().click();
     await expect(sheet).toHaveCount(0);
 
