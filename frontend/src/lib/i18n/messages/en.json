@@ -1641,6 +1641,7 @@
     "economicCode": "Economic Code",
     "grandTotal": "Grand Total",
     "item": "Item",
+    "netPaid": "Net paid",
     "onlineOrder": "ONLINE ORDER",
     "payments": "Payments",
     "phone": "Ph",

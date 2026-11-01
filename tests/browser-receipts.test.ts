@@ -354,7 +354,30 @@ async function run() {
       'Payments section header shows Persian "پرداخت‌ها"',
       html.includes('<th colspan="2">پرداخت‌ها</th>'),
     );
-    assert('Card payment method translated to "کارت"', html.includes('<td>کارت</td>'));
+    assert(
+      'a single payment prints as net paid instead of its method',
+      /<tbody>\s*<tr><td>[^<(]+<\/td><td class="text-end num">/.test(
+        html.slice(html.indexOf('payments-table')),
+      ) && !html.includes('<td>کارت</td>'),
+    );
+    const splitHtml = generateBillHtml(
+      {
+        ...testIranBill,
+        payment_details: [
+          { method: 'card', amount: 490000, timestamp: '2026-08-17T14:35:00.000Z' },
+          { method: 'cash', amount: 500000, timestamp: '2026-08-17T14:35:00.000Z' },
+        ],
+      },
+      baseIranTenant,
+      { language: 'fa' },
+    );
+    assert('split payments keep each method beside net paid', splitHtml.includes('(کارت)</td>'));
+    assert('special instructions stay off the bill', !html.includes('کم شیرین'));
+    assert(
+      'item rows have no divider lines and the column headings are ruled above and below',
+      html.includes('.items-table th, .items-table td { padding: 8px; text-align: start; }') &&
+        html.includes('border-top: 1px solid #000; border-bottom: 1px solid #000;'),
+    );
     assert('Footer preserves Persian thank you text', html.includes('از بازدید شما سپاسگزاریم!'));
     assert('Footer shows Persian tax notice', html.includes('مالیات در صورت اعمال، شامل شده است'));
     assert('Print button shows Persian "چاپ رسید"', html.includes('چاپ رسید</button>'));
@@ -670,7 +693,6 @@ async function run() {
       delivery: 'هزینه ارسال',
       total: 'جمع کل',
       payments: 'پرداخت‌ها',
-      card: 'کارت',
       thankYou: 'از بازدید شما سپاسگزاریم!',
     };
     const faHtml = generateBillHtml(canonicalBill, canonicalTenant, {

@@ -866,7 +866,9 @@ function run(): void {
     ];
     const expectCashRows = (text: string, renderer: string): void => {
       const rows = contentRows(text);
-      const appliedRow = rows.find((row) => /\bcash\b/i.test(row) && !row.includes(tenderedLabel));
+      const appliedRow = rows.find(
+        (row) => /\bcash\b|net paid/i.test(row) && !row.includes(tenderedLabel),
+      );
       const tenderedRow = rows.find((row) => row.includes(tenderedLabel));
       const changeRow = rows.find((row) => row.includes(changeLabel));
       warn(
@@ -1312,10 +1314,12 @@ function run(): void {
         subtotal: 1220,
         truncationMarker: false,
         items: [LATIN_ITEM, LONG_ITEM, PERSIAN_ITEM],
+        instructions: [],
       },
       warn,
     );
     warn(html.includes('<table'), `html/${paperSize}: structured markup present`);
+    warn(!html.includes('Less sugar'), `html/${paperSize}: kitchen instructions stay off the bill`);
   }
 
   section('Browser HTML reprint banner');
@@ -1335,6 +1339,7 @@ function run(): void {
         items: [LATIN_ITEM, LONG_ITEM, PERSIAN_ITEM],
         reprint: true,
         reprintStyle: 'html',
+        instructions: [],
       },
       warn,
     );

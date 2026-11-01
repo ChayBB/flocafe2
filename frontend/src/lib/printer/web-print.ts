@@ -327,12 +327,14 @@ export function generateBillHtml(
     ),
     taxDetails: breakdown?.heading.primary ?? printLabelResolver('receipt.taxDetails', lang),
     paymentsHeader: payments?.heading.primary ?? printLabelResolver('receipt.payments', lang),
+    netPaid: printLabelResolver('receipt.netPaid', lang),
     thankYou: surfaceLabel(messages?.thankYou, 'print.thankYouShort', 'receipt.thankYou', lang),
     taxIncluded: messages?.taxIncluded.primary ?? printLabelResolver('receipt.taxIncluded', lang),
     printBill: printLabelResolver('receipt.printBill', lang),
   };
 
   const invoiceNumberLabel = L.billNumber;
+  const netPaidLabel = netPaidLabelFor(L.netPaid);
   const styles = getPaperStyles(paperSize);
 
   const items = itemsBlock?.rows ?? [];
@@ -400,7 +402,6 @@ export function generateBillHtml(
             <td>
               ${escapeHtml(row.name.text)}
               ${row.addons.length > 0 ? `<br><small class="text-muted">${row.addons.map((a) => `+ ${escapeHtml(a.name.text)}${(a.quantity ?? 1) > 1 ? ` ×${escapeHtml(a.quantity)}` : ''}${a.price > 0 ? ` (${fmtAmount(a.price)})` : ''}`).join(', ')}</small>` : ''}
-              ${row.specialInstructions ? `<br><small class="text-italic">${escapeHtml(row.specialInstructions.text)}</small>` : ''}
             </td>
             <td class="text-end num">${fmtQuantity(row.quantity)}</td>
             <td class="text-end num">${fmtAmount(row.amount)}</td>
@@ -467,8 +468,8 @@ export function generateBillHtml(
           .map((line) =>
             paymentDisplayRows(line)
               .map(
-                (row) => `
-          <tr><td>${escapeHtml(paymentLineLabel(row.label))}</td><td class="text-end num">${fmtAmount(row.amount)}</td></tr>
+                (row, index) => `
+          <tr><td>${escapeHtml(index === 0 ? netPaidLabel(row.label, payments.lines.length > 1) : paymentLineLabel(row.label))}</td><td class="text-end num">${fmtAmount(row.amount)}</td></tr>
         `,
               )
               .join(''),
@@ -535,6 +536,12 @@ function stripLabelPlaceholder(label: string): string {
 }
 
 /** Unknown payment methods keep their legacy capitalized literal rendering. */
+/** The amount each payment settled prints as net paid; split payments keep their method beside it. */
+function netPaidLabelFor(netPaid: string) {
+  return (method: { conceptId?: string; primary: string }, split: boolean) =>
+    split ? `${netPaid} (${paymentLineLabel(method)})` : netPaid;
+}
+
 function paymentLineLabel(label: { conceptId?: string; primary: string }): string {
   return label.conceptId !== undefined
     ? label.primary
@@ -556,8 +563,8 @@ function getPaperStyles(size: PaperSize): string {
     .bill-details { margin-bottom: 15px; }
     .bill-details table { width: 100%; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-    .items-table th, .items-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: start; }
-    .items-table th { font-weight: bold; }
+    .items-table th, .items-table td { padding: 8px; text-align: start; }
+    .items-table th { font-weight: bold; border-top: 1px solid #000; border-bottom: 1px solid #000; }
     .tax-table, .payments-table { width: 50%; margin-inline-start: 50%; border-collapse: collapse; margin-bottom: 15px; }
     .tax-table th, .tax-table td, .payments-table th, .payments-table td { padding: 6px 8px; }
     .tax-table th, .payments-table th { text-align: start; }
