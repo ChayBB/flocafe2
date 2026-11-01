@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -81,7 +82,7 @@ test(`on ${screenSize.name}, tapping a table keeps the picker and shows the tabl
     [TOKEN_KEY, managerToken],
   );
   await page.reload();
-  await page.getByTestId('server-app-table-button').click();
+  await openServerAppTables(page);
   await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
 
   // The picker stays open. On a phone "Add food items" and the kitchen summary sit above the menu
@@ -125,7 +126,8 @@ test(`on ${screenSize.name}, tapping a table keeps the picker and shows the tabl
   await screen.getByTestId('server-app-ordered-add').click();
   await expect(screen).toHaveCount(0);
   await expect(page.getByTestId('server-app-table-actions')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+  // A phone closes the table list for the menu; a tablet keeps it beside the menu.
+  await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(screenSize.phone ? 0 : 1);
   await expect(page.getByTestId('pos-product-search')).toBeVisible();
   await expect(page.locator('header')).toContainText(`Phone ${run}`);
 
@@ -144,8 +146,7 @@ test(`on ${screenSize.name}, tapping a table keeps the picker and shows the tabl
   await expect(page.locator('header')).toContainText('Select a table');
 
   // Choosing the table again shows all five; "Exit" leaves the list like the back arrow, keeping the table.
-  const picker = page.getByTestId('server-app-table-button');
-  if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
+  await openServerAppTables(page);
   await page.getByRole('button', { name: new RegExp(`Phone ${run}`) }).click();
   await page.getByTestId('server-app-ordered-items-button').click();
   await expect(page.getByTestId('server-app-ordered-item')).toHaveCount(5);

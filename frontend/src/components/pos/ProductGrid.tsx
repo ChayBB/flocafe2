@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Category, Product, ProductVariant } from '@/lib/types';
@@ -305,6 +305,8 @@ interface Props {
    * follows the scroll position and choosing a category scrolls to it, instead of filtering.
    */
   scrollSpy?: boolean;
+  /** With scrollSpy: scrolling past the last category carries on into the first, and back. */
+  loopSections?: boolean;
 }
 
 export default function ProductGrid({
@@ -326,6 +328,7 @@ export default function ProductGrid({
   disabled = false,
   collapseCategories = false,
   scrollSpy = false,
+  loopSections = false,
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cart = useCartStore();
@@ -384,6 +387,56 @@ export default function ProductGrid({
     return groups;
   }, [scrollSpy, categories, filtered]);
 
+  // Looping moves a whole category from one end of the list to the other once it is out of sight,
+  // shifting the scroll position by its height so nothing on screen moves.
+  const [rotation, setRotation] = useState(0);
+  const looping = scrollSpy && loopSections && !activeQuery && sections.length > 1;
+  const shownSections = useMemo(() => {
+    if (!looping) return sections;
+    const start = ((rotation % sections.length) + sections.length) % sections.length;
+    return [...sections.slice(start), ...sections.slice(0, start)];
+  }, [looping, rotation, sections]);
+  const pendingShift = useRef(0);
+  const lastScrollTop = useRef(0);
+  // A category chosen from the chips scrolls on its own; nothing loops until that scroll settles.
+  const chipScrollTimer = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || pendingShift.current === 0) return;
+    container.scrollTop += pendingShift.current;
+    pendingShift.current = 0;
+    lastScrollTop.current = container.scrollTop;
+  }, [shownSections]);
+
+  const loopSectionsOnScroll = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const { scrollTop, clientHeight, scrollHeight } = container;
+    const direction = Math.sign(scrollTop - lastScrollTop.current);
+    lastScrollTop.current = scrollTop;
+    if (chipScrollTimer.current !== null) {
+      window.clearTimeout(chipScrollTimer.current);
+      chipScrollTimer.current = window.setTimeout(() => (chipScrollTimer.current = null), 200);
+      return;
+    }
+    if (!looping || direction === 0 || pendingShift.current !== 0) return;
+    const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-category-section]'));
+    if (nodes.length < 2) return;
+    const box = container.getBoundingClientRect();
+    const span = (node: HTMLElement) => node.offsetHeight + parseFloat(getComputedStyle(node).marginBottom || '0');
+    if (direction > 0 && scrollHeight - scrollTop - clientHeight < clientHeight) {
+      const first = nodes[0];
+      if (first.getBoundingClientRect().bottom >= box.top) return;
+      pendingShift.current = -span(first);
+      setRotation((value) => value + 1);
+    } else if (direction < 0 && scrollTop < clientHeight) {
+      const last = nodes[nodes.length - 1];
+      if (last.getBoundingClientRect().top <= box.bottom) return;
+      pendingShift.current = span(last);
+      setRotation((value) => value - 1);
+    }
+  };
+
   const updateActiveCategory = useCallback(() => {
     const container = scrollRef.current;
     if (!container || !scrollSpy) return;
@@ -408,6 +461,7 @@ export default function ProductGrid({
   }, [scrollSpy, selectedCategory, setSelectedCategory]);
 
   const onCatalogScroll = () => {
+    if (loopSections) loopSectionsOnScroll();
     if (!scrollSpy || spyFrame.current !== null) return;
     spyFrame.current = requestAnimationFrame(() => {
       spyFrame.current = null;
@@ -447,7 +501,13 @@ export default function ProductGrid({
     setSelectedCategory(id);
     if (!container) return;
     spyPausedUntil.current = performance.now() + 800;
+    if (chipScrollTimer.current !== null) window.clearTimeout(chipScrollTimer.current);
+    chipScrollTimer.current = window.setTimeout(() => (chipScrollTimer.current = null), 200);
     if (id === null) {
+      if (rotation !== 0) {
+        pendingShift.current = 0;
+        setRotation(0);
+      }
       container.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -645,7 +705,7 @@ export default function ProductGrid({
         className="flex-1 min-h-0 overflow-y-auto pb-20 md:pb-0"
       >
           {scrollSpy ? (
-            sections.map((section) => (
+            shownSections.map((section) => (
               <section
                 key={section.id ?? 'other'}
                 data-category-section={section.id ?? ''}

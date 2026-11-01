@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -51,7 +52,7 @@ test('each table shows waiting-ready-served counts, and its sent items spell out
     [TOKEN_KEY, managerToken],
   );
   await page.reload();
-  await page.getByTestId('server-app-table-button').click();
+  await openServerAppTables(page);
 
   const tableButton = page.getByRole('button', { name: new RegExp(`Count ${run}`) });
   const counts = tableButton.getByTestId('table-kitchen-counts');

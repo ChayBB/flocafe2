@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const owner = () => ({
@@ -51,7 +52,7 @@ test('Server App lists only the tables a staff member owns, but a table QR still
   expect(assigned.ok()).toBeTruthy();
 
   await signInAs(page, staffName, '3579');
-  await page.getByTestId('server-app-table-button').click();
+  await openServerAppTables(page);
   await expect(page.getByRole('button', { name: new RegExp(mine) })).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(theirs) })).toHaveCount(0);
   // No table is chosen until the staff member picks one.

@@ -13,6 +13,7 @@ test('the Server App picks the store language up again when the page comes back 
     await route.fulfill({ response, json: { ...body, language } });
   });
 
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
   await page.evaluate(
     ([key, token]) => localStorage.setItem(key, token),

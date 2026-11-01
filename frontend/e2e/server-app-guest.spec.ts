@@ -126,7 +126,7 @@ test.describe('Server App guest from a table QR', () => {
     }
   });
 
-  test('signing in shows the staff name and the Select Table button while keeping the QR table', async ({
+  test('signing in shows the staff name and the table list while keeping the QR table', async ({
     page,
   }) => {
     const table = await createTable(page);
@@ -139,7 +139,8 @@ test.describe('Server App guest from a table QR', () => {
 
     const header = page.locator('header');
     await expect(header.getByTestId('server-app-staff-name')).toHaveText('E2E server');
-    await expect(header.getByTestId('server-app-table-button')).toBeVisible();
+    await expect(header.getByTestId('server-app-table-button')).toHaveCount(0);
+    await expect(page.getByTestId('server-app-table-picker')).toBeVisible();
     await expect(header.getByTestId('server-app-session-button')).toHaveClass(/text-green-600/);
     await expect(header.getByTestId('server-app-login-button')).toHaveCount(0);
     await expect(header).toContainText(table.name);

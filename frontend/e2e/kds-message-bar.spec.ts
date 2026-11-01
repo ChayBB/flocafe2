@@ -103,6 +103,7 @@ test('the KDS message bar lists table moves, merges, take-away changes and Serve
     parsed.state = { ...parsed.state, language: 'en' };
     localStorage.setItem('pos-settings', JSON.stringify(parsed));
   }, managerToken);
+  await serverApp.setViewportSize({ width: 390, height: 844 });
   await serverApp.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${moveToId}`);
   await serverApp.getByTestId('server-app-emergency-button').click();
   const dialog = serverApp.getByTestId('server-app-emergency-dialog');

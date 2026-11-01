@@ -112,3 +112,68 @@ test('the highlighted category follows the menu scroll and choosing one scrolls 
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(5);
   await expect.poll(() => isActive('All')).toBe(true);
 });
+
+test('the menu shows two columns and scrolling past the last category carries on into the first', async ({ page }) => {
+  const run = Math.random().toString(36).slice(2, 6);
+  await createCategoryWithProducts(page, `Loop ${run}`, 6);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+  await page.evaluate(
+    ([key, token]) => {
+      localStorage.setItem(key, token);
+      const raw = localStorage.getItem('pos-settings');
+      const parsed = raw ? JSON.parse(raw) : { state: {} };
+      parsed.state = { ...parsed.state, language: 'en' };
+      localStorage.setItem('pos-settings', JSON.stringify(parsed));
+    },
+    [TOKEN_KEY, getE2eToken('e2e-server', 'server@flo.local', 'server')],
+  );
+  await page.reload();
+  const scroller = page.getByTestId('pos-catalog-scroll');
+  await expect(scroller.locator('[data-category-section]').first()).toBeVisible();
+
+  const columns = await scroller
+    .locator('[data-category-section] > div')
+    .first()
+    .evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length);
+  expect(columns).toBe(2);
+
+  const sectionOrder = () =>
+    scroller.evaluate((element) =>
+      Array.from(element.querySelectorAll<HTMLElement>('[data-category-section]')).map(
+        (node) => node.dataset.categorySection,
+      ),
+    );
+  const start = await sectionOrder();
+  const total = start.length;
+  expect(total).toBeGreaterThan(2);
+  const cardCount = await scroller.getByTestId('pos-product-card').count();
+
+  // Scrolling on and on wraps round: the first category comes back after the last, nothing is duplicated.
+  await scroller.hover();
+  await expect
+    .poll(
+      async () => {
+        await page.mouse.wheel(0, 1500);
+        return (await sectionOrder())[0];
+      },
+      { timeout: 20000, intervals: [100] },
+    )
+    .not.toBe(start[0]);
+  const rotated = await sectionOrder();
+  expect([...rotated].sort()).toEqual([...start].sort());
+  const shift = rotated.indexOf(start[0]);
+  expect(rotated).toEqual([...start.slice(total - shift), ...start.slice(0, total - shift)]);
+  await expect(scroller.getByTestId('pos-product-card')).toHaveCount(cardCount);
+
+  // Scrolling back up wraps the other way.
+  await expect
+    .poll(
+      async () => {
+        await page.mouse.wheel(0, -1500);
+        return JSON.stringify(await sectionOrder()) !== JSON.stringify(rotated);
+      },
+      { timeout: 20000, intervals: [100] },
+    )
+    .toBe(true);
+});

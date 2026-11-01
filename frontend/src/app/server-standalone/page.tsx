@@ -215,6 +215,8 @@ export default function ServerStandalonePage() {
     () => window.matchMedia(WIDE_QUERY).matches,
     () => false,
   );
+  // A tablet always shows its tables beside the menu, so it has no table or emergency button.
+  const showTablePicker = Boolean(user) && (tablePickerOpen || isWide);
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
     return () => document.documentElement.classList.remove('theme-server-app');
@@ -1503,6 +1505,7 @@ export default function ServerStandalonePage() {
               >
                 {user.name}
               </span>
+              {!isWide && (
               <button
                 type="button"
                 disabled={sending}
@@ -1514,13 +1517,14 @@ export default function ServerStandalonePage() {
                 <UtensilsCrossed size={14} />
                 {t('selectTable')}
               </button>
+              )}
             </>
           ) : (
             <span data-testid="server-app-guest-name" className="text-sm font-medium text-muted-foreground">
               {t('guestLabel')}
             </span>
           )}
-          {user && (
+          {user && !isWide && (
             <button
               type="button"
               onClick={() => setEmergencyOpen(true)}
@@ -1564,9 +1568,9 @@ export default function ServerStandalonePage() {
         </div>
       ) : (
         <main
-          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${user && tablePickerOpen ? 'lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
+          className={`mx-auto grid max-w-6xl min-w-0 gap-3 p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
-          {user && tablePickerOpen && (
+          {showTablePicker && (
           <section ref={tablePickerRef} data-testid="server-app-table-picker" className="min-w-0 scroll-mt-20 rounded-lg border border-border bg-card p-3">
             <h2 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
               {t('tables')}
@@ -1652,15 +1656,16 @@ export default function ServerStandalonePage() {
               cartQuantities={draftQuantities}
               formatPrice={(amount) => money(amount, regional)}
               showImages={true}
-              gridClassName="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
+              gridClassName="grid-cols-2"
               searchPlaceholder={t('searchMenu')}
               scrollSpy
+              loopSections
             />
           </section>
 
           <section
             data-testid="server-app-ticket-panel"
-            className="hidden min-w-0 rounded-lg border border-border bg-card p-3 pb-0 md:block md:sticky md:top-16 md:max-h-[calc(100dvh-5rem)] md:self-start md:overflow-y-auto"
+            className={`${showTablePicker ? 'md:col-span-2 lg:col-span-1' : ''} hidden min-w-0 rounded-lg border border-border bg-card p-3 pb-0 md:block md:sticky md:top-16 md:max-h-[calc(100dvh-5rem)] md:self-start md:overflow-y-auto`}
           >
             {ticketPanelBody}
           </section>

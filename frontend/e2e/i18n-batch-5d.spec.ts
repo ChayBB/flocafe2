@@ -18,6 +18,7 @@ async function captureScreenshot(page: Page, filename: string): Promise<void> {
   await page.screenshot({ path: path.join(EVIDENCE_DIR, filename), fullPage: true });
 }
 
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 async function setLanguage(page: Page, token: string, value: string): Promise<void> {
@@ -140,7 +141,7 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
 
     // 1f. Server App Main UI (EN)
     await expect(page.getByRole('heading', { name: 'Server App' })).toBeVisible();
-    await page.getByTestId('server-app-table-button').click();
+    await openServerAppTables(page);
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Current ticket' })).toBeVisible();
     await expect(page.getByText('New items', { exact: true })).toBeVisible();
@@ -245,7 +246,7 @@ test('Batch 5D: KDS and Server App render and function correctly in English and 
     // 2f. Server App Main UI (FA)
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { name: 'برنامه سرور' })).toBeVisible();
-    await page.getByTestId('server-app-table-button').click();
+    await openServerAppTables(page);
     await expect(page.getByRole('heading', { name: 'میزها' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'صورتحساب جاری' })).toBeVisible();
     await expect(page.getByText('کالاهای تازه', { exact: true })).toBeVisible();

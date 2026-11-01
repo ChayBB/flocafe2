@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
+import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
@@ -20,8 +21,7 @@ async function openServerApp(page: Page, serverToken: string): Promise<void> {
 }
 
 async function pickTable(page: Page, tableName: string): Promise<void> {
-  const picker = page.getByTestId('server-app-table-button');
-  if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
+  await openServerAppTables(page);
   await page.getByRole('button', { name: new RegExp(tableName) }).click();
 }
 
@@ -86,7 +86,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
-  test('keeps the table list hidden until Select Table is pressed, and open beside the menu after a pick', async ({
+  test('a phone keeps the table list hidden until Select Table is pressed; a tablet always shows it', async ({
     page,
   }) => {
     const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -98,6 +98,7 @@ test.describe('Server App tableside ordering', () => {
     });
     expect(created.ok()).toBeTruthy();
 
+    await page.setViewportSize({ width: 390, height: 844 });
     await openServerApp(page, serverToken);
     const picker = page.getByTestId('server-app-table-button');
     await expect(picker).toHaveText(/Select a table/);
@@ -108,12 +109,21 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
 
-    // On a computer the list stays beside the menu; Select Table toggles it closed.
     await expect(page.locator('header')).toContainText(tableName);
-    await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await picker.click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
-    await expect(page.locator('header')).toContainText(tableName);
+
+    // A tablet shows the tables beside the menu with no Select Table or emergency button.
+    for (const size of [
+      { width: 1024, height: 768 },
+      { width: 820, height: 1180 },
+    ]) {
+      await page.setViewportSize(size);
+      await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
+      await expect(page.getByTestId('server-app-table-button')).toHaveCount(0);
+      await expect(page.getByTestId('server-app-emergency-button')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: new RegExp(tableName) })).toBeVisible();
+    }
   });
 
   test('fits mobile viewports without horizontal overflow', async ({ page }) => {
@@ -122,7 +132,7 @@ test.describe('Server App tableside ordering', () => {
       `server-${Date.now()}-${Math.random()}@flo.local`,
       'server',
     );
-    const viewports = [320, 375, 390, 430, 768];
+    const viewports = [320, 375, 390, 430];
 
     for (const width of viewports) {
       await page.setViewportSize({ width, height: 800 });
@@ -152,6 +162,11 @@ test.describe('Server App tableside ordering', () => {
       });
       expect(hasOverflow).toBeFalsy();
     }
+
+    // A tablet keeps only the session button in the header and still fits.
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.locator('header').getByRole('button')).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBeFalsy();
 
     await page.setViewportSize({ width: 390, height: 844 });
     const header = page.locator('header');
@@ -198,7 +213,7 @@ test.describe('Server App tableside ordering', () => {
     await notesInput.fill('Initial note');
 
     // Keep the table list open so the frozen table buttons can be checked during Send.
-    await expect(page.getByTestId('server-app-table-button')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('server-app-table-picker')).toBeVisible();
 
     // Open the customizer before Send is clicked so its callback is live when Send starts.
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
@@ -266,7 +281,8 @@ test.describe('Server App tableside ordering', () => {
     await expect(removeButton).toBeDisabled();
     await expect(editButton).toBeDisabled();
     await expect(tableBButton).toBeDisabled();
-    await expect(tablePickerButton).toBeDisabled();
+    // A tablet has no Select Table button; the table buttons themselves are frozen.
+    await expect(tablePickerButton).toHaveCount(0);
     await expect(notesInput).toBeDisabled();
 
     // Bypassing disabled UI via synthetic clicks or search Enter must also be blocked by the in-flight ref.
@@ -274,7 +290,6 @@ test.describe('Server App tableside ordering', () => {
     await removeButton.dispatchEvent('click');
     await editButton.dispatchEvent('click');
     await tableBButton.dispatchEvent('click');
-    await tablePickerButton.dispatchEvent('click');
     await search.fill('E2E Coffee');
     await search.press('Enter');
 
