@@ -148,6 +148,27 @@ test.describe('Server App guest from a table QR', () => {
     expect(await marked()).toBe(true);
   });
 
+  test('customers always see the day theme, and staff get the night theme back after signing in', async ({
+    page,
+  }) => {
+    const table = await createTable(page);
+    await setEnglish(page);
+    await page.evaluate(() => localStorage.setItem('flo-theme-resolved', 'dark'));
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?${table.query}`);
+    const html = page.locator('html');
+    await expect(page.locator('header').getByTestId('server-app-guest-name')).toBeVisible();
+    await expect(html).not.toHaveClass(/(^|\s)dark(\s|$)/);
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await expect(html).not.toHaveClass(/(^|\s)dark(\s|$)/);
+
+    await page.getByTestId('server-app-login-button').click();
+    await page.getByPlaceholder('Staff name').fill('server@flo.local');
+    await page.getByPlaceholder('Staff code').fill('E2ePass123!');
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await expect(page.locator('header').getByTestId('server-app-staff-name')).toBeVisible();
+    await expect(html).toHaveClass(/(^|\s)dark(\s|$)/);
+  });
+
   test('the guest label reads ลูกค้า in Thai', async ({ page }) => {
     const table = await createTable(page);
     const setServerLanguage = (value: string) =>

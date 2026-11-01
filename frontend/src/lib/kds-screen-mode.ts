@@ -40,6 +40,25 @@ function store(key: string, value: string): void {
   } catch {}
 }
 
+/** Holds the `dark` class on <html> as asked, against app theme changes; the returned undo restores the app's theme. */
+export function holdDarkClass(wantDark: boolean): () => void {
+  const html = document.documentElement;
+  let appDark = html.classList.contains('dark');
+  const hold = () => {
+    const dark = html.classList.contains('dark');
+    if (dark === wantDark) return;
+    appDark = dark;
+    html.classList.toggle('dark', wantDark);
+  };
+  hold();
+  const observer = new MutationObserver(hold);
+  observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+  return () => {
+    observer.disconnect();
+    html.classList.toggle('dark', appDark);
+  };
+}
+
 /**
  * Applies this display's palette to <html> while the KDS is open, holding the `dark` class against
  * app theme changes; the app's own theme comes back when the KDS closes.
@@ -50,21 +69,10 @@ export function useKdsScreenMode() {
 
   useEffect(() => {
     const html = document.documentElement;
-    const wantDark = mode === 'night';
-    let appDark = html.classList.contains('dark');
-    const hold = () => {
-      const dark = html.classList.contains('dark');
-      if (dark === wantDark) return;
-      appDark = dark;
-      html.classList.toggle('dark', wantDark);
-    };
     html.classList.add('theme-kds');
-    hold();
-    const observer = new MutationObserver(hold);
-    observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+    const release = holdDarkClass(mode === 'night');
     return () => {
-      observer.disconnect();
-      html.classList.toggle('dark', appDark);
+      release();
       html.classList.remove('theme-kds');
     };
   }, [mode]);

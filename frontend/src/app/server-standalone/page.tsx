@@ -25,6 +25,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore }
 import { parsePhone } from '@/lib/phone';
 import { getLanguageDirection, getLanguageLocale, useSyncServerLanguage } from '@/lib/i18n';
 import { useReloadOnNewBuild } from '@/hooks/useReloadOnNewBuild';
+import { holdDarkClass } from '@/lib/kds-screen-mode';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
@@ -1178,6 +1179,9 @@ export default function ServerStandalonePage() {
   useReloadOnNewBuild('/api/server-app/info', draft.length === 0 && !sending);
 
   const guestMode = !user && !!guestTable && !showLogin;
+  // Customers ordering from a table QR always see the day theme; staff keep the app's theme.
+  const customerFacing = !user;
+  useEffect(() => (customerFacing ? holdDarkClass(false) : undefined), [customerFacing]);
   const waitingForGuest =
     !user && (guestTableId === undefined || (!!guestTableId && !guestChecked));
 
