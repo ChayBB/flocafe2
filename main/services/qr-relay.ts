@@ -14,6 +14,7 @@ import { WebSocket, type RawData } from 'ws';
 import { getSettingValue, upsertSettings } from '../db';
 import { getServerAppPort } from '../server-app-state';
 import { isBlockedSsrfTarget } from '../middleware/security';
+import { readProtectedSetting, writeProtectedSetting } from '../security/protected-setting';
 import {
   GUEST_QR_PUBLIC_URL_KEY,
   normalizePublicBaseUrl,
@@ -158,7 +159,7 @@ let running = false;
 let inFlight = 0;
 
 function privateKey(): KeyObject | null {
-  const pem = getSettingValue(QR_RELAY_PRIVATE_KEY);
+  const pem = readProtectedSetting(QR_RELAY_PRIVATE_KEY);
   return pem ? createPrivateKey(pem) : null;
 }
 
@@ -201,11 +202,11 @@ export async function startQrRelayPairing(rawServerUrl: unknown): Promise<void> 
   if (!serverUrl) throw new QrRelayError('server_url_invalid');
   stopTunnel();
   const { privateKey: key } = generateKeyPairSync('ed25519');
-  upsertSettings({
-    [QR_RELAY_SERVER_KEY]: serverUrl,
-    [QR_RELAY_PRIVATE_KEY]: key.export({ format: 'pem', type: 'pkcs8' }).toString(),
-    [QR_RELAY_STORE_KEY]: '',
-  });
+  writeProtectedSetting(
+    QR_RELAY_PRIVATE_KEY,
+    key.export({ format: 'pem', type: 'pkcs8' }).toString(),
+  );
+  upsertSettings({ [QR_RELAY_SERVER_KEY]: serverUrl, [QR_RELAY_STORE_KEY]: '' });
   const data = await relayPost(serverUrl, '/api/pos/pair/start', {
     public_key: publicKeyOf(key),
     device_name: os.hostname(),
@@ -276,16 +277,14 @@ export async function unpairQrRelay(): Promise<void> {
       signature: signText(`unpair:${storeId}`),
     }).catch(() => undefined);
   }
-  upsertSettings({
-    [QR_RELAY_PRIVATE_KEY]: '',
-    [QR_RELAY_STORE_KEY]: '',
-    [GUEST_QR_PUBLIC_URL_KEY]: '',
-  });
+  writeProtectedSetting(QR_RELAY_PRIVATE_KEY, '');
+  upsertSettings({ [QR_RELAY_STORE_KEY]: '', [GUEST_QR_PUBLIC_URL_KEY]: '' });
   lastError = null;
 }
 
 export function getQrRelayStatus() {
-  const storeId = getSettingValue(QR_RELAY_STORE_KEY) || '';
+  // A key the OS store no longer yields (a backup restored on another machine) means pairing again.
+  const storeId = privateKey() ? getSettingValue(QR_RELAY_STORE_KEY) || '' : '';
   return {
     server_url: getSettingValue(QR_RELAY_SERVER_KEY) || '',
     state: pairing ? 'pairing' : storeId ? 'paired' : 'unpaired',
@@ -303,7 +302,7 @@ export function getQrRelayStatus() {
 export function startQrRelay(): void {
   const serverUrl = getSettingValue(QR_RELAY_SERVER_KEY);
   const storeId = getSettingValue(QR_RELAY_STORE_KEY);
-  if (!serverUrl || !storeId || !getSettingValue(QR_RELAY_PRIVATE_KEY)) return;
+  if (!serverUrl || !storeId || !readProtectedSetting(QR_RELAY_PRIVATE_KEY)) return;
   stopTunnel();
   running = true;
   reconnectDelay = RECONNECT_MIN_MS;

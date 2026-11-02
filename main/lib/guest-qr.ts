@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
-import { getSettingValue, upsertSettings } from '../db';
+import { getSettingValue } from '../db';
+import { readProtectedSetting, writeProtectedSetting } from '../security/protected-setting';
 
 export const GUEST_QR_PUBLIC_URL_KEY = 'guest_qr_public_base_url';
 export const GUEST_QR_TRUSTED_PROXY_KEY = 'guest_qr_trusted_proxy';
@@ -23,7 +24,14 @@ export function normalizePublicBaseUrl(value: unknown): string | null {
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash) {
+  if (
+    url.protocol !== 'https:' ||
+    !url.hostname ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
     return null;
   }
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
@@ -60,17 +68,20 @@ export function isTrustedGuestProxy(address: string): boolean {
 }
 
 function guestQrSecret(): string {
-  let secret = getSettingValue(GUEST_QR_SECRET_KEY);
+  let secret = readProtectedSetting(GUEST_QR_SECRET_KEY);
   if (!secret) {
     secret = randomBytes(32).toString('hex');
-    upsertSettings({ [GUEST_QR_SECRET_KEY]: secret });
+    writeProtectedSetting(GUEST_QR_SECRET_KEY, secret);
   }
   return secret;
 }
 
 /** The token a table's QR carries; without it a table id alone cannot place an order. */
 export function guestTableToken(tableId: string): string {
-  return createHmac('sha256', guestQrSecret()).update(`table:${tableId}`).digest('base64url').slice(0, 22);
+  return createHmac('sha256', guestQrSecret())
+    .update(`table:${tableId}`)
+    .digest('base64url')
+    .slice(0, 22);
 }
 
 export function verifyGuestTableToken(tableId: string, token: unknown): boolean {
@@ -82,5 +93,5 @@ export function verifyGuestTableToken(tableId: string, token: unknown): boolean 
 
 /** Issues a new secret, so every table QR printed before stops working. */
 export function rotateGuestQrSecret(): void {
-  upsertSettings({ [GUEST_QR_SECRET_KEY]: randomBytes(32).toString('hex') });
+  writeProtectedSetting(GUEST_QR_SECRET_KEY, randomBytes(32).toString('hex'));
 }

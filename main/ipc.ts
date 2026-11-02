@@ -66,6 +66,8 @@ const SENSITIVE_SETTING_KEYS = new Set([
   'cloud_device_secret',
   'cloud_deletion_status_token',
   'cloud_last_error',
+  'qr_relay_private_key',
+  'guest_qr_secret',
 ]);
 
 function maskSetting(key: string, value: string): string {

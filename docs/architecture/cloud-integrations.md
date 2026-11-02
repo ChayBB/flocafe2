@@ -368,7 +368,10 @@ uses `isBlockedSsrfTarget()` before every relay request and inside the tunnel's 
 name that later resolves inside the shop is refused too.
 
 Pairing (`POST /api/qr-relay/pair`) generates a new Ed25519 key pair and keeps the private key in
-the `qr_relay_private_key` setting, which the wildcard settings read refuses. It sends only the
+the `qr_relay_private_key` setting, which the wildcard settings read refuses. A packaged install
+encrypts the key with Electron `safeStorage` (`qr_relay_private_key.enc`) and leaves only the
+`safe-storage:v1` marker in SQLite; database exports redact it, and a restore keeps this device's
+pairing. A key the OS store can no longer decrypt reads as unpaired. Pairing sends only the
 public key (SPKI DER, base64) and the device name to `{server}/api/pos/pair/start`. The relay
 answers with `pairing_id`, a 6-digit `code` and `expires_at`. Settings shows the code and a QR of
 `{server}/admin/pair?code=`, and checks `{server}/api/pos/pair/status` about every 3 seconds with

@@ -61,6 +61,9 @@ const EXPORT_SETTINGS_REDACT = new Set([
   'cloud_deletion_status_token',
   // Redact legacy error strings from exported settings.
   'cloud_last_error',
+  // QR ordering secrets: a relay key lets anyone act as this shop, a QR secret forges table codes.
+  'qr_relay_private_key',
+  'guest_qr_secret',
 ]);
 
 // User columns stripped from export — hashes must never leave the server.

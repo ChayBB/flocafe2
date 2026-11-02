@@ -3062,6 +3062,11 @@ const RESTORE_PROTECTED_SETTING_KEYS = [
   'diagnostics_consent_remote_initialized',
   'mobile_pairing_code',
   'mobile_pairing_code_expires_at',
+  // The device's QR pairing and table-code secret: their OS-store copies stay with this machine.
+  'guest_qr_secret',
+  'qr_relay_server_url',
+  'qr_relay_private_key',
+  'qr_relay_store_id',
 ];
 
 export function captureRestoreProtectedSettings(

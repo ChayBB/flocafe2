@@ -256,7 +256,9 @@ checkbox on the OrderFlow settings tab, on by default) closes all three routes w
 `guest_ordering_disabled` when it is `false`, and the guest view then asks the customer to call staff.
 A table id alone cannot place an order: the table and order routes also need the token the QR link
 carries (an HMAC of the table id under `guest_qr_secret`), and "Cancel all table QR codes" on the same
-tab replaces the secret so every printed QR stops working. For ordering over mobile data the tab
+tab replaces the secret so every printed QR stops working. A packaged install keeps that secret in
+Electron `safeStorage` (`guest_qr_secret.enc`) and only the `safe-storage:v1` marker in SQLite, the
+way it keeps the JWT secret; database exports redact it and a restore keeps this device's copy. For ordering over mobile data the tab
 also sets a public https address for the QR links and the one proxy address whose
 `X-Forwarded-For` the Server App believes, which keeps the per-address limit per customer behind
 that proxy.
