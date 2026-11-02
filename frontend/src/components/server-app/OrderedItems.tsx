@@ -54,9 +54,16 @@ export interface OrderedItem {
   weight_pending?: boolean | number | null;
 }
 
+/** A ready or served dish, or a take-away one still in the kitchen, not yet confirmed. */
+function canConfirmServed(item: OrderedItem): boolean {
+  if (item.served_confirmed_at) return false;
+  if (item.status === 'ready' || item.status === 'served') return true;
+  return item.service_change === 'takeaway' && ['pending', 'preparing'].includes(item.status);
+}
+
 /**
  * Any item not yet served can be packed to go; only a waiting item can be cancelled; a served
- * item can be confirmed at the table once.
+ * item, or a take-away one the kitchen is still packing, can be confirmed once.
  */
 export function itemChangeOptions(item: OrderedItem): {
   takeaway: boolean;
@@ -67,7 +74,7 @@ export function itemChangeOptions(item: OrderedItem): {
     takeaway:
       ['pending', 'preparing', 'ready'].includes(item.status) && item.service_change !== 'takeaway',
     cancel: item.status === 'pending',
-    confirmServed: ['ready', 'served'].includes(item.status) && !item.served_confirmed_at,
+    confirmServed: canConfirmServed(item),
   };
 }
 
@@ -280,11 +287,9 @@ export function OrderedItemList({
   );
 }
 
-/** Dishes ready or served but not yet confirmed at the table, in list order. */
+/** Dishes not yet confirmed at the table, in list order. */
 export function itemsToConfirmServed(items: OrderedItem[]): OrderedItem[] {
-  return items.filter(
-    (item) => (item.status === 'ready' || item.status === 'served') && !item.served_confirmed_at,
-  );
+  return items.filter(canConfirmServed);
 }
 
 /** Every dish starts ticked; untick any that has not reached the table, then confirm them together. */

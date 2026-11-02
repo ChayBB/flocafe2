@@ -380,7 +380,9 @@ service staff took a `ready` or `served` item to the table: a `ready` item becom
 it sets `served_confirmed_at` and `served_confirmed_by` once and records an `item_served_confirmed`
 audit entry (with the item's previous status); repeating it changes nothing. It returns
 `{ order: { ...order, items } }` and `409` for an item that is neither `ready` nor `served`. A
-status change away from `served` clears the confirmation. `POST /:orderId/items/confirm-served`
+`pending` or `preparing` item marked take-away (`service_change` `takeaway`) can also be confirmed;
+it keeps its status so the kitchen goes on packing it while the bill prints. A status change away
+from `served` clears the confirmation, except on a take-away item. `POST /:orderId/items/confirm-served`
 (same permission and limiter) confirms the items in body `item_ids` (1 to 200 ids) the same way in
 one transaction: `400` for a bad list, and any item that cannot be confirmed (`404` or `409`) leaves
 every item unconfirmed. The KDS shows confirmed items, and the Server App forwards all four routes.

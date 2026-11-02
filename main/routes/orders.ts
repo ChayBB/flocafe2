@@ -5731,7 +5731,10 @@ function confirmItemServed(
     .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
     .get(itemId, orderId) as any;
   if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
-  if (item.status !== 'served' && item.status !== 'ready') {
+  // A take-away item is confirmed while the kitchen still packs it, so the bill can print alongside.
+  const takeawayInKitchen =
+    item.service_change === 'takeaway' && ['pending', 'preparing'].includes(item.status);
+  if (item.status !== 'served' && item.status !== 'ready' && !takeawayInKitchen) {
     throw Object.assign(new Error('Only ready or served items can be confirmed at the table'), {
       statusCode: 409,
     });

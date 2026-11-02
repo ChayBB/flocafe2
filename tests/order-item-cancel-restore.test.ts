@@ -434,11 +434,28 @@ async function main() {
       );
       const again = await confirmServed(served.orderId, served.itemId);
       assertEqualOrThrow(again.status, 200, 'confirming twice is harmless');
-      const notServed = await confirmServed(order.orderId, order.itemId);
+      const waiting = seedOrderWithItem(db, 'CONFIRM-WAITING', 'prod-cancel', 'pending');
+      const notServed = await confirmServed(waiting.orderId, waiting.itemId);
       assertEqualOrThrow(
         notServed.status,
         409,
         'an item the kitchen has not finished cannot be confirmed at the table',
+      );
+      // A take-away item is confirmed while the kitchen still packs it, and stays confirmed.
+      const takeawayConfirmed = await confirmServed(order.orderId, order.itemId);
+      assertEqualOrThrow(
+        takeawayConfirmed.status,
+        200,
+        `a waiting take-away item can be confirmed (${JSON.stringify(takeawayConfirmed.data)})`,
+      );
+      db.prepare("UPDATE order_items SET status = 'preparing' WHERE id = ?").run(order.itemId);
+      const packing = db
+        .prepare('SELECT status, served_confirmed_at FROM order_items WHERE id = ?')
+        .get(order.itemId) as any;
+      assertEqualOrThrow(packing.status, 'preparing', 'the kitchen keeps working on it');
+      assertOrThrow(
+        Boolean(packing.served_confirmed_at),
+        'the kitchen moving a take-away item on keeps its confirmation',
       );
       // A ready dish taken to the table is served and confirmed in one step.
       const ready = seedOrderWithItem(db, 'CONFIRM-READY', 'prod-cancel', 'ready');

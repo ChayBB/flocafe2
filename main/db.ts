@@ -7904,6 +7904,23 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 130,
+    name: 'keep_takeaway_served_confirmation',
+    up: () => {
+      // A take-away item is confirmed before the kitchen finishes it, so its confirmation survives the kitchen moving it on.
+      db.exec(`
+        DROP TRIGGER IF EXISTS clear_served_confirmation_on_status_change;
+        CREATE TRIGGER clear_served_confirmation_on_status_change
+        AFTER UPDATE OF status ON order_items
+        WHEN NEW.status != 'served' AND NEW.served_confirmed_at IS NOT NULL
+          AND COALESCE(NEW.service_change, '') != 'takeaway'
+        BEGIN
+          UPDATE order_items SET served_confirmed_at = NULL, served_confirmed_by = NULL WHERE id = NEW.id;
+        END
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
