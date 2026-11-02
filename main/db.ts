@@ -7894,6 +7894,16 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 129,
+    name: 'add_printer_device_name',
+    up: () => {
+      // The operating system's printer a USB/OS-queue printer sends to; the name stays a free label.
+      if (!getColumns(db, 'printers').includes('device_name')) {
+        db.exec('ALTER TABLE printers ADD COLUMN device_name TEXT DEFAULT NULL');
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

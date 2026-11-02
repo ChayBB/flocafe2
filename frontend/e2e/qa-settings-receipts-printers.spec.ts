@@ -284,6 +284,66 @@ test.describe('@ci-tier2 Settings > Printers', () => {
     await expect(page.getByRole('button', { name: /Installed on this computer/ })).toBeVisible();
   });
 
+  test('a USB printer takes any name and picks the computer printer it sends to', async ({
+    page,
+  }) => {
+    await page.route('**/api/printers/detect', (route) =>
+      route.fulfill({
+        json: {
+          printers: [
+            {
+              name: 'FUJIFILM Apeos C3070',
+              make: 'FUJIFILM',
+              model: 'Apeos C3070',
+              connectionType: 'usb',
+              deviceUri: 'usb://fuji',
+              status: 'idle',
+            },
+          ],
+        },
+      }),
+    );
+    // The last printer cannot be deleted, so the save is answered here instead of stored.
+    const saved = { name: 'Isan kitchen', device_name: 'FUJIFILM Apeos C3070' };
+    let posted: unknown;
+    let listed = false;
+    await page.route('**/api/printers', async (route) => {
+      if (route.request().method() === 'POST') {
+        posted = route.request().postDataJSON();
+        listed = true;
+        await route.fulfill({ status: 201, json: { printer: { id: 'p-isan', ...saved } } });
+        return;
+      }
+      if (!listed) return route.continue();
+      await route.fulfill({
+        json: {
+          printers: [
+            {
+              id: 'p-isan',
+              ...saved,
+              connection_type: 'usb',
+              is_default: 1,
+              paper_width: 'cols-42',
+            },
+          ],
+        },
+      });
+    });
+    await openPrintersTab(page);
+    await page.getByRole('button', { name: 'Add Manually', exact: true }).click();
+    await page.getByPlaceholder('e.g. Kitchen Printer').fill('Isan kitchen');
+    await page
+      .locator('select')
+      .filter({ has: page.locator('option[value="webusb"]') })
+      .selectOption('usb');
+    await expect(page.getByText(/doesn't match any detected printer/)).toHaveCount(0);
+    await page.getByLabel('Printer on this computer *').selectOption('FUJIFILM Apeos C3070');
+    await page.getByRole('button', { name: 'Add Printer', exact: true }).click();
+    await expect(page.getByText('Printer added', { exact: true })).toBeVisible();
+    expect(posted).toMatchObject({ ...saved, connection_type: 'usb' });
+    await expect(page.getByText('USB · FUJIFILM Apeos C3070')).toBeVisible();
+  });
+
   test('the kitchen ticket print layout is one choice saved straight to the server', async ({
     page,
   }) => {

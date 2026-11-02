@@ -141,15 +141,15 @@ print requests are sent.
    local API is unencrypted; see
    [authentication and authorization](architecture/authentication-and-authorization.md).
 
-### Adding a printer manually by name
+### Adding a printer manually
 
-FloCafe dispatches USB and OS-queue print jobs by sending the printer's exact name to the OS
-(`lp -d <name>` on macOS and Linux, `OpenPrinterW` on Windows). There is no fuzzy matching. If a
-printer is not found by **Settings > Printers > Detect**, use **Add Manually**, but the name must
-match the OS print queue identifier exactly, not just the printer's name on your desktop.
+A printer's **Printer Name** is a free label for what it does, such as "Isan kitchen" or "Drinks
+bar". For a USB / OS-queue printer, **Printer on this computer** picks the OS queue it sends to,
+from the same detection FloCafe uses; it is stored as `device_name`. FloCafe dispatches the job by
+sending that exact queue name to the OS (`lp -d <name>` on macOS and Linux, `OpenPrinterW` on
+Windows). There is no fuzzy matching. A printer saved without a `device_name` sends to its
+**Printer Name**.
 
-- Prefer picking the name from the autocomplete list under the name field, which is sourced from the
-  same detection FloCafe uses, over typing it by hand.
 - On macOS and Linux, the CUPS queue name can differ from the display name shown in system
   settings, because spaces are sometimes replaced with underscores. Check the exact queue name with
   `lpstat -p`.

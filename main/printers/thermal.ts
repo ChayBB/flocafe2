@@ -1687,6 +1687,11 @@ export function resolvePrinterContext(
   return { profile, columns, capabilities };
 }
 
+/** The operating system's printer to send to: the chosen device, else the label for older printers. */
+export function osPrinterName(printer: { name?: string; device_name?: string | null }): string {
+  return printer.device_name || printer.name || '';
+}
+
 async function dispatchPrint(
   printer: any,
   data: Buffer,
@@ -1698,14 +1703,14 @@ async function dispatchPrint(
     case 'usb':
       if (isMasBuild) {
         if (process.platform === 'darwin') {
-          return await printViaLocalIpp(data, printer.name, signal);
+          return await printViaLocalIpp(data, osPrinterName(printer), signal);
         }
         const detail =
           'USB printers are not supported in the App Store build. Use a network printer.';
         console.log(`[Printer] ${detail}`);
         return { ok: false, detail };
       }
-      return await printViaUSB(data, printer.name, signal);
+      return await printViaUSB(data, osPrinterName(printer), signal);
     case 'webusb':
       console.log('[Printer] WebUSB printer — not supported in Electron');
       return {
@@ -3742,7 +3747,7 @@ export async function printZReport(
         result = await printViaNetwork(printer.ip_address, printer.port || 9100, data, signal);
         break;
       case 'usb':
-        result = await printViaUSB(data, printer.name, signal);
+        result = await printViaUSB(data, osPrinterName(printer), signal);
         break;
       case 'webusb':
         // Backend never dispatches WebUSB; return the FULL bytes (including

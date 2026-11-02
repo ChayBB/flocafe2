@@ -39,6 +39,7 @@ const SELECTABLE_LANGUAGES: Language[] = (Object.keys(LANGUAGES) as Language[]).
 export type HwPrinter = {
   id: string;
   name: string;
+  device_name?: string | null;
   connection_type: 'network' | 'usb' | 'webusb';
   ip_address?: string;
   port?: number;
@@ -65,6 +66,7 @@ export type DetectedPrinter = {
 
 export type PrinterForm = {
   name: string;
+  device_name: string;
   connection_type: 'network' | 'usb' | 'webusb';
   ip_address: string;
   port: string;
@@ -124,6 +126,7 @@ export interface TemplateCard {
 
 const emptyPrinterForm: PrinterForm = {
   name: '',
+  device_name: '',
   connection_type: 'network',
   ip_address: '',
   port: '9100',
@@ -265,6 +268,7 @@ export function PrintersSettingsTab({
     try {
       const payload: {
         name: string;
+        device_name?: string;
         connection_type: 'network' | 'usb';
         paper_width: string;
         ip_address?: string;
@@ -277,6 +281,8 @@ export function PrintersSettingsTab({
       if (p.connectionType === 'network') {
         payload.ip_address = p.ipAddress || '';
         payload.port = p.port || 9100;
+      } else {
+        payload.device_name = p.name;
       }
       await api.post('/printers', payload);
       toast.success(t('printerQuickAdded', { name: p.name }));
@@ -298,6 +304,7 @@ export function PrintersSettingsTab({
   const openEditPrinter = (p: HwPrinter) => {
     setPrinterForm({
       name: p.name,
+      device_name: p.device_name || (p.connection_type === 'usb' ? p.name : ''),
       connection_type: p.connection_type,
       ip_address: p.ip_address || '',
       port: String(p.port || 9100),
@@ -312,10 +319,15 @@ export function PrintersSettingsTab({
       toast.error(t('printerNameRequired'));
       return;
     }
+    if (printerForm.connection_type === 'usb' && !printerForm.device_name) {
+      toast.error(t('printerDeviceRequired'));
+      return;
+    }
     setSavingPrinter(true);
     try {
       const payload = {
         name: printerForm.name,
+        device_name: printerForm.connection_type === 'usb' ? printerForm.device_name : null,
         connection_type: printerForm.connection_type,
         ip_address: printerForm.connection_type === 'network' ? printerForm.ip_address : undefined,
         port: printerForm.connection_type === 'network' ? Number(printerForm.port) : undefined,
@@ -447,7 +459,7 @@ export function PrintersSettingsTab({
                   <div className="mt-2 space-y-2">
                     {detectedPrinters.map((p) => {
                       const alreadyAdded = hwPrinters.some(
-                        (h) => h.name.toLowerCase() === p.name.toLowerCase(),
+                        (h) => (h.device_name || h.name).toLowerCase() === p.name.toLowerCase(),
                       );
                       const isAdding = addingDetectedName === p.name;
                       const dotColor =
@@ -568,7 +580,11 @@ export function PrintersSettingsTab({
                         {p.ip_address}:{p.port}
                       </Ltr>
                     ) : p.connection_type === 'usb' ? (
-                      t('connectionUsb')
+                      p.device_name && p.device_name !== p.name ? (
+                        `${t('connectionUsb')} · ${p.device_name}`
+                      ) : (
+                        t('connectionUsb')
+                      )
                     ) : (
                       t('browserWebusb')
                     )}
@@ -630,22 +646,9 @@ export function PrintersSettingsTab({
                     value={printerForm.name}
                     onChange={(e) => setPrinterForm((p) => ({ ...p, name: e.target.value }))}
                     placeholder={t('printerNamePlaceholder')}
-                    list="detected-printer-names"
                     className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                   />
-                  <datalist id="detected-printer-names">
-                    {detectedPrinters.map((dp) => (
-                      <option key={dp.name} value={dp.name} />
-                    ))}
-                  </datalist>
-                  {printerForm.connection_type !== 'webusb' &&
-                    printerForm.name.trim() &&
-                    detectedPrinters.length > 0 &&
-                    !detectedPrinters.some((dp) => dp.name === printerForm.name) && (
-                      <p className="mt-1 text-xs text-amber-600">
-                        {t('printerNameMismatchWarning')}
-                      </p>
-                    )}
+                  <p className="mt-1 text-xs text-muted-foreground">{t('printerNameHint')}</p>
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">
@@ -697,6 +700,41 @@ export function PrintersSettingsTab({
                       />
                     </div>
                   </>
+                )}
+
+                {printerForm.connection_type === 'usb' && (
+                  <div className="md:col-span-2">
+                    <label
+                      htmlFor="printer-device-name"
+                      className="block text-xs text-muted-foreground mb-1"
+                    >
+                      {t('printerDevice')}
+                    </label>
+                    <select
+                      id="printer-device-name"
+                      value={printerForm.device_name}
+                      onChange={(e) =>
+                        setPrinterForm((p) => ({ ...p, device_name: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                    >
+                      <option value="">{t('printerDevicePlaceholder')}</option>
+                      {printerForm.device_name &&
+                        !detectedPrinters.some((dp) => dp.name === printerForm.device_name) && (
+                          <option value={printerForm.device_name}>{printerForm.device_name}</option>
+                        )}
+                      {detectedPrinters.map((dp) => (
+                        <option key={dp.name} value={dp.name}>
+                          {dp.name}
+                        </option>
+                      ))}
+                    </select>
+                    {printerForm.device_name &&
+                      detectedPrinters.length > 0 &&
+                      !detectedPrinters.some((dp) => dp.name === printerForm.device_name) && (
+                        <p className="mt-1 text-xs text-amber-600">{t('printerDeviceNotFound')}</p>
+                      )}
+                  </div>
                 )}
 
                 {printerForm.connection_type === 'webusb' && (

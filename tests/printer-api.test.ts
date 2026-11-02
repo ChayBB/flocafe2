@@ -33,7 +33,7 @@ const request = require('supertest');
 const { initDatabase, getDatabase, closeDatabase, now } = require('../main/db');
 const { printerRoutes } = require('../main/routes/printers');
 const { kitchenStationRoutes } = require('../main/routes/kitchen-stations');
-const { printReceipt, printReceiptDetailed } = require('../main/printers/thermal');
+const { printReceipt, printReceiptDetailed, osPrinterName } = require('../main/printers/thermal');
 const { cloudSync } = require('../main/services/cloud-sync');
 const { printerService } = require('../frontend/src/lib/printer/PrinterService');
 
@@ -847,7 +847,49 @@ async function runTests() {
     }
   }
 
-  console.log('\nTest 11: kitchen tickets print combined or one per menu line');
+  console.log('\nTest 11: a printer name is a free label apart from the computer printer');
+  {
+    const created = await request(app).post('/api/printers').send({
+      name: 'ครัวอีสาน',
+      device_name: '  EPSON TM-T82 Receipt  ',
+      connection_type: 'usb',
+    });
+    assert(created.status === 201, `a labelled USB printer is created (got ${created.status})`);
+    const printer = created.body.printer;
+    assert(
+      printer.name === 'ครัวอีสาน' && printer.device_name === 'EPSON TM-T82 Receipt',
+      `the label and the trimmed computer printer are stored apart (got ${printer.name} / ${printer.device_name})`,
+    );
+    const row = db.prepare('SELECT * FROM printers WHERE id = ?').get(printer.id);
+    assert(
+      osPrinterName(row) === 'EPSON TM-T82 Receipt',
+      'jobs go to the computer printer, not the label',
+    );
+    const renamed = await request(app).put(`/api/printers/${printer.id}`).send({ name: 'บาร์น้ำ' });
+    assert(
+      renamed.body.printer.name === 'บาร์น้ำ' &&
+        renamed.body.printer.device_name === 'EPSON TM-T82 Receipt',
+      'renaming the label keeps the computer printer',
+    );
+    const cleared = await request(app)
+      .put(`/api/printers/${printer.id}`)
+      .send({ device_name: null });
+    assert(cleared.body.printer.device_name === null, 'device_name can be cleared');
+    assert(
+      osPrinterName(db.prepare('SELECT * FROM printers WHERE id = ?').get(printer.id)) === 'บาร์น้ำ',
+      'a printer without a computer printer still sends to its name',
+    );
+    const badDevice = await request(app)
+      .put(`/api/printers/${printer.id}`)
+      .send({ device_name: 'bad\u0007name' });
+    assert(
+      badDevice.status === 400,
+      `control characters in device_name are refused (got ${badDevice.status})`,
+    );
+    await request(app).delete(`/api/printers/${printer.id}`);
+  }
+
+  console.log('\nTest 12: kitchen tickets print combined or one per menu line');
   {
     const tickets: string[] = [];
     const kitchenServer = net.createServer((socket) => {

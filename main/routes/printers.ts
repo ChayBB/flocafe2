@@ -29,6 +29,7 @@ import { randomUUID } from 'node:crypto';
 import {
   printViaNetwork,
   printViaUSB,
+  osPrinterName,
   buildTestPage,
   printReceiptDetailed,
   printKOTDetailed,
@@ -106,6 +107,14 @@ function validatePrinterFields(body: any, existing?: any): string | null {
   ) {
     return 'name must be 1-128 characters and cannot contain control characters.';
   }
+  if (
+    body.device_name !== undefined &&
+    body.device_name !== null &&
+    (typeof body.device_name !== 'string' ||
+      (body.device_name.trim() !== '' && !PRINTER_NAME_REGEX.test(body.device_name.trim())))
+  ) {
+    return 'device_name must be 1-128 characters and cannot contain control characters.';
+  }
   if (body.connection_type !== undefined && !CONNECTION_TYPES.includes(body.connection_type)) {
     return 'connection_type must be network | usb | webusb';
   }
@@ -176,6 +185,7 @@ function printerShape(printer: any) {
   return {
     id: printer.id,
     name: printer.name,
+    device_name: printer.device_name ?? null,
     connection_type: printer.connection_type,
     ip_address: printer.ip_address,
     port: printer.port,
@@ -301,8 +311,8 @@ router.post('/', requirePermission('printers.manage'), (req: Request, res: Respo
       is_default,
       cash_drawer_pulse_enabled,
     } = req.body;
-    // Trim accidental whitespace so the name matches the OS print queue exactly.
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : req.body.name;
+    const deviceName = typeof req.body.device_name === 'string' ? req.body.device_name.trim() : '';
 
     if (!name) return res.status(400).json({ error: 'name is required' });
     if (typeof name !== 'string' || !PRINTER_NAME_REGEX.test(name)) {
@@ -332,11 +342,12 @@ router.post('/', requirePermission('printers.manage'), (req: Request, res: Respo
       const shouldBeDefault = Boolean(is_default) || isFirstPrinter;
       if (shouldBeDefault) db.prepare('UPDATE printers SET is_default = 0').run();
       db.prepare(`
-        INSERT INTO printers (id, name, connection_type, ip_address, port, paper_width, is_default, cash_drawer_pulse_enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO printers (id, name, device_name, connection_type, ip_address, port, paper_width, is_default, cash_drawer_pulse_enabled, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         name,
+        deviceName || null,
         connection_type,
         ip_address ?? null,
         port ?? 9100,
@@ -373,6 +384,12 @@ router.put('/:id', requirePermission('printers.manage'), (req: Request, res: Res
       cash_drawer_pulse_enabled,
     } = req.body;
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : req.body.name;
+    const deviceName =
+      req.body.device_name === undefined
+        ? existing.device_name
+        : typeof req.body.device_name === 'string' && req.body.device_name.trim()
+          ? req.body.device_name.trim()
+          : null;
 
     const fieldError = validatePrinterFields({ ...req.body, name }, existing);
     if (fieldError) return res.status(400).json({ error: fieldError });
@@ -384,11 +401,12 @@ router.put('/:id', requirePermission('printers.manage'), (req: Request, res: Res
       const becameDefault = is_default === true;
       db.prepare(`
         UPDATE printers SET
-          name = ?, connection_type = ?, ip_address = ?, port = ?,
+          name = ?, device_name = ?, connection_type = ?, ip_address = ?, port = ?,
           paper_width = ?, is_default = ?, cash_drawer_pulse_enabled = ?, updated_at = ?
         WHERE id = ?
       `).run(
         name !== undefined ? name : existing.name,
+        deviceName ?? null,
         updatedConnectionType,
         updatedIpAddress === undefined ? null : updatedIpAddress,
         port !== undefined ? port : existing.port,
@@ -531,7 +549,7 @@ router.post(
           );
           break;
         case 'usb':
-          result = await printViaUSB(testData, printer.name, getHttpRequestSignal(req));
+          result = await printViaUSB(testData, osPrinterName(printer), getHttpRequestSignal(req));
           break;
         case 'webusb':
           // WebUSB is handled entirely in the browser; return the bytes for the frontend to send
@@ -586,7 +604,11 @@ router.post(
           );
           break;
         case 'usb':
-          result = await printViaUSB(drawerPulseBytes, printer.name, getHttpRequestSignal(req));
+          result = await printViaUSB(
+            drawerPulseBytes,
+            osPrinterName(printer),
+            getHttpRequestSignal(req),
+          );
           break;
         case 'webusb':
           return res.json({
@@ -650,7 +672,7 @@ router.post(
           );
           break;
         case 'usb':
-          result = await printViaUSB(testData, printer.name, getHttpRequestSignal(req));
+          result = await printViaUSB(testData, osPrinterName(printer), getHttpRequestSignal(req));
           break;
         case 'webusb':
           return res.json({
