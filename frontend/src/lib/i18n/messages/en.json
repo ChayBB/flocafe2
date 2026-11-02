@@ -569,7 +569,7 @@
     "kotReprinting": "Printing...",
     "kotDrop": "Cancel",
     "kotReprintFailed": "Still not printing. Check the printer and try again.",
-    "speechTakeaway": "{place}, {item}, take-away",
+    "speechTakeaway": "{place}, {item}, changed to take-away",
     "speechCancelled": "{place}, {item}, cancelled",
     "messageEmergency": "Emergency",
     "messageFrom": "from {name}",

@@ -105,7 +105,7 @@ test('the KDS reads out the table and dish of an item changed to take-away or ca
     page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.join(' | '));
   await expect
     .poll(spoken, { timeout: 15000 })
-    .toContain(`Table ${tableName}, E2E Coffee, take-away`);
+    .toContain(`Table ${tableName}, E2E Coffee, changed to take-away`);
   await expect
     .poll(spoken, { timeout: 15000 })
     .toContain(`Table ${tableName}, E2E Coffee, cancelled`);

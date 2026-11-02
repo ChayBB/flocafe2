@@ -569,7 +569,7 @@
     "kotReprinting": "กำลังพิมพ์...",
     "kotDrop": "ยกเลิก",
     "kotReprintFailed": "ยังพิมพ์ไม่สำเร็จ ตรวจเครื่องพิมพ์แล้วลองใหม่",
-    "speechTakeaway": "{place} {item} กลับบ้าน",
+    "speechTakeaway": "{place} {item} เปลี่ยนเป็น กลับบ้าน",
     "speechCancelled": "{place} {item} ยกเลิก",
     "messageEmergency": "เหตุฉุกเฉิน",
     "messageFrom": "จาก {name}",
