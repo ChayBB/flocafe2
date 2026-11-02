@@ -6,9 +6,9 @@ import type { PrintConceptId } from '../../shared/print/concepts';
 import type { PrinterCutMode } from './profiles';
 import type { ThermalPrinterCapabilities } from '../../shared/print/thermal-capabilities';
 import type { RasterSemanticLineGroup } from '../../shared/print/raster';
+import { ticketItemLine } from '../../shared/item-line';
 import {
   buildEscPos,
-  formatVariantItemHeading,
   parseVariantSelection,
   pushWrapped,
   truncate,
@@ -57,22 +57,28 @@ export function buildKotPrintData(order: any, items: any[], stationName: string)
           .find((val: unknown) => typeof val === 'string' && val.trim().length > 0)
           ?.trim() ?? '',
     },
-    items: ticketItems.map((item: any) => ({
-      productName: formatVariantItemHeading(
-        String(item?.product_name ?? ''),
-        parseVariantSelection(item?.variant_selection),
-      ),
-      quantity: Number(item?.quantity) || 0,
-      addons: parseKotAddons(item?.addons).map((addon) => ({
+    items: ticketItems.map((item: any) => {
+      const addons = parseKotAddons(item?.addons).map((addon) => ({
         name: String(addon?.name ?? ''),
         ...(typeof addon?.quantity === 'number' &&
         Number.isFinite(addon.quantity) &&
         addon.quantity > 0
           ? { quantity: addon.quantity }
           : {}),
-      })),
-      specialInstructions: String(item?.special_instructions ?? ''),
-    })),
+      }));
+      const line = ticketItemLine(
+        String(item?.product_name ?? ''),
+        parseVariantSelection(item?.variant_selection),
+        addons,
+        String(item?.special_instructions ?? ''),
+      );
+      return {
+        productName: line.name,
+        quantity: Number(item?.quantity) || 0,
+        addons: line.joinsOptions ? [] : addons,
+        specialInstructions: line.instructions,
+      };
+    }),
   };
 }
 
@@ -212,7 +218,10 @@ function kotHeaderLines(
 ): string[] {
   const cols = options.columns;
   const lines: string[] = [];
-  const tzOptions = { hourCycle: 'h23' as const, ...(options.timezone ? { timeZone: options.timezone } : {}) };
+  const tzOptions = {
+    hourCycle: 'h23' as const,
+    ...(options.timezone ? { timeZone: options.timezone } : {}),
+  };
   const thermalCapabilities = mergeThermalCapabilities(options.capabilities, options.arabicShaping);
   const banner = thermalSafeText(
     labelOf(header.banner),

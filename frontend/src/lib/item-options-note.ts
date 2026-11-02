@@ -32,10 +32,11 @@ interface KdsLineItem {
 
 /** The menu line a kitchen screen shows; see itemLine. */
 export function kdsItemLine(item: KdsLineItem): { name: string; instructions: string } {
-  return itemLine(
+  const { name, instructions } = itemLine(
     item.product_name,
     parseVariantSelection(item.variant_selection),
     item.addons,
     item.special_instructions,
   );
+  return { name, instructions };
 }

@@ -19,7 +19,8 @@ import {
 } from './warnings';
 import { printLabelResolver } from './print-document';
 import { isKotItemPending } from '@print/document';
-import { formatItemHeading } from './item-heading';
+import { parseVariantSelection } from './item-heading';
+import { ticketItemLine } from '../../../../shared/item-line';
 
 export interface KotOptions {
   /** 58 mm (32 cols) or 80 mm (42 cols). Default: 58 */
@@ -297,8 +298,16 @@ export function buildKotBytes(
 
     hasItems = true;
 
-    // Item name with quantity
-    const qtyName = `${item.quantity}x ${formatItemHeading(item.product_name, item.variant_selection)}`;
+    // Addons can come from older/API paths as a JSON string. Normalize before
+    // iterating so a stored string cannot abort KOT printing.
+    const parsedAddons = parseAddons(item.addons);
+    const line = ticketItemLine(
+      item.product_name,
+      parseVariantSelection(item.variant_selection),
+      parsedAddons.filter((addon) => addon.name),
+      item.special_instructions,
+    );
+    const qtyName = `${item.quantity}x ${line.name}`;
     enc.bold(true);
     safePrinterText(
       enc,
@@ -312,9 +321,7 @@ export function buildKotBytes(
     ).newline();
     enc.bold(false);
 
-    // Addons can come from older/API paths as a JSON string. Normalize before
-    // iterating so a stored string cannot abort KOT printing.
-    const addons = parseAddons(item.addons);
+    const addons = line.joinsOptions ? [] : parsedAddons;
     if (addons.length > 0) {
       for (const addon of addons) {
         if (addon.name) {
@@ -340,10 +347,10 @@ export function buildKotBytes(
     }
 
     // Special instructions
-    if (item.special_instructions) {
+    if (line.instructions) {
       safePrinterText(
         enc,
-        `   >> ${truncateText(item.special_instructions, cols - 6)}`,
+        `   >> ${truncateText(line.instructions, cols - 6)}`,
         warnings,
         false,
         arabicShaping,

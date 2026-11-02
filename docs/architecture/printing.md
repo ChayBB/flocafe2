@@ -82,14 +82,17 @@ The contact block also records
 `addressSource`, so a printed slip records whether the address came from the order or from the
 customer's standing record.
 
-### Item names on bills and order slips
+### Item names on bills, order slips, and kitchen tickets
 
-Receipts (both render paths) and the browser order slip name an item the way the KDS does, through
-`itemLine()` in `shared/item-line.ts`. Free options join the dish, and a listed choice such as
-`หมู/กุ้ง` gives way to the chosen one. Thai joins without a space (`ข้าวต้มหมู`), other scripts
-keep one, and the size follows in brackets. Priced options keep their own `+` row so the bill shows
-their amount. The options note the order screen wrote into the special instructions is dropped,
-because the name already says it.
+Receipts and kitchen tickets (both render paths) and the browser order slip name an item through
+`itemLine()` and `ticketItemLine()` in `shared/item-line.ts`. When the menu name lists its choices,
+such as `ข้าวผัด หมู/กุ้ง`, the chosen options replace the list the way the KDS shows them. Thai
+joins without a space (`ข้าวผัดหมู`), other scripts keep one, and the size follows in brackets.
+A kitchen ticket joins every option. A bill joins only free options and keeps a `+` row for each
+priced one, so the amount still shows. A name without listed choices keeps every option as its own
+row. A printer drops a row it cannot encode but refuses an item line, so an option in another
+script must not ride on the name. The options note that the order screen writes into the special
+instructions is dropped, because the item already shows those options.
 
 ### Labels are semantic
 

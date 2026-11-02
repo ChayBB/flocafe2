@@ -64,7 +64,7 @@ function withJoinedOptions(order: any): any {
         ...item,
         product_name: line.name,
         special_instructions: line.instructions,
-        addons: addons.filter((addon: any) => Number(addon?.price) > 0),
+        addons: addons.filter((addon: any) => !line.joinsOptions || Number(addon?.price) > 0),
       };
     }),
   };

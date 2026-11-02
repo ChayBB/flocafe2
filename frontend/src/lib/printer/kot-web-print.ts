@@ -12,7 +12,8 @@ import { usePosSettingsStore } from '@/store/pos-settings';
 import { useAuthStore } from '@/store/auth';
 import { formatTime } from './format-date';
 import { escapeHtml } from './web-print';
-import { formatItemHeading } from './item-heading';
+import { parseVariantSelection } from './item-heading';
+import { ticketItemLine } from '../../../../shared/item-line';
 
 export interface KotWebPrintOptions {
   /** 58 mm or 80mm paper. Controls font sizing. Default: 58 */
@@ -168,17 +169,21 @@ export function generateKotHtml(order: Order, opts: KotWebPrintOptions = {}): st
 
   const items = (order.items ?? [])
     .filter((item) => isKotItemPending(item.status))
-    .map((item) => ({
-      name: directionalText(
-        formatItemHeading(String(item.product_name ?? ''), item.variant_selection),
-        base,
-      ),
-      quantity: Number(item.quantity) || 0,
-      addons: (Array.isArray(item.addons) ? item.addons : []).filter((addon) => addon?.name),
-      specialInstructions: item.special_instructions
-        ? directionalText(String(item.special_instructions), base)
-        : null,
-    }));
+    .map((item) => {
+      const addons = (Array.isArray(item.addons) ? item.addons : []).filter((addon) => addon?.name);
+      const line = ticketItemLine(
+        String(item.product_name ?? ''),
+        parseVariantSelection(item.variant_selection),
+        addons,
+        item.special_instructions,
+      );
+      return {
+        name: directionalText(line.name, base),
+        quantity: Number(item.quantity) || 0,
+        addons: line.joinsOptions ? [] : addons,
+        specialInstructions: line.instructions ? directionalText(line.instructions, base) : null,
+      };
+    });
 
   const itemRows =
     items.length > 0

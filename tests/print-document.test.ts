@@ -35,6 +35,7 @@ import {
   renderBillDocumentToClassicLines,
 } from '../main/printers/document-classic';
 import { renderBillDocumentToCompactLines } from '../main/printers/document-compact';
+import { buildKotPrintData } from '../main/printers/document-kot';
 import { receiptDocumentLines } from '../main/printers/thermal';
 import { GENERIC_THERMAL_CAPABILITIES } from '../shared/print/thermal-capabilities';
 import { buildParityFixtures } from './print-parity.test';
@@ -997,14 +998,57 @@ console.log('\n▶ Add-on quantity and charge financial parity');
     { country: 'IN', currency_symbol: '₹' },
     false,
   );
-  assert.equal(malformedData.order.items[0].addons[0].price, 0);
-  assert.equal(malformedData.order.items[0].addons[1].price, 0);
+  assert.equal(malformedData.order.items[0].addons.length, 1, 'malformed entries are dropped');
   assert.equal(
-    malformedData.order.items[0].addons[2].price,
+    malformedData.order.items[0].addons[0].price,
     16,
     'object add-on quantity still uses the extended amount after malformed entries',
   );
   ok('malformed add-on entries do not break normalization');
+
+  const choiceItem = {
+    product_name: 'ข้าวผัด หมู/กุ้ง',
+    quantity: 1,
+    unit_price: 50,
+    total: 70,
+    status: 'pending',
+    addons: [
+      { name: 'หมู', price: 0, quantity: 1 },
+      { name: 'ไข่ดาว', price: 20, quantity: 1 },
+    ],
+    special_instructions: 'หมู ไข่ดาว | ไม่เผ็ด',
+  };
+  const choiceBill = buildBillPrintData(
+    { order_number: 'ORD-CHOICE', created_at: '2026-08-21 18:42:00', items: [choiceItem] },
+    { bill_number: 'INV-CHOICE', subtotal: 70, discount_amount: 0, tax_amount: 0, total: 70 },
+    { country: 'TH', currency_symbol: '฿' },
+    false,
+  ).order.items[0];
+  assert.equal(choiceBill.productName, 'ข้าวผัดหมู');
+  assert.deepEqual(
+    choiceBill.addons.map((addon) => addon.name),
+    ['ไข่ดาว'],
+    'a priced option keeps its row for the amount',
+  );
+  assert.equal(choiceBill.specialInstructions, 'ไม่เผ็ด');
+  const choiceKot = buildKotPrintData({ order_number: 'ORD-CHOICE' }, [choiceItem], 'Kitchen')
+    .items[0];
+  assert.equal(choiceKot.productName, 'ข้าวผัดหมู ไข่ดาว');
+  assert.deepEqual(choiceKot.addons, []);
+  const plainKot = buildKotPrintData(
+    { order_number: 'ORD-PLAIN' },
+    [{ ...choiceItem, product_name: 'ข้าวผัด' }],
+    'Kitchen',
+  ).items[0];
+  assert.equal(plainKot.productName, 'ข้าวผัด');
+  assert.deepEqual(
+    plainKot.addons.map((addon) => addon.name),
+    ['หมู', 'ไข่ดาว'],
+    'a name without listed choices keeps its options as rows',
+  );
+  ok(
+    'a name that lists choices takes the chosen options on bills and kitchen tickets, as on the KDS',
+  );
 }
 
 // ---------------------------------------------------------------------------

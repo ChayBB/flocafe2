@@ -62,7 +62,7 @@ export function generateOrderSlipHtml(
       <span>${escapeHtml(money(item.subtotal ?? item.unit_price * item.quantity))}</span>
     </div>
     ${addons
-      .filter((addon) => addon.price)
+      .filter((addon) => !line.joinsOptions || addon.price)
       .map(
         (addon) => `
       <div style="padding-inline-start:1em;display:flex;justify-content:space-between;gap:8px;color:#444;">

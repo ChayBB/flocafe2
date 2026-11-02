@@ -7,22 +7,34 @@ import {
   spokenItemName,
   withoutOptionsNote,
 } from '../src/lib/item-options-note';
-import { itemLine } from '../../shared/item-line';
+import { itemLine, ticketItemLine } from '../../shared/item-line';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 
-test('a bill names the dish with its free options, keeps priced ones as rows, and spaces other scripts', () => {
+test('printed bills and tickets join options into a name that lists choices, and keep rows otherwise', () => {
   const addons = [{ name: 'หมู' }, { name: 'ไข่ดาว', quantity: 2 }];
   expect(
     itemLine('ข้าวผัด หมู/กุ้ง/ไก่/ปลาหมึก', { name: 'จานเล็ก' }, addons, 'จานเล็ก หมู ไข่ดาว ×2', {
       joined: [addons[0]],
     }),
-  ).toEqual({ name: 'ข้าวผัดหมู (จานเล็ก)', instructions: '' });
+  ).toEqual({ name: 'ข้าวผัดหมู (จานเล็ก)', instructions: '', joinsOptions: true });
   expect(
     itemLine('Rice soup pork/shrimp', null, [{ name: 'Pork' }], '', {
       joined: [{ name: 'Pork', quantity: 2 }],
     }).name,
   ).toBe('Rice soup Pork x2');
+  expect(ticketItemLine('ข้าวต้ม หมู/กุ้ง', null, addons, '')).toEqual({
+    name: 'ข้าวต้มหมู ไข่ดาว x2',
+    instructions: '',
+    joinsOptions: true,
+  });
+  // A name without listed choices keeps its options as rows: a printer drops a row it cannot
+  // encode but refuses an item line, so an option must not ride on the name.
+  expect(ticketItemLine('ข้าวผัด', null, addons, 'ไม่ใส่ผัก')).toEqual({
+    name: 'ข้าวผัด',
+    instructions: 'ไม่ใส่ผัก',
+    joinsOptions: false,
+  });
 });
 
 test('the KDS reads the chosen option and size instead of the listed choices and brackets', () => {

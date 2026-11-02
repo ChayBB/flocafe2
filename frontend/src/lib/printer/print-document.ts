@@ -26,8 +26,8 @@ import { getCountryByCode, getCurrencySymbol, resolveTenantCurrency } from '@cou
 import { resolveTaxComponents } from './tax-components';
 import { shouldShowCustomerNumber } from '@print/document';
 import type { Bill, Order, OrderItem } from '@/lib/types';
-import { formatItemHeading, parseVariantSelection } from './item-heading';
-import { itemLine } from '../../../../shared/item-line';
+import { parseVariantSelection } from './item-heading';
+import { itemLine, ticketItemLine } from '../../../../shared/item-line';
 import { isExcludedFromBillReceipt } from '../../../../shared/order-item-status';
 
 /** Business contact facts and visibility flags for one bill print run. */
@@ -175,7 +175,7 @@ export function buildBillPrintData(bill: Bill, opts: BillBusinessOptions = {}): 
         const addons = (Array.isArray(item?.addons) ? item.addons : []).filter(
           (addon) => addon && typeof addon === 'object',
         );
-        // Free options join the dish as on the KDS; priced ones keep their row, for the amount.
+        // Free options join a name that lists choices, as on the KDS; priced ones keep their row.
         const line = itemLine(
           String(item?.product_name ?? ''),
           parseVariantSelection(item?.variant_selection),
@@ -199,7 +199,7 @@ export function buildBillPrintData(bill: Bill, opts: BillBusinessOptions = {}): 
           unitPrice: Number(item?.unit_price) || 0,
           total: Number(item?.total) || 0,
           addons: addons
-            .filter((addon) => Number(addon.price) > 0)
+            .filter((addon) => !line.joinsOptions || Number(addon.price) > 0)
             .map((addon) => {
               const addonQty =
                 (addon !== null &&
@@ -387,19 +387,28 @@ export function buildFrontendKotDocument(
     },
     items: items
       .filter((item) => isKotItemPending(item.status))
-      .map((item) => ({
-        productName: formatItemHeading(String(item.product_name ?? ''), item.variant_selection),
-        quantity: Number(item.quantity) || 0,
-        addons: parseKotAddons(item.addons).map((addon) => ({
+      .map((item) => {
+        const addons = parseKotAddons(item.addons).map((addon) => ({
           name: String(addon?.name ?? ''),
           ...(typeof addon?.quantity === 'number' &&
           Number.isFinite(addon.quantity) &&
           addon.quantity > 0
             ? { quantity: addon.quantity }
             : {}),
-        })),
-        specialInstructions: String(item.special_instructions ?? ''),
-      })),
+        }));
+        const line = ticketItemLine(
+          String(item.product_name ?? ''),
+          parseVariantSelection(item.variant_selection),
+          addons,
+          String(item.special_instructions ?? ''),
+        );
+        return {
+          productName: line.name,
+          quantity: Number(item.quantity) || 0,
+          addons: line.joinsOptions ? [] : addons,
+          specialInstructions: line.instructions,
+        };
+      }),
   };
   const printContext: PrintContext = {
     columns: opts.columns,

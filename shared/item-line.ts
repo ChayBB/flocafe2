@@ -81,6 +81,31 @@ export function dishWithOptions(
   ].join(' ');
 }
 
+/** Whether the menu name lists its choices, as "ข้าวผัด หมู/กุ้ง/ไก่" does. */
+export function listsChoices(productName: string): boolean {
+  return cleanItemText(productName)
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .split(/\s+/)
+    .some((word) => word.includes('/'));
+}
+
+/** A kitchen ticket's line: a name that lists its choices takes the chosen options, as on the KDS. */
+export function ticketItemLine(
+  productName: string,
+  variant: { name?: unknown; sku?: unknown } | null | undefined,
+  addons: NamedOption[] | null | undefined,
+  specialInstructions: string | null | undefined,
+): PrintedItemLine {
+  return itemLine(productName, variant, addons, specialInstructions, { joined: addons ?? [] });
+}
+
+export interface PrintedItemLine {
+  name: string;
+  instructions: string;
+  /** The options are in the name, so the document lists none (or only priced ones) below it. */
+  joinsOptions: boolean;
+}
+
 /**
  * An item's printed or displayed line, the way the kitchen screen shows it: options join the dish,
  * the size follows in brackets ("ข้าวต้มหมู (จานเล็ก)"), and the options note the order screen
@@ -91,16 +116,26 @@ export function itemLine(
   variant: { name?: unknown; sku?: unknown } | null | undefined,
   addons: NamedOption[] | null | undefined,
   specialInstructions: string | null | undefined,
-  /** Printed documents join only the options they do not list with a price, and write x for ×. */
+  /**
+   * Printed documents join the given options only into a name that lists its choices, and write x
+   * for ×. Any other option keeps its own row: printers drop a row they cannot encode, but refuse
+   * an item line, so an unprintable option must not ride on the name.
+   */
   print?: { joined: NamedOption[] },
-): { name: string; instructions: string } {
+): PrintedItemLine {
   const variantName = String(variant?.name ?? '').trim();
   const sku = String(variant?.sku ?? '').trim();
-  const dish = print
-    ? dishWithOptions(productName, print.joined, 'x')
-    : dishWithOptions(productName, addons);
+  const joinsOptions = print
+    ? listsChoices(productName) && print.joined.some((option) => cleanItemText(option.name))
+    : true;
+  const dish = !print
+    ? dishWithOptions(productName, addons)
+    : joinsOptions
+      ? dishWithOptions(productName, print.joined, 'x')
+      : productName;
   return {
     name: variantName ? `${dish} (${variantName})${sku ? ` [${sku}]` : ''}` : dish,
     instructions: withoutOptionsNote(specialInstructions, optionsNote(variantName, addons)),
+    joinsOptions,
   };
 }

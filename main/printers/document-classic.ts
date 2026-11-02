@@ -137,7 +137,7 @@ export function buildBillPrintData(
         const addons = (Array.isArray(item?.addons) ? item.addons : []).filter(
           (addon: any) => addon && typeof addon === 'object',
         );
-        // Free options join the dish as on the KDS; priced ones keep their row, for the amount.
+        // Free options join a name that lists choices, as on the KDS; priced ones keep their row.
         const line = itemLine(
           String(item?.product_name ?? ''),
           parseVariantSelection(item?.variant_selection),
@@ -161,7 +161,7 @@ export function buildBillPrintData(
           unitPrice: Number(item?.unit_price ?? item?.price ?? 0) || 0,
           total: Number(item?.total) || 0,
           addons: addons
-            .filter((addon: any) => Number(addon.price) > 0)
+            .filter((addon: any) => !line.joinsOptions || Number(addon.price) > 0)
             .map((addon: any) => {
               const addonQuantity =
                 (addon !== null &&
