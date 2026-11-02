@@ -162,6 +162,14 @@ export function KdsWorkspace({
       id: `${change.key}:${at}`,
       kind: change.kind,
       at,
+      // Take-away and cancelled items are read short: the place, the dish, then what changed.
+      speech:
+        'place' in change
+          ? t(change.kind === 'takeaway' ? 'speechTakeaway' : 'speechCancelled', {
+              place: change.place,
+              item: spokenItemName(change.item, null, null),
+            })
+          : undefined,
       text:
         'place' in change
           ? t(change.kind === 'takeaway' ? 'messageTakeaway' : 'messageCancelled', {
@@ -174,12 +182,12 @@ export function KdsWorkspace({
             }),
     }));
     announceKdsMessages(notices.filter((notice) => notice.kind !== 'cancelled'));
-    // A cancellation only updates an item's take-away notice; the card already beeps for it.
-    const cancelled = cancelKdsTakeawayMessages(
-      notices.filter((notice) => notice.kind === 'cancelled'),
-    );
+    // A cancellation only updates an item's take-away notice and the card beeps for it, but every
+    // cancelled dish is still read out.
+    const cancelled = notices.filter((notice) => notice.kind === 'cancelled');
+    cancelKdsTakeawayMessages(cancelled);
     if (cancelled.length > 0)
-      speakKds(cancelled.map((notice) => notice.text).join('. '), kdsSpeechLang());
+      speakKds(cancelled.map((notice) => notice.speech).join('. '), kdsSpeechLang());
   }, [conn.orders, t]);
   useEffect(() => {
     const seen = readSeenKdsAlerts();
