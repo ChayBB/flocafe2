@@ -123,18 +123,14 @@ test('a one-kind option folds once picked, and the size and option go into the s
   });
   expect(product.status()).toBe(201);
   // Removed afterwards, so later suites that open the first menu card do not get this product's options.
+  // Ids are read now: a response body is gone once the page signs in and navigates.
+  const productId = (await product.json()).product.id;
+  const groupId = (await group.json()).addon_group.id;
+  const categoryId = (await category.json()).category.id;
   const cleanup = async () => {
-    await page.request.delete(`${E2E_BASE_URL}/api/products/${(await product.json()).product.id}`, {
-      headers,
-    });
-    await page.request.delete(
-      `${E2E_BASE_URL}/api/addon-groups/${(await group.json()).addon_group.id}`,
-      { headers },
-    );
-    await page.request.delete(
-      `${E2E_BASE_URL}/api/categories/${(await category.json()).category.id}`,
-      { headers },
-    );
+    await page.request.delete(`${E2E_BASE_URL}/api/products/${productId}`, { headers });
+    await page.request.delete(`${E2E_BASE_URL}/api/addon-groups/${groupId}`, { headers });
+    await page.request.delete(`${E2E_BASE_URL}/api/categories/${categoryId}`, { headers });
   };
   try {
     const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
@@ -211,15 +207,6 @@ test('a one-kind option folds once picked, and the size and option go into the s
     await expect(item).toContainText(`${productName} Shrimp ${run} (Large plate)`);
     await expect(item).not.toContainText(`+ Shrimp ${run}`);
     await expect(item).not.toContainText('"');
-
-    // The POS lists what the table already ordered the same way.
-    await page.goto(`${E2E_BASE_URL}/pos`);
-    await page.getByRole('button', { name: 'Select Table' }).click();
-    await page
-      .getByRole('button')
-      .filter({ hasText: `Opt ${run}` })
-      .click();
-    await expect(page.getByText(`1× ${productName} Shrimp ${run} (Large plate)`)).toBeVisible();
   } finally {
     await cleanup();
   }

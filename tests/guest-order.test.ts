@@ -61,8 +61,16 @@ function main() {
     },
   ]);
   assertOrThrow(forged.ok === true, 'a line with forged fields is still accepted after cleaning');
-  assertEqualOrThrow(forged.items[0].addons[0].price, 25, 'the add-on price comes from the catalog');
-  assertEqualOrThrow(forged.items[0].addons[0].name, 'Extra shot', 'the add-on name comes from the catalog');
+  assertEqualOrThrow(
+    forged.items[0].addons[0].price,
+    25,
+    'the add-on price comes from the catalog',
+  );
+  assertEqualOrThrow(
+    forged.items[0].addons[0].name,
+    'Extra shot',
+    'the add-on name comes from the catalog',
+  );
   assertEqualOrThrow(forged.items[0].addons[0].quantity, 2, 'the add-on quantity is kept');
   assertOrThrow(
     !('unit_price' in forged.items[0]) && !('discount' in forged.items[0]),
@@ -78,19 +86,47 @@ function main() {
     ['a zero quantity', [{ product_id: 'g-coffee', quantity: 0 }]],
     ['a negative quantity', [{ product_id: 'g-coffee', quantity: -1 }]],
     ['a huge quantity', [{ product_id: 'g-coffee', quantity: 51 }]],
+    ['a fractional quantity', [{ product_id: 'g-coffee', quantity: 0.001 }]],
+    ['a quantity sent as text', [{ product_id: 'g-coffee', quantity: '2' }]],
+    [
+      'over 100 items in all',
+      Array.from({ length: 3 }, () => ({ product_id: 'g-coffee', quantity: 34 })),
+    ],
     ['an unknown add-on', [{ product_id: 'g-coffee', quantity: 1, addons: [{ id: 'zzz' }] }]],
     ['an inactive add-on', [{ product_id: 'g-coffee', quantity: 1, addons: [{ id: 'g-gone' }] }]],
-    ['a fractional add-on quantity', [{ product_id: 'g-coffee', quantity: 1, addons: [{ id: 'g-shot', quantity: 1.5 }] }]],
+    [
+      'a fractional add-on quantity',
+      [{ product_id: 'g-coffee', quantity: 1, addons: [{ id: 'g-shot', quantity: 1.5 }] }],
+    ],
     ['an unknown variant', [{ product_id: 'g-coffee', quantity: 1, variant_id: 'v-none' }]],
-    ['a long item note', [{ product_id: 'g-coffee', quantity: 1, special_instructions: 'x'.repeat(201) }]],
+    [
+      'a long item note',
+      [{ product_id: 'g-coffee', quantity: 1, special_instructions: 'x'.repeat(201) }],
+    ],
     ['too many lines', Array.from({ length: 31 }, () => ({ product_id: 'g-coffee', quantity: 1 }))],
   ] as Array<[string, unknown]>) {
     assertEqualOrThrow(sanitizeGuestOrderItems(db, items).ok, false, `${label} is refused`);
   }
 
-  assertEqualOrThrow(sanitizeGuestOrderNote('  Birthday  '), 'Birthday', 'an order note is trimmed');
+  assertOrThrow(
+    sanitizeGuestOrderItems(
+      db,
+      Array.from({ length: 2 }, () => ({ product_id: 'g-coffee', quantity: 50 })),
+    ).ok,
+    'exactly 100 items in all is accepted',
+  );
+
+  assertEqualOrThrow(
+    sanitizeGuestOrderNote('  Birthday  '),
+    'Birthday',
+    'an order note is trimmed',
+  );
   assertEqualOrThrow(sanitizeGuestOrderNote(''), null, 'a blank note is none');
-  assertEqualOrThrow(sanitizeGuestOrderNote('x'.repeat(301)), false, 'a long order note is refused');
+  assertEqualOrThrow(
+    sanitizeGuestOrderNote('x'.repeat(301)),
+    false,
+    'a long order note is refused',
+  );
   assertEqualOrThrow(sanitizeGuestOrderNote(5), false, 'a non-text note is refused');
 
   const clean = sanitizeGuestProduct({
@@ -101,9 +137,13 @@ function main() {
     inventory_product_id: 'x',
     variants: [{ id: 'v', price: 1, cost_price: 3, recipe_multiplier: 2 }],
   });
-  assertOrThrow(!('cost' in clean) && !('inventory_product_id' in clean), 'product cost and links are removed');
   assertOrThrow(
-    !('cost_price' in (clean.variants as any[])[0]) && !('recipe_multiplier' in (clean.variants as any[])[0]),
+    !('cost' in clean) && !('inventory_product_id' in clean),
+    'product cost and links are removed',
+  );
+  assertOrThrow(
+    !('cost_price' in (clean.variants as any[])[0]) &&
+      !('recipe_multiplier' in (clean.variants as any[])[0]),
     'variant cost fields are removed',
   );
   assertEqualOrThrow(clean.price, 100, 'the shown price is kept');

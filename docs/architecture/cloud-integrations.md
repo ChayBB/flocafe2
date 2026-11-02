@@ -389,6 +389,10 @@ header. The tunnel works like this:
 
 The tunnel forwards only the guest routes, `GET /api/server-app/info` and the static guest page.
 Anything else, including paths with `..` or `//`, answers `404` without reaching the Server App.
+The Server App itself answers `404` for any path with a hidden segment (one starting with `.`),
+sends `Referrer-Policy: no-referrer` so the table token in the page URL never leaves as a Referer,
+and parses `/api/guest` bodies with a 100 KB limit, whether a request comes through the tunnel or
+the shop LAN.
 
 The POS caps each request body at 64 KB, each response at 10 MB, and the requests in flight at 20.
 It pings every 25 seconds and reconnects with backoff from 1 to 60 seconds. An `unknown_store`

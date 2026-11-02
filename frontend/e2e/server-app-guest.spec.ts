@@ -530,3 +530,19 @@ test('pairing with a QR ordering server by code opens a tunnel that serves guest
     await relay.close();
   }
 });
+
+test('the guest site sends no referrer, hides dotfiles and keeps guest bodies small', async ({
+  request,
+}) => {
+  const page = await request.get(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+  expect(page.headers()['referrer-policy']).toBe('no-referrer');
+  expect((await request.get(`${E2E_SERVER_APP_BASE_URL}/server-standalone/.env`)).status()).toBe(
+    404,
+  );
+  expect((await request.get(`${E2E_SERVER_APP_BASE_URL}/.hidden/index.html`)).status()).toBe(404);
+  const big = await request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+    data: { note: 'x'.repeat(150 * 1024) },
+  });
+  expect(big.status()).toBe(413);
+  expect((await big.json()).code).toBe('body_too_large');
+});

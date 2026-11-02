@@ -43,7 +43,7 @@ import {
   getServerAppPort as getActiveServerAppPort,
   setServerAppPort,
 } from './server-app-state';
-import { API_JSON_BODY_LIMIT } from './http-limits';
+import { API_JSON_BODY_LIMIT, GUEST_JSON_BODY_LIMIT } from './http-limits';
 import { buildCspHeader } from './csp';
 import { resolveContainedPath } from './lib/path-containment';
 import { RegionalNotConfiguredError, resolveRegionalSnapshot } from './countries';
@@ -320,10 +320,18 @@ export function startServerApp(): Promise<void> {
     app.use((req: Request, res: Response, next: NextFunction) => {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Security-Policy', buildCspHeader(req));
+      // The table token rides in the page URL (?t=), so no request may carry it on as a Referer.
+      res.setHeader('Referrer-Policy', 'no-referrer');
       next();
     });
+    // Guests send a few order lines; parsed first, so the larger staff limit never applies to them.
+    app.use('/api/guest', express.json({ limit: GUEST_JSON_BODY_LIMIT }));
     app.use(express.json({ limit: API_JSON_BODY_LIMIT }));
-    app.use((error: any, _req: Request, res: Response, next: NextFunction) => {
+    app.use((error: any, req: Request, res: Response, next: NextFunction) => {
+      if (error?.type === 'entity.too.large' && req.path.startsWith('/api/guest')) {
+        res.status(413).json({ error: 'The order is too large', code: 'body_too_large' });
+        return;
+      }
       if (error?.type === 'entity.too.large') {
         res.status(413).json({
           error: `Request body is too large. JSON imports are limited to ${API_JSON_BODY_LIMIT}; use Backup/Restore for full database migration.`,
@@ -827,7 +835,15 @@ export function startServerApp(): Promise<void> {
           next();
         });
       }
-      app.use(express.static(staticDir, { dotfiles: 'allow', index: false }));
+      // Hidden files in the build output (.env, editor leftovers) are never served.
+      app.use((req: Request, res: Response, next: NextFunction) => {
+        if (req.path.split('/').some((segment) => segment.startsWith('.'))) {
+          res.status(404).end();
+          return;
+        }
+        next();
+      });
+      app.use(express.static(staticDir, { dotfiles: 'ignore', index: false }));
       app.get('/', (_req: Request, res: Response) => res.redirect('/server-standalone'));
       app.get('/*splat', staticRouteRateLimit(), (req: Request, res: Response) => {
         const routePath = resolveContainedPath(staticDir, `.${req.path}`, 'index.html');

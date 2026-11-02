@@ -4,6 +4,8 @@ export const GUEST_USER_ID = 'guest-self-order';
 
 const MAX_LINES = 30;
 const MAX_QUANTITY = 50;
+// Caps the whole order, so 30 lines of 50 cannot print a kitchen ticket metres long.
+const MAX_TOTAL_QUANTITY = 100;
 const MAX_ADDON_QUANTITY = 10;
 const MAX_ADDONS_PER_LINE = 20;
 const MAX_LINE_NOTE = 200;
@@ -32,14 +34,13 @@ function cleanNote(value: unknown, max: number): string | null | false {
  * add-on ids and a short note are taken from the request; add-on names and prices always
  * come from the catalog so a guest cannot choose what an item costs.
  */
-export function sanitizeGuestOrderItems(
-  db: Database.Database,
-  raw: unknown,
-): GuestItemsResult {
+export function sanitizeGuestOrderItems(db: Database.Database, raw: unknown): GuestItemsResult {
   if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: 'Add at least one item' };
-  if (raw.length > MAX_LINES) return { ok: false, error: `An order can have at most ${MAX_LINES} lines` };
+  if (raw.length > MAX_LINES)
+    return { ok: false, error: `An order can have at most ${MAX_LINES} lines` };
 
   const items: GuestOrderItem[] = [];
+  let totalQuantity = 0;
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') return { ok: false, error: 'Invalid item' };
     const line = entry as Record<string, unknown>;
@@ -52,15 +53,25 @@ export function sanitizeGuestOrderItems(
     if (!product) return { ok: false, error: 'A product is no longer available' };
 
     const quantity = line.quantity;
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
-      return { ok: false, error: `Quantity must be between 0 and ${MAX_QUANTITY}` };
+    if (
+      !Number.isInteger(quantity) ||
+      (quantity as number) < 1 ||
+      (quantity as number) > MAX_QUANTITY
+    ) {
+      return { ok: false, error: `Quantity must be a whole number from 1 to ${MAX_QUANTITY}` };
+    }
+    totalQuantity += quantity as number;
+    if (totalQuantity > MAX_TOTAL_QUANTITY) {
+      return { ok: false, error: `An order can have at most ${MAX_TOTAL_QUANTITY} items` };
     }
 
     let variantId: string | null = null;
     if (line.variant_id !== undefined && line.variant_id !== null) {
       if (typeof line.variant_id !== 'string') return { ok: false, error: 'Invalid variant' };
       const variant = db
-        .prepare('SELECT id FROM product_variants WHERE id = ? AND product_id = ? AND is_active = 1')
+        .prepare(
+          'SELECT id FROM product_variants WHERE id = ? AND product_id = ? AND is_active = 1',
+        )
         .get(line.variant_id, line.product_id);
       if (!variant) return { ok: false, error: 'A product option is no longer available' };
       variantId = line.variant_id;
@@ -74,7 +85,8 @@ export function sanitizeGuestOrderItems(
       const resolved: NonNullable<GuestOrderItem['addons']> = [];
       for (const addonEntry of line.addons) {
         const addonInput = addonEntry as Record<string, unknown> | null;
-        if (!addonInput || typeof addonInput.id !== 'string') return { ok: false, error: 'Invalid add-on' };
+        if (!addonInput || typeof addonInput.id !== 'string')
+          return { ok: false, error: 'Invalid add-on' };
         const addonQuantity = addonInput.quantity === undefined ? 1 : addonInput.quantity;
         if (
           typeof addonQuantity !== 'number' ||
@@ -88,7 +100,12 @@ export function sanitizeGuestOrderItems(
           .prepare('SELECT id, name, price FROM addons WHERE id = ? AND is_active = 1')
           .get(addonInput.id) as { id: string; name: string; price: number } | undefined;
         if (!addon) return { ok: false, error: 'An add-on is no longer available' };
-        resolved.push({ id: addon.id, name: addon.name, price: Number(addon.price) || 0, quantity: addonQuantity });
+        resolved.push({
+          id: addon.id,
+          name: addon.name,
+          price: Number(addon.price) || 0,
+          quantity: addonQuantity,
+        });
       }
       addons = resolved.length > 0 ? resolved : null;
     }
@@ -99,7 +116,7 @@ export function sanitizeGuestOrderItems(
     items.push({
       product_id: line.product_id,
       variant_id: variantId,
-      quantity,
+      quantity: quantity as number,
       addons,
       special_instructions: note,
     });
