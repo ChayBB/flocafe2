@@ -12,6 +12,7 @@ import * as dns from 'dns';
 import * as https from 'https';
 import * as net from 'net';
 import { asyncHandler } from '../middleware/async-handler';
+import { TERMINAL_ITEM_STATUSES } from '../../shared/order-item-status';
 
 const MAX_FETCH_BYTES = 10 * 1024 * 1024;
 
@@ -1187,6 +1188,34 @@ router.get('/', requirePermission('catalog.view'), (req: Request, res: Response)
     });
 
     res.json({ products: productsWithRelations });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** The menu's best sellers by quantity over the last 30 days, for the Server App's popular filter. */
+router.get('/popular', requirePermission('catalog.view'), (req: Request, res: Response) => {
+  try {
+    const requested = Number(req.query.limit);
+    const limit = Number.isInteger(requested) ? Math.min(Math.max(requested, 1), 50) : 10;
+    const statuses = TERMINAL_ITEM_STATUSES.map(() => '?').join(', ');
+    const rows = getDatabase()
+      .prepare(
+        `SELECT oi.product_id, SUM(oi.quantity) AS sold
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         JOIN products p ON p.id = oi.product_id
+         WHERE o.created_at >= datetime(?, '-30 days')
+           AND o.status != 'cancelled'
+           AND oi.status NOT IN (${statuses})
+           AND p.deleted_at IS NULL AND p.is_active = 1
+         GROUP BY oi.product_id
+         ORDER BY sold DESC, oi.product_id
+         LIMIT ?`,
+      )
+      .all(now(), ...TERMINAL_ITEM_STATUSES, limit) as { product_id: string }[];
+    res.json({ product_ids: rows.map((row) => row.product_id) });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

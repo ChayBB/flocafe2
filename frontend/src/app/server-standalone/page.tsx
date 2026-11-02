@@ -47,7 +47,8 @@ import { printerService } from '@/lib/printer/PrinterService';
 import { generateCartItemId } from '@/lib/cart-identity';
 import { productNeedsCustomizer, scannedVariantNeedsCustomizer } from '@/lib/product-variants';
 import AddonModal from '@/components/pos/AddonModal';
-import ProductGrid from '@/components/pos/ProductGrid';
+import ProductGrid, { type QuickFilter } from '@/components/pos/ProductGrid';
+import { hasTag } from '@/components/pos/DietaryBadge';
 import type {
   Order as FullOrder,
   Product,
@@ -245,6 +246,8 @@ export default function ServerStandalonePage() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Best sellers of the last 30 days; staff only, so a guest at a QR table sees no popular filter.
+  const [popularIds, setPopularIds] = useState<string[] | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
   const [tablesLoaded, setTablesLoaded] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string>('');
@@ -429,6 +432,46 @@ export default function ServerStandalonePage() {
       cancelled = true;
     };
   }, [api]);
+
+  useEffect(() => {
+    if (!user || !api) return;
+    let cancelled = false;
+    api
+      .get('/api/products/popular')
+      .then((res) => !cancelled && setPopularIds(res.data.product_ids || []))
+      .catch(() => !cancelled && setPopularIds(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [user, api]);
+
+  const quickFilters = useMemo<QuickFilter[]>(() => {
+    const rank = new Map((popularIds ?? []).map((id, index) => [id, index]));
+    return [
+      ...(popularIds
+        ? [
+            {
+              key: 'popular',
+              label: t('menuPopular'),
+              match: (product: Product) => rank.has(product.id),
+              emptyText: t('menuPopularEmpty'),
+            },
+          ]
+        : []),
+      {
+        key: 'recommended',
+        label: t('menuRecommended'),
+        match: (product: Product) => hasTag(product.tags, 'recommended'),
+        emptyText: t('menuRecommendedEmpty'),
+      },
+      {
+        key: 'promotion',
+        label: t('menuPromotion'),
+        match: (product: Product) => hasTag(product.tags, 'promotion'),
+        emptyText: t('menuPromotionEmpty'),
+      },
+    ];
+  }, [popularIds, t]);
 
   useEffect(() => {
     if (!user || !api) return;
@@ -1737,6 +1780,7 @@ export default function ServerStandalonePage() {
               showImages={true}
               gridClassName="grid-cols-2"
               searchPlaceholder={t('searchMenu')}
+              quickFilters={quickFilters}
               scrollSpy
               loopSections
               flat

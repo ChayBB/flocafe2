@@ -83,10 +83,15 @@ function CategoryRow({
   allLabel,
   resetKey,
   flat,
+  allSelected = !selectedCategory,
+  extraChips = [],
 }: {
   className: string;
   collapse: boolean;
   flat: boolean;
+  allSelected?: boolean;
+  /** Filters shown right after "All", such as the Server App's popular and recommended dishes. */
+  extraChips?: { key: string; label: string; active: boolean; onSelect: () => void }[];
   categories: Category[];
   selectedCategory: Category['id'] | null;
   setSelectedCategory: (id: Category['id'] | null) => void;
@@ -98,12 +103,12 @@ function CategoryRow({
       data-chip-key="all"
       onClick={() => setSelectedCategory(null)}
       title={collapse ? allLabel : undefined}
-      aria-pressed={!selectedCategory}
+      aria-pressed={allSelected}
       className={
         flat
-          ? `${FLAT_TAB} ${!selectedCategory ? FLAT_TAB_ACTIVE : FLAT_TAB_IDLE}`
+          ? `${FLAT_TAB} ${allSelected ? FLAT_TAB_ACTIVE : FLAT_TAB_IDLE}`
           : `${collapse ? 'min-w-0 truncate ' : ''}px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              !selectedCategory
+              allSelected
                 ? 'bg-brand text-white'
                 : 'bg-card text-foreground border border-border hover:bg-muted'
             }`
@@ -135,6 +140,19 @@ function CategoryRow({
         className={`flex flex-nowrap ${flat ? 'gap-5 [scrollbar-width:none]' : 'gap-2'} ${className} overflow-x-auto`}
       >
         {allChip}
+        {extraChips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            data-chip-key={`quick:${chip.key}`}
+            data-testid={`pos-quick-filter-${chip.key}`}
+            aria-pressed={chip.active}
+            onClick={chip.onSelect}
+            className={`${FLAT_TAB} ${chip.active ? FLAT_TAB_ACTIVE : FLAT_TAB_IDLE}`}
+          >
+            {chip.label}
+          </button>
+        ))}
         {categoryChips.map((chip) => (
           <div key={chip.key} data-chip-key={chip.key}>
             {chip.render()}
@@ -337,6 +355,15 @@ interface Props {
   loopSections?: boolean;
   /** A light, borderless look for the Server App on a phone: text category tabs and edge-to-edge photos. */
   flat?: boolean;
+  /** Flat look only: filters after "All" that show just the matching products in one grid. */
+  quickFilters?: QuickFilter[];
+}
+
+export interface QuickFilter {
+  key: string;
+  label: string;
+  match: (product: Product) => boolean;
+  emptyText: string;
 }
 
 export default function ProductGrid({
@@ -360,6 +387,7 @@ export default function ProductGrid({
   scrollSpy = false,
   loopSections = false,
   flat = false,
+  quickFilters = [],
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cart = useCartStore();
@@ -392,10 +420,17 @@ export default function ProductGrid({
   const parsedSearch = useMemo(() => parseQuantitySearch(search), [search]);
   const activeQuery = parsedSearch ? parsedSearch.query : search;
 
+  const [quickKey, setQuickKey] = useState<string | null>(null);
+  const quickFilter = quickFilters.find((filter) => filter.key === quickKey) ?? null;
+  // A quick filter shows one plain grid, so the category sections and their scroll tracking pause.
+  const spying = scrollSpy && !quickFilter;
+
   const filtered = products.filter((p) => {
-    const matchCat = scrollSpy || !selectedCategory || p.category_id === selectedCategory;
+    const matchCat =
+      scrollSpy || quickFilter || !selectedCategory || p.category_id === selectedCategory;
+    const matchQuick = !quickFilter || quickFilter.match(p);
     const matchSearch = !activeQuery || p.name.toLowerCase().includes(activeQuery.toLowerCase());
-    return matchCat && matchSearch;
+    return matchCat && matchQuick && matchSearch;
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -404,7 +439,7 @@ export default function ProductGrid({
   const spyFrame = useRef<number | null>(null);
 
   const sections = useMemo(() => {
-    if (!scrollSpy) return [];
+    if (!spying) return [];
     const known = new Set(categories.map((category) => category.id));
     const groups = categories
       .map((category) => ({
@@ -418,12 +453,12 @@ export default function ProductGrid({
     );
     if (other.length > 0) groups.push({ id: null, name: '', items: other });
     return groups;
-  }, [scrollSpy, categories, filtered]);
+  }, [spying, categories, filtered]);
 
   // Looping moves a whole category from one end of the list to the other once it is out of sight,
   // shifting the scroll position by its height so nothing on screen moves.
   const [rotation, setRotation] = useState(0);
-  const looping = scrollSpy && loopSections && !activeQuery && sections.length > 1;
+  const looping = spying && loopSections && !activeQuery && sections.length > 1;
   const shownSections = useMemo(() => {
     if (!looping) return sections;
     const start = ((rotation % sections.length) + sections.length) % sections.length;
@@ -473,7 +508,7 @@ export default function ProductGrid({
 
   const updateActiveCategory = useCallback(() => {
     const container = scrollRef.current;
-    if (!container || !scrollSpy) return;
+    if (!container || !spying) return;
     if (performance.now() < spyPausedUntil.current) return;
     const headings = Array.from(
       container.querySelectorAll<HTMLElement>('[data-category-section]'),
@@ -495,11 +530,11 @@ export default function ProductGrid({
       }
     }
     if (active !== (selectedCategory ?? null)) setSelectedCategory(active);
-  }, [scrollSpy, looping, selectedCategory, setSelectedCategory]);
+  }, [spying, looping, selectedCategory, setSelectedCategory]);
 
   const onCatalogScroll = () => {
     if (loopSections) loopSectionsOnScroll();
-    if (!scrollSpy || spyFrame.current !== null) return;
+    if (!spying || spyFrame.current !== null) return;
     spyFrame.current = requestAnimationFrame(() => {
       spyFrame.current = null;
       updateActiveCategory();
@@ -527,13 +562,30 @@ export default function ProductGrid({
     }
   }, [scrollSpy, selectedCategory]);
 
+  const pendingCategory = useRef<string | null | undefined>(undefined);
+  const chooseQuickFilter = (key: string) => {
+    setQuickKey(key);
+    setSelectedCategory(null);
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
+
   const chooseCategory = (id: string | null) => {
+    if (quickFilter) {
+      setQuickKey(null);
+      setSelectedCategory(id);
+      if (scrollSpy) pendingCategory.current = id;
+      return;
+    }
     if (!scrollSpy) {
       setSelectedCategory(id);
       return;
     }
-    const container = scrollRef.current;
     setSelectedCategory(id);
+    scrollToCategory(id);
+  };
+
+  function scrollToCategory(id: string | null) {
+    const container = scrollRef.current;
     if (!container) return;
     spyPausedUntil.current = performance.now() + 800;
     if (chipScrollTimer.current !== null) window.clearTimeout(chipScrollTimer.current);
@@ -553,7 +605,15 @@ export default function ProductGrid({
       const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
       container.scrollTo({ top: container.scrollTop + offset, behavior: 'smooth' });
     }
-  };
+  }
+
+  // Leaving a quick filter brings the sections back; the chosen category is scrolled to once they render.
+  useLayoutEffect(() => {
+    if (quickFilter || pendingCategory.current === undefined) return;
+    const id = pendingCategory.current;
+    pendingCategory.current = undefined;
+    scrollToCategory(id);
+  });
 
   const renderProductCard = (product: Product) => {
     const inCartQty = cartQuantities.get(product.id) || 0;
@@ -662,8 +722,8 @@ export default function ProductGrid({
       data-testid="pos-product-grid"
       className="flex-1 flex flex-col min-w-0 h-full overflow-hidden"
     >
-      <div className="shrink-0 mb-3">
-        <div className="relative mb-2">
+      <div className={`shrink-0 mb-3 ${flat ? 'flex items-center gap-4' : ''}`}>
+        <div className={`relative ${flat ? 'w-36 shrink-0 pb-1' : 'mb-2'}`}>
           <Search
             size={16}
             className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
@@ -724,20 +784,27 @@ export default function ProductGrid({
                 : 'bg-card border-border rounded-xl focus:border-brand'
             }`}
           />
-          {!search && (
+          {!search && !flat && (
             <kbd className="hidden sm:inline-flex absolute end-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">
               /
             </kbd>
           )}
         </div>
         <CategoryRow
-          className="pb-1"
+          className={`pb-1 ${flat ? 'min-w-0 flex-1' : ''}`}
           collapse={collapseCategories}
           categories={categories}
-          selectedCategory={selectedCategory}
+          selectedCategory={quickFilter ? null : selectedCategory}
           setSelectedCategory={chooseCategory}
           allLabel={t('allCategories')}
           flat={flat}
+          allSelected={!quickFilter && !selectedCategory}
+          extraChips={quickFilters.map((filter) => ({
+            key: filter.key,
+            label: filter.label,
+            active: quickKey === filter.key,
+            onSelect: () => chooseQuickFilter(filter.key),
+          }))}
           resetKey={
             collapseCategories
               ? cart.customer?.id == null
@@ -757,7 +824,14 @@ export default function ProductGrid({
         // Looping shifts the scroll itself; the browser's own scroll anchoring would shift it twice.
         className={`flex-1 min-h-0 overflow-y-auto overscroll-contain pb-20 md:pb-0 ${looping ? '[overflow-anchor:none]' : ''}`}
       >
-        {scrollSpy ? (
+        {quickFilter && filtered.length === 0 ? (
+          <p
+            data-testid="pos-quick-filter-empty"
+            className="py-10 text-center text-sm text-muted-foreground"
+          >
+            {quickFilter.emptyText}
+          </p>
+        ) : spying ? (
           shownSections.map((section) => (
             <section
               key={section.id ?? 'other'}

@@ -74,6 +74,8 @@ const PRESET_TAGS: { key: string; labelKey: PosKey }[] = [
   { key: 'organic', labelKey: 'tagOrganic' },
   { key: 'fragrance_free', labelKey: 'tagFragranceFree' },
   { key: 'limited', labelKey: 'tagLimited' },
+  { key: 'recommended', labelKey: 'tagRecommended' },
+  { key: 'promotion', labelKey: 'tagPromotion' },
 ];
 
 const CATEGORY_COLORS: { key: string; labelKey: ProductsKey; bg: string; text: string }[] = [
