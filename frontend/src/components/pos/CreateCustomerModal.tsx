@@ -8,7 +8,7 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth';
 import { useTranslations } from 'use-intl';
-import { dialCodeFor, normalizeOptionalPhone } from '@/lib/phone';
+import { normalizeOptionalPhone } from '@/lib/phone';
 import { countryName } from '@/lib/countries';
 import type { Customer } from '@/lib/types';
 import { disambiguateCustomerInput } from '@/lib/customer-disambiguation';
@@ -30,7 +30,6 @@ export default function CreateCustomerModal({
   const t = useTranslations('pos');
   const tCommon = useTranslations('common');
   const country = currentTenant?.country ?? '';
-  const dialCode = dialCodeFor(country);
 
   const initialClassification = disambiguateCustomerInput(initialSearch);
   const targetField =
@@ -39,10 +38,6 @@ export default function CreateCustomerModal({
 
   const [name, setName] = useState(isPhoneInitial ? '' : initialSearch.trim());
   const [phone, setPhone] = useState(isPhoneInitial ? initialSearch.trim() : '');
-  // The standing address, bounded by the tenant's max_customer_address_length. The
-  // server owns that bound, so nothing is trimmed or capped here — a refusal has to
-  // reach the user as a message rather than a silently shortened address.
-  const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSwapFields = () => {
@@ -68,7 +63,6 @@ export default function CreateCustomerModal({
         name: name.trim(),
         phone: norm.e164 ?? '',
         country_code: norm.countryCode ?? '',
-        address: address.trim(),
       });
       onCreated(data.customer);
       toast.success(t('customerCreated'));
@@ -134,25 +128,10 @@ export default function CreateCustomerModal({
               inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder={dialCode}
+              placeholder={t('localPhonePlaceholder')}
               className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
               dir="ltr"
               autoFocus={isPhoneInitial}
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="customer-address"
-              className="block text-xs font-medium text-muted-foreground mb-1"
-            >
-              {t('customerAddress')}
-            </label>
-            <input
-              id="customer-address"
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="w-full min-h-11 px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
             />
           </div>
         </div>

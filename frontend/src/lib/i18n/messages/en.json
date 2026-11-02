@@ -1218,6 +1218,7 @@
     "shortcutCategorySearch": "Search & Catalog",
     "showKeyboardShortcutsShortcut": "Show keyboard shortcuts guide",
     "spaceTenderShortcut": "Place order or tender cash at checkout",
+    "localPhonePlaceholder": "e.g. 0812345678",
     "swapNameAndPhone": "Swap Name & Phone",
     "createWithPhone": "Create customer with phone: {phone}",
     "createWithName": "Create customer named: {name}",

@@ -81,11 +81,14 @@ test('A customer address typed once is saved, reloaded into the editor, and reac
     .locator('div.fixed.inset-0')
     .filter({ has: page.getByRole('heading', { name: 'Add Customer' }) });
   await expect(modal).toBeVisible();
-  // The name field is the first textbox; the address is labelled, so it is reached
-  // by name rather than by position. `input[type="text"]` now matches both.
+  // The quick add asks only for a name and a local phone number; the address is set in the editor.
+  await expect(modal.getByLabel('Customer address')).toHaveCount(0);
+  await expect(modal.locator('input[type="tel"]')).toHaveAttribute(
+    'placeholder',
+    'e.g. 0812345678',
+  );
   await modal.getByRole('textbox').first().fill(customerName);
   await modal.locator('input[type="tel"]').fill(customerPhone);
-  await modal.getByLabel('Customer address').fill(ADDRESS);
 
   if (EVIDENCE_DIR) {
     fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
@@ -101,16 +104,9 @@ test('A customer address typed once is saved, reloaded into the editor, and reac
   });
   await modal.getByRole('button', { name: 'Save' }).click();
   const created = (await (await createdResponse).json()).customer;
-  expect(created.address).toBe(ADDRESS);
+  expect(created.address ?? '').toBe('');
 
-  // The column is written, so a later read returns it. This is the assertion the
-  // old code could not have passed: nothing ever sent the field.
-  const readBack = await page.request.get(`${BASE}/api/customers/${created.id}`, { headers: auth });
-  expect(readBack.ok()).toBeTruthy();
-  expect((await readBack.json()).customer.address).toBe(ADDRESS);
-
-  // The editor reloads it, so a merchant does not retype it on the next visit.
-  // Reached through the POS customer strip, the same control the reporter used.
+  // The address is typed once in the editor, reached through the POS customer strip.
   await page.goto(`${BASE}/pos`);
   await expect(page.getByTestId('pos-product-grid')).toBeVisible({ timeout: 20000 });
   const posCustomerInput = page.getByTestId('pos-customer-search-input').first();
@@ -124,6 +120,23 @@ test('A customer address typed once is saved, reloaded into the editor, and reac
   const editModal = page
     .locator('div.fixed.inset-0')
     .filter({ has: page.getByRole('heading', { name: 'Edit Customer' }) });
+  await expect(editModal).toBeVisible();
+  await editModal.getByLabel('Customer address').fill(ADDRESS);
+  const savedAddress = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'PUT' && url.pathname === `/api/customers/${created.id}`;
+  });
+  await editModal.getByRole('button', { name: 'Save' }).click();
+  expect((await savedAddress).status()).toBe(200);
+
+  // The column is written, so a later read returns it.
+  const readBack = await page.request.get(`${BASE}/api/customers/${created.id}`, { headers: auth });
+  expect(readBack.ok()).toBeTruthy();
+  expect((await readBack.json()).customer.address).toBe(ADDRESS);
+
+  // The editor reloads it, so a merchant does not retype it on the next visit.
+  await expect(editModal).toHaveCount(0);
+  await customerChip.click();
   await expect(editModal).toBeVisible();
   await expect(editModal.getByLabel('Customer address')).toHaveValue(ADDRESS);
   if (EVIDENCE_DIR) {
