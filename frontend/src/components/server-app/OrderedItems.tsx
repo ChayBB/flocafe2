@@ -35,6 +35,7 @@ import {
   stageOf,
   type KitchenStage,
 } from '@/components/server-app/ItemStatus';
+import { itemStatusDot } from '@/components/orders/OrderCard';
 
 export interface OrderedItem {
   id: number;
@@ -332,13 +333,9 @@ export function OrderedItemsScreen({
   const billReady = live.length > 0 && notAtTable === 0 && awaitingPrice === 0;
   const counts = stageCounts(items);
   const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
-  const tabs: { key: KitchenStage | 'all'; count: number; className: string }[] = [
-    { key: 'all', count: live.length, className: 'bg-card text-foreground' },
-    ...KITCHEN_STAGES.map((stage) => ({
-      key: stage,
-      count: counts[stage],
-      className: STAGE_STYLES[stage].className,
-    })),
+  const tabs: { key: KitchenStage | 'all'; count: number }[] = [
+    { key: 'all', count: live.length },
+    ...KITCHEN_STAGES.map((stage) => ({ key: stage, count: counts[stage] })),
   ];
 
   return (
@@ -439,24 +436,41 @@ export function OrderedItemsScreen({
         )}
       </header>
 
-      <div className="grid grid-cols-5 gap-1.5 px-3 pt-3">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            data-testid={`server-app-ordered-tab-${tab.key}`}
-            aria-pressed={filter === tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`flex min-h-14 flex-col items-center justify-center rounded-lg border px-1 py-1 text-xs font-medium ${tab.className} ${
-              filter === tab.key ? 'border-brand ring-2 ring-brand/30' : 'border-border'
-            }`}
-          >
-            <span className="truncate">
+      {/* The same thin stage bar as the POS order header; each label filters the list. */}
+      <div data-testid="server-app-ordered-stages" className="space-y-1 px-3 pt-3">
+        <div className="flex h-1 gap-0.5">
+          {KITCHEN_STAGES.map((stage) =>
+            counts[stage] > 0 ? (
+              <div
+                key={stage}
+                className={`rounded-full opacity-75 ${itemStatusDot[stage].dot}`}
+                style={{ flexGrow: counts[stage], flexBasis: 0 }}
+              />
+            ) : null,
+          )}
+        </div>
+        <div className="-mx-1 flex items-center justify-between overflow-x-auto whitespace-nowrap text-xs text-muted-foreground">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              data-testid={`server-app-ordered-tab-${tab.key}`}
+              aria-pressed={filter === tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1.5 ${
+                filter === tab.key ? 'bg-muted font-semibold text-foreground' : ''
+              } ${tab.count > 0 || tab.key === 'all' ? '' : 'opacity-50'}`}
+            >
+              {tab.key !== 'all' && (
+                <span
+                  className={`h-1.5 w-1.5 rounded-full opacity-75 ${itemStatusDot[tab.key].dot}`}
+                />
+              )}
               {tab.key === 'all' ? t('filterAll') : t(STAGE_STYLES[tab.key].key)}
-            </span>
-            <Ltr className="text-lg font-bold tabular-nums">{tab.count}</Ltr>
-          </button>
-        ))}
+              <Ltr className="font-medium tabular-nums text-foreground/80">{tab.count}</Ltr>
+            </button>
+          ))}
+        </div>
       </div>
 
       <OrderedItemList
