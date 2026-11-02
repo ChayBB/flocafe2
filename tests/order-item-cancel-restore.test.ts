@@ -318,14 +318,26 @@ async function main() {
       const order = seedOrderWithItem(db, 'CANCEL-WAITER-OTHER', 'prod-cancel', 'pending');
       // A second line keeps the order open, so the cancelled one can be restored.
       db.prepare(`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, tax_amount, total, status, created_at, updated_at)
-        VALUES (?, 'prod-cancel', 'Other', 100, 1, 100, 0, 100, 'pending', ?, ?)`).run(order.orderId, now(), now());
+        VALUES (?, 'prod-cancel', 'Other', 100, 1, 100, 0, 100, 'pending', ?, ?)`).run(
+        order.orderId,
+        now(),
+        now(),
+      );
       const byServer = await cancel(order.orderId, order.itemId, {}, waiterAuth);
-      assertEqualOrThrow(byServer.status, 200, 'a server can cancel an item the kitchen has not started');
+      assertEqualOrThrow(
+        byServer.status,
+        200,
+        'a server can cancel an item the kitchen has not started',
+      );
       const flagged = db
         .prepare('SELECT status, service_change, service_change_at FROM order_items WHERE id = ?')
         .get(order.itemId) as any;
       assertEqualOrThrow(flagged.status, 'cancelled', 'the waiting item is cancelled');
-      assertEqualOrThrow(flagged.service_change, 'cancelled', 'the cancellation is flagged for the kitchen');
+      assertEqualOrThrow(
+        flagged.service_change,
+        'cancelled',
+        'the cancellation is flagged for the kitchen',
+      );
       assertOrThrow(Boolean(flagged.service_change_at), 'the flag records when it was made');
       const { isCancelledNoticeKdsVisible } = require('../main/db');
       assertOrThrow(
@@ -339,7 +351,8 @@ async function main() {
       const restored = await restore(order.orderId, order.itemId, ownerAuth);
       assertEqualOrThrow(restored.status, 200, 'the owner can restore it');
       assertEqualOrThrow(
-        (db.prepare('SELECT service_change FROM order_items WHERE id = ?').get(order.itemId) as any).service_change,
+        (db.prepare('SELECT service_change FROM order_items WHERE id = ?').get(order.itemId) as any)
+          .service_change,
         null,
         'restoring clears the kitchen flag',
       );
@@ -354,17 +367,27 @@ async function main() {
     {
       // Packing an item to go flags it for the kitchen until it is served.
       const takeaway = (orderId: any, itemId: any, headers: any) =>
-        api(baseUrl, `/api/orders/${orderId}/items/${itemId}/takeaway`, { method: 'PATCH', body: {}, headers });
+        api(baseUrl, `/api/orders/${orderId}/items/${itemId}/takeaway`, {
+          method: 'PATCH',
+          body: {},
+          headers,
+        });
       const order = seedOrderWithItem(db, 'TAKEAWAY-WAITING', 'prod-cancel', 'pending');
       const changed = await takeaway(order.orderId, order.itemId, waiterAuth);
-      assertEqualOrThrow(changed.status, 200, `a server changes a waiting item to takeaway (${JSON.stringify(changed.data)})`);
+      assertEqualOrThrow(
+        changed.status,
+        200,
+        `a server changes a waiting item to takeaway (${JSON.stringify(changed.data)})`,
+      );
       const row = db
         .prepare('SELECT status, service_change FROM order_items WHERE id = ?')
         .get(order.itemId) as any;
       assertEqualOrThrow(row.service_change, 'takeaway', 'the item is flagged as takeaway');
       assertEqualOrThrow(row.status, 'pending', 'the item keeps waiting for the kitchen');
       const audit = db
-        .prepare("SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_changed_to_takeaway'")
+        .prepare(
+          "SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_changed_to_takeaway'",
+        )
         .get(String(order.itemId));
       assertOrThrow(Boolean(audit), 'the change is recorded in the order audit log');
 
@@ -385,16 +408,26 @@ async function main() {
           headers: waiterAuth,
         });
       const confirmed = await confirmServed(served.orderId, served.itemId);
-      assertEqualOrThrow(confirmed.status, 200, `a server confirms a served item (${JSON.stringify(confirmed.data)})`);
+      assertEqualOrThrow(
+        confirmed.status,
+        200,
+        `a server confirms a served item (${JSON.stringify(confirmed.data)})`,
+      );
       const confirmedRow = db
         .prepare('SELECT served_confirmed_at, served_confirmed_by FROM order_items WHERE id = ?')
         .get(served.itemId) as any;
       assertOrThrow(Boolean(confirmedRow.served_confirmed_at), 'the confirmation time is recorded');
-      assertEqualOrThrow(confirmedRow.served_confirmed_by, 'waiter-cancel', 'the confirming staff member is recorded');
+      assertEqualOrThrow(
+        confirmedRow.served_confirmed_by,
+        'waiter-cancel',
+        'the confirming staff member is recorded',
+      );
       assertOrThrow(
         Boolean(
           db
-            .prepare("SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_served_confirmed'")
+            .prepare(
+              "SELECT 1 FROM order_audit_log WHERE order_item_id = ? AND action = 'item_served_confirmed'",
+            )
             .get(String(served.itemId)),
         ),
         'the confirmation is in the order audit log',
@@ -402,11 +435,38 @@ async function main() {
       const again = await confirmServed(served.orderId, served.itemId);
       assertEqualOrThrow(again.status, 200, 'confirming twice is harmless');
       const notServed = await confirmServed(order.orderId, order.itemId);
-      assertEqualOrThrow(notServed.status, 409, 'an item not yet served cannot be confirmed at the table');
+      assertEqualOrThrow(
+        notServed.status,
+        409,
+        'an item the kitchen has not finished cannot be confirmed at the table',
+      );
+      // A ready dish taken to the table is served and confirmed in one step.
+      const ready = seedOrderWithItem(db, 'CONFIRM-READY', 'prod-cancel', 'ready');
+      const readyConfirmed = await confirmServed(ready.orderId, ready.itemId);
+      assertEqualOrThrow(
+        readyConfirmed.status,
+        200,
+        `a server confirms a ready item (${JSON.stringify(readyConfirmed.data)})`,
+      );
+      const readyRow = db
+        .prepare(
+          'SELECT status, served_confirmed_at, served_confirmed_by FROM order_items WHERE id = ?',
+        )
+        .get(ready.itemId) as any;
+      assertEqualOrThrow(readyRow.status, 'served', 'confirming a ready item serves it');
+      assertOrThrow(Boolean(readyRow.served_confirmed_at), 'the ready item is confirmed');
+      assertEqualOrThrow(
+        readyRow.served_confirmed_by,
+        'waiter-cancel',
+        'the confirming staff member is recorded',
+      );
       db.prepare("UPDATE order_items SET status = 'ready' WHERE id = ?").run(served.itemId);
       assertEqualOrThrow(
-        (db.prepare('SELECT served_confirmed_at FROM order_items WHERE id = ?').get(served.itemId) as any)
-          .served_confirmed_at,
+        (
+          db
+            .prepare('SELECT served_confirmed_at FROM order_items WHERE id = ?')
+            .get(served.itemId) as any
+        ).served_confirmed_at,
         null,
         'moving the item back out of served clears the confirmation',
       );

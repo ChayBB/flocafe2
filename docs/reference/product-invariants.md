@@ -42,7 +42,8 @@ did what, not from hiding data between staff who already share a till and a kitc
 2. **Permission-based restriction on a specific action.** KDS stage transitions (marking an item
    preparing, ready, or served) require `kitchen.status.update`, shipped chef/manager/owner-only,
    narrowed further by the chef's assigned kitchen station and category. A server can place an
-   order but cannot do the kitchen's work on it.
+   order but cannot do the kitchen's work on it. The one exception is the table end of the line:
+   service staff confirming a `ready` item at the table (`orders.create`) also marks it `served`.
 3. **Audit attribution.** Every order and every write is recorded against the authenticated actor
    (`user_id`, `created_by`). This serves the audit trail, not access gating.
 

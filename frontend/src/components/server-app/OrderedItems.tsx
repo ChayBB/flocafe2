@@ -65,7 +65,7 @@ export function itemChangeOptions(item: OrderedItem): {
     takeaway:
       ['pending', 'preparing', 'ready'].includes(item.status) && item.service_change !== 'takeaway',
     cancel: item.status === 'pending',
-    confirmServed: item.status === 'served' && !item.served_confirmed_at,
+    confirmServed: ['ready', 'served'].includes(item.status) && !item.served_confirmed_at,
   };
 }
 

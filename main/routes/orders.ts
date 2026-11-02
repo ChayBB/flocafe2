@@ -1171,9 +1171,10 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
   const ownerNameById = new Map<string, string>();
   if (ownerIds.length > 0) {
     const ph = ownerIds.map(() => '?').join(',');
-    const rows = db
-      .prepare(`SELECT id, name FROM users WHERE id IN (${ph})`)
-      .all(...ownerIds) as { id: string; name: string }[];
+    const rows = db.prepare(`SELECT id, name FROM users WHERE id IN (${ph})`).all(...ownerIds) as {
+      id: string;
+      name: string;
+    }[];
     for (const u of rows) ownerNameById.set(u.id, u.name);
   }
   const customersById = new Map<string, any>();
@@ -4885,9 +4886,7 @@ function persistRecomputedOrderTotals(
   const collected = bills.reduce((sum, bill) => sum + Number(bill.paid_amount || 0), 0);
   if (payableTotal < collected) {
     throw Object.assign(
-      new Error(
-        'The new total is below the amount already collected; refund the difference first',
-      ),
+      new Error('The new total is below the amount already collected; refund the difference first'),
       { statusCode: 409 },
     );
   }
@@ -5243,10 +5242,7 @@ router.patch(
           }
 
           try {
-            validateItemNotes(
-              db,
-              stripPendingPriceNotes(newItem.special_instructions),
-            );
+            validateItemNotes(db, stripPendingPriceNotes(newItem.special_instructions));
             if (preserveStoredSelections) {
               // A reduction needs no extra units, so the stored selections stay
               // authoritative even when the catalog has since disabled the sold
@@ -5490,9 +5486,9 @@ function completePendingPriceLine(mode: PendingPriceMode) {
           });
         }
 
-        const product = db
-          .prepare('SELECT * FROM products WHERE id = ?')
-          .get(item.product_id) as ProductRow | undefined;
+        const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id) as
+          | ProductRow
+          | undefined;
         if (!product) {
           throw Object.assign(new Error(`Product ${item.product_id} not found`), {
             statusCode: 404,
@@ -5650,7 +5646,8 @@ router.patch(
         const item = db
           .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
           .get(itemId, orderId) as any;
-        if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+        if (!item)
+          throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
         if (!['pending', 'preparing', 'ready'].includes(item.status)) {
           throw Object.assign(new Error('Only items not yet served can change to takeaway'), {
             statusCode: 409,
@@ -5668,10 +5665,16 @@ router.patch(
             details: { product_name: item.product_name },
           });
         }
-        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<string, unknown>;
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
+          string,
+          unknown
+        >;
         const items = attachEffectiveAddons(
           db,
-          db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as { id: number }[],
+          db
+            .prepare('SELECT * FROM order_items WHERE order_id = ?')
+            .all(orderId)
+            .map(parseItemJson) as { id: number }[],
         );
         return { ...updatedOrder, items };
       });
@@ -5688,7 +5691,7 @@ router.patch(
   },
 );
 
-// PATCH /api/orders/:orderId/items/:itemId/confirm-served — service staff confirm a served item reached the table.
+// PATCH /api/orders/:orderId/items/:itemId/confirm-served — service staff confirm a ready or served item reached the table.
 router.patch(
   '/:orderId/items/:itemId/confirm-served',
   orderItemCancelRateLimit,
@@ -5705,11 +5708,22 @@ router.patch(
         const item = db
           .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
           .get(itemId, orderId) as any;
-        if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
-        if (item.status !== 'served') {
-          throw Object.assign(new Error('Only served items can be confirmed at the table'), {
-            statusCode: 409,
-          });
+        if (!item)
+          throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+        if (item.status !== 'served' && item.status !== 'ready') {
+          throw Object.assign(
+            new Error('Only ready or served items can be confirmed at the table'),
+            {
+              statusCode: 409,
+            },
+          );
+        }
+        // Taking a ready dish to the table serves it, so staff need not wait for the kitchen to mark it.
+        if (item.status === 'ready') {
+          db.prepare("UPDATE order_items SET status = 'served', updated_at = ? WHERE id = ?").run(
+            now(),
+            itemId,
+          );
         }
         if (!item.served_confirmed_at) {
           db.prepare(
@@ -5720,13 +5734,19 @@ router.patch(
             orderItemId: itemId,
             actorUserId: actorId,
             action: 'item_served_confirmed',
-            details: { product_name: item.product_name },
+            details: { product_name: item.product_name, from_status: item.status },
           });
         }
-        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<string, unknown>;
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
+          string,
+          unknown
+        >;
         const items = attachEffectiveAddons(
           db,
-          db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as { id: number }[],
+          db
+            .prepare('SELECT * FROM order_items WHERE order_id = ?')
+            .all(orderId)
+            .map(parseItemJson) as { id: number }[],
         );
         return { ...updatedOrder, items };
       });
@@ -5759,10 +5779,15 @@ router.post(
           throw Object.assign(new Error('This order is already closed'), { statusCode: 409 });
         }
         if (orderHasWeightPending(db, orderId)) {
-          throw Object.assign(new Error(WEIGHT_PENDING_ERROR), { statusCode: 409, code: 'weight_pending' });
+          throw Object.assign(new Error(WEIGHT_PENDING_ERROR), {
+            statusCode: 409,
+            code: 'weight_pending',
+          });
         }
         const liveItems = (
-          db.prepare('SELECT status, served_confirmed_at FROM order_items WHERE order_id = ?').all(orderId) as {
+          db
+            .prepare('SELECT status, served_confirmed_at FROM order_items WHERE order_id = ?')
+            .all(orderId) as {
             status: string;
             served_confirmed_at: string | null;
           }[]
@@ -5784,7 +5809,12 @@ router.post(
                  bill_payment_received_at = NULL, updated_at = ?
              WHERE id = ?`,
           ).run(now(), actorId, actor?.name ?? null, now(), orderId);
-          recordOrderAudit(db, { orderId, actorUserId: actorId, action: 'bill_requested', details: {} });
+          recordOrderAudit(db, {
+            orderId,
+            actorUserId: actorId,
+            action: 'bill_requested',
+            details: {},
+          });
         }
         return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
       });
@@ -5793,11 +5823,13 @@ router.post(
     } catch (err) {
       const error = err as { statusCode?: number; message?: string; code?: string };
       if (!error.statusCode) console.error('[Orders] Bill request error:', error);
-      res.status(error.statusCode || 500).json(
-        error.statusCode
-          ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
-          : { error: 'Internal server error' },
-      );
+      res
+        .status(error.statusCode || 500)
+        .json(
+          error.statusCode
+            ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
+            : { error: 'Internal server error' },
+        );
     }
   },
 );
@@ -5811,7 +5843,9 @@ interface MergeBillRow {
 }
 
 const isBillPaying = (bill: MergeBillRow) =>
-  Boolean(bill.split_group_id) || bill.payment_status !== 'unpaid' || Number(bill.paid_amount || 0) > 0;
+  Boolean(bill.split_group_id) ||
+  bill.payment_status !== 'unpaid' ||
+  Number(bill.paid_amount || 0) > 0;
 
 const BILL_RECORDS_KEPT_ON_MERGE = new Set(['bills', 'bill_items', 'print_logs']);
 
@@ -5826,7 +5860,11 @@ function billHasMoneyRecords(db: ReturnType<typeof getDatabase>, billId: number)
   return tables.some(
     ({ name }) =>
       !BILL_RECORDS_KEPT_ON_MERGE.has(name) &&
-      db.prepare(`SELECT 1 FROM "${name.replace(/"/g, '""')}" WHERE bill_id = ? OR bill_id = ? LIMIT 1`).get(billId, String(billId)),
+      db
+        .prepare(
+          `SELECT 1 FROM "${name.replace(/"/g, '""')}" WHERE bill_id = ? OR bill_id = ? LIMIT 1`,
+        )
+        .get(billId, String(billId)),
   );
 }
 
@@ -5838,7 +5876,8 @@ router.post(
   (req: Request, res: Response) => {
     try {
       const sourceOrderId = String(req.params.id);
-      const targetTableId = typeof req.body?.target_table_id === 'string' ? req.body.target_table_id : '';
+      const targetTableId =
+        typeof req.body?.target_table_id === 'string' ? req.body.target_table_id : '';
       const actorId = String((req as Request & { user?: { userId?: string } }).user?.userId || '');
       if (!targetTableId) return res.status(400).json({ error: 'target_table_id is required' });
       const db = getDatabase();
@@ -5847,18 +5886,32 @@ router.post(
 
       const result = withTxn(() => {
         const source = db.prepare('SELECT * FROM orders WHERE id = ?').get(sourceOrderId) as
-          | (EditableOrderRow & { id: number; order_number: string; table_id: string | null; type: string })
+          | (EditableOrderRow & {
+              id: number;
+              order_number: string;
+              table_id: string | null;
+              type: string;
+            })
           | undefined;
         if (!source) throw fail('Order not found', 404);
-        if (['completed', 'cancelled'].includes(source.status)) throw fail('This order is already closed', 409);
-        if (source.type !== 'dine_in' || !source.table_id) throw fail('Only a table order can be merged', 400);
-        if (source.table_id === targetTableId) throw fail('The order is already on this table', 400);
+        if (['completed', 'cancelled'].includes(source.status))
+          throw fail('This order is already closed', 409);
+        if (source.type !== 'dine_in' || !source.table_id)
+          throw fail('Only a table order can be merged', 400);
+        if (source.table_id === targetTableId)
+          throw fail('The order is already on this table', 400);
         if (Number(source.discount_amount || 0) > 0) {
           throw fail('Remove the order discount before merging tables', 409, 'source_discount');
         }
-        const sourceBills = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id').all(source.id) as MergeBillRow[];
+        const sourceBills = db
+          .prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id')
+          .all(source.id) as MergeBillRow[];
         if (sourceBills.some(isBillPaying)) {
-          throw fail('This order has started paying; finish its payment before merging', 409, 'source_billed');
+          throw fail(
+            'This order has started paying; finish its payment before merging',
+            409,
+            'source_billed',
+          );
         }
 
         const targetTable = db.prepare('SELECT * FROM tables WHERE id = ?').get(targetTableId) as
@@ -5870,11 +5923,24 @@ router.post(
             `SELECT * FROM orders WHERE table_id = ? AND status NOT IN ('completed', 'cancelled')
              ORDER BY created_at DESC LIMIT 1`,
           )
-          .get(targetTableId) as (EditableOrderRow & { id: number; order_number: string }) | undefined;
-        if (!target) throw fail('The target table has no open order; move the order instead', 409, 'target_empty');
-        const targetBills = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id').all(target.id) as MergeBillRow[];
+          .get(targetTableId) as
+          | (EditableOrderRow & { id: number; order_number: string })
+          | undefined;
+        if (!target)
+          throw fail(
+            'The target table has no open order; move the order instead',
+            409,
+            'target_empty',
+          );
+        const targetBills = db
+          .prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY id')
+          .all(target.id) as MergeBillRow[];
         if (targetBills.some(isBillPaying)) {
-          throw fail('The target table has started paying; finish its payment first', 409, 'target_paying');
+          throw fail(
+            'The target table has started paying; finish its payment first',
+            409,
+            'target_paying',
+          );
         }
 
         const tenantInfo = {
@@ -5886,7 +5952,9 @@ router.post(
         };
         const decimals = getCurrencyFractionDigits(tenantInfo.currency);
         const customer = target.customer_id
-          ? (db.prepare('SELECT * FROM customers WHERE id = ?').get(target.customer_id) as TaxCustomerRow)
+          ? (db
+              .prepare('SELECT * FROM customers WHERE id = ?')
+              .get(target.customer_id) as TaxCustomerRow)
           : null;
 
         const movedItems = db
@@ -5897,13 +5965,24 @@ router.post(
         const mergedBills: string[] = [];
         for (const bill of sourceBills) {
           if (bill === keptBill) {
-            db.prepare('UPDATE bills SET order_id = ?, updated_at = ? WHERE id = ?').run(target.id, now(), bill.id);
+            db.prepare('UPDATE bills SET order_id = ?, updated_at = ? WHERE id = ?').run(
+              target.id,
+              now(),
+              bill.id,
+            );
             continue;
           }
           if (billHasMoneyRecords(db, bill.id)) {
-            throw fail('This order has started paying; finish its payment before merging', 409, 'source_billed');
+            throw fail(
+              'This order has started paying; finish its payment before merging',
+              409,
+              'source_billed',
+            );
           }
-          db.prepare('UPDATE print_logs SET bill_id = ? WHERE bill_id = ?').run(keptBill.id, bill.id);
+          db.prepare('UPDATE print_logs SET bill_id = ? WHERE bill_id = ?').run(
+            keptBill.id,
+            bill.id,
+          );
           db.prepare('DELETE FROM bill_items WHERE bill_id = ?').run(bill.id);
           db.prepare('DELETE FROM bills WHERE id = ?').run(bill.id);
           mergedBills.push(bill.bill_number);
@@ -5919,8 +5998,14 @@ router.post(
              total = 0, service_charge = 0, packaging_charge = 0, charges_breakdown = NULL, round_off = 0,
              cancelled_at = ?, cancellation_reason = ?, updated_at = ? WHERE id = ?`,
         ).run(now(), `Merged into ${target.order_number}`, now(), source.id);
-        db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?").run(now(), source.table_id);
-        db.prepare("UPDATE tables SET status = 'occupied', updated_at = ? WHERE id = ?").run(now(), targetTableId);
+        db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?").run(
+          now(),
+          source.table_id,
+        );
+        db.prepare("UPDATE tables SET status = 'occupied', updated_at = ? WHERE id = ?").run(
+          now(),
+          targetTableId,
+        );
         const details = {
           from_order: source.order_number,
           to_order: target.order_number,
@@ -5929,11 +6014,23 @@ router.post(
           ...(keptBill ? { bill: keptBill.bill_number } : {}),
           ...(mergedBills.length ? { merged_bills: mergedBills } : {}),
         };
-        recordOrderAudit(db, { orderId: String(source.id), actorUserId: actorId, action: 'order_merged', details });
-        recordOrderAudit(db, { orderId: String(target.id), actorUserId: actorId, action: 'order_merged', details });
+        recordOrderAudit(db, {
+          orderId: String(source.id),
+          actorUserId: actorId,
+          action: 'order_merged',
+          details,
+        });
+        recordOrderAudit(db, {
+          orderId: String(target.id),
+          actorUserId: actorId,
+          action: 'order_merged',
+          details,
+        });
         return {
           sourceId: source.id,
-          order: parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(target.id) as any),
+          order: parseRowJson(
+            db.prepare('SELECT * FROM orders WHERE id = ?').get(target.id) as any,
+          ),
           items: db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(target.id),
         };
       });
@@ -5946,11 +6043,13 @@ router.post(
     } catch (err) {
       const error = err as { statusCode?: number; message?: string; code?: string };
       if (!error.statusCode) console.error('[Orders] Merge table error:', error);
-      res.status(error.statusCode || 500).json(
-        error.statusCode
-          ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
-          : { error: 'Internal server error' },
-      );
+      res
+        .status(error.statusCode || 500)
+        .json(
+          error.statusCode
+            ? { error: error.message, ...(error.code ? { code: error.code } : {}) }
+            : { error: 'Internal server error' },
+        );
     }
   },
 );
@@ -6072,10 +6171,7 @@ router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) =>
       // Restore - mark as pending
       db.prepare(
         "UPDATE order_items SET status = 'pending', service_change = NULL, service_change_at = NULL, updated_at = ? WHERE id = ?",
-      ).run(
-        now(),
-        itemId,
-      );
+      ).run(now(), itemId);
 
       // Recalculate order totals
       const orderTotals = calculateOrderTotals(db, orderId);

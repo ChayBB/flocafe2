@@ -376,9 +376,10 @@ is `pending`, `preparing` or `ready` to go: it sets `service_change` to `takeawa
 completed or cancelled order.
 
 `PATCH /:orderId/items/:itemId/confirm-served` (`orders.create`, item cancel limiter) records that
-service staff took a `served` item to the table: it sets `served_confirmed_at` and
-`served_confirmed_by` once and records an `item_served_confirmed` audit entry; repeating it changes
-nothing. It returns `{ order: { ...order, items } }` and `409` for an item that is not `served`. A
+service staff took a `ready` or `served` item to the table: a `ready` item becomes `served`, then
+it sets `served_confirmed_at` and `served_confirmed_by` once and records an `item_served_confirmed`
+audit entry (with the item's previous status); repeating it changes nothing. It returns
+`{ order: { ...order, items } }` and `409` for an item that is neither `ready` nor `served`. A
 status change away from `served` clears the confirmation. The KDS shows confirmed items, and the
 Server App forwards all three routes.
 
