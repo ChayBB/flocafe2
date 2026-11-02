@@ -86,7 +86,7 @@ test.describe('Server App tableside ordering', () => {
     await expect(page.getByTestId('pos-product-grid')).toHaveCount(0);
   });
 
-  test('a phone opens on the table list and toggles it from the title; a tablet always shows it', async ({
+  test('a phone opens on the table list and toggles it with Select Table; a tablet always shows it', async ({
     page,
   }) => {
     const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
@@ -105,12 +105,12 @@ test.describe('Server App tableside ordering', () => {
     await expect(picker).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await page.getByRole('button', { name: new RegExp(tableName) }).click();
-    await expect(picker).toContainText(tableName);
+    await expect(page.locator('header')).toContainText(tableName);
     // Picking a table folds the list away.
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
     await expect(picker).toHaveAttribute('aria-expanded', 'false');
 
-    // Tapping the title brings the list back and hides it again.
+    // Tapping Select Table brings the list back and hides it again.
     await picker.click();
     await expect(page.getByRole('heading', { name: 'Tables' })).toBeVisible();
     await picker.click();
@@ -143,7 +143,7 @@ test.describe('Server App tableside ordering', () => {
       await openServerApp(page, serverToken);
       await expect(page.getByTestId('pos-product-grid')).toBeVisible();
 
-      // The title opens the tables; besides it only the session button remains.
+      // Select Table opens the tables; besides it only the session button remains.
       const header = page.locator('header');
       const tableButton = header.getByTestId('server-app-table-button');
       const logoutButton = header.getByRole('button', { name: 'Logout' });

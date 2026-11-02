@@ -15,7 +15,6 @@ import {
   Trash2,
   UserRound,
   UtensilsCrossed,
-  ChevronDown,
   MoreVertical,
   ArrowLeftRight,
   Merge,
@@ -212,7 +211,7 @@ export default function ServerStandalonePage() {
     () => window.matchMedia(WIDE_QUERY).matches,
     () => false,
   );
-  // A tablet always shows its tables beside the menu; a phone opens on them and toggles them from the title.
+  // A tablet always shows its tables beside the menu; a phone opens on them and toggles them with Select Table.
   const showTablePicker = Boolean(user) && (tablePickerOpen || isWide);
   useEffect(() => {
     document.documentElement.classList.add('theme-server-app');
@@ -1489,32 +1488,10 @@ export default function ServerStandalonePage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
             <ChefHat size={18} />
           </div>
-          {user && !isWide ? (
-            // On a phone the title opens and closes the table list.
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() => setTablePickerOpen((open) => !open)}
-              aria-expanded={showTablePicker}
-              aria-label={t('tables')}
-              data-testid="server-app-table-button"
-              className="flex min-h-11 min-w-0 flex-1 flex-col justify-center text-start disabled:opacity-50"
-            >
-              <span className="block truncate text-base font-semibold">{t('title')}</span>
-              <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                <span className="truncate">{headerTableText}</span>
-                <ChevronDown
-                  size={14}
-                  className={`shrink-0 transition-transform ${showTablePicker ? 'rotate-180' : ''}`}
-                />
-              </span>
-            </button>
-          ) : (
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-semibold">{t('title')}</h1>
-              <p className="truncate text-xs text-muted-foreground">{headerTableText}</p>
-            </div>
-          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold">{t('title')}</h1>
+            <p className="truncate text-xs text-muted-foreground">{headerTableText}</p>
+          </div>
           {user ? (
             <>
               <span
@@ -1523,6 +1500,19 @@ export default function ServerStandalonePage() {
               >
                 {user.name}
               </span>
+              {!isWide && (
+                <button
+                  type="button"
+                  disabled={sending}
+                  onClick={() => setTablePickerOpen((open) => !open)}
+                  aria-expanded={showTablePicker}
+                  data-testid="server-app-table-button"
+                  className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <UtensilsCrossed size={14} />
+                  {t('selectTable')}
+                </button>
+              )}
             </>
           ) : (
             <span
