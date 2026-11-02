@@ -33,6 +33,7 @@ import { postHogApiFailureMiddleware } from './services/posthog';
 import { API_JSON_BODY_LIMIT } from './http-limits';
 import { buildCspHeader } from './csp';
 import { resolveContainedPath } from './lib/path-containment';
+import { GUEST_USER_ID, isGuestApiRoute } from './lib/guest-order';
 import { setServerPort } from './server-state';
 export { getServerPort, getLocalIP, getAllLocalIPs } from './server-state';
 
@@ -123,6 +124,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     // Reject tokens issued before user password/PIN was last changed.
     if (isTokenStale(decoded.iat, status.tokensValidAfter)) {
       res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    if (decoded.userId === GUEST_USER_ID && !isGuestApiRoute(req.method, reqPath)) {
+      res.status(403).json({ error: 'Insufficient permissions', code: 'guest_scope' });
       return;
     }
 

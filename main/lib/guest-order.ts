@@ -2,6 +2,27 @@ import type Database from 'better-sqlite3';
 
 export const GUEST_USER_ID = 'guest-self-order';
 
+/** All the Guest account may do, whatever its role or overrides say: read the menu and order. */
+export const GUEST_PERMISSION_IDS: ReadonlySet<string> = new Set([
+  'catalog.view',
+  'orders.create',
+  'printing.execute',
+]);
+
+const GUEST_API_ROUTES: [string, RegExp][] = [
+  ['GET', /^\/api\/categories\/?$/],
+  ['GET', /^\/api\/products\/?$/],
+  ['POST', /^\/api\/orders\/?$/],
+  ['POST', /^\/api\/orders\/[^/]+\/items\/?$/],
+  ['POST', /^\/api\/printers\/print-kot\/?$/],
+];
+
+/** The main API routes the Server App calls for a table QR; a Guest token reaches nothing else. */
+export function isGuestApiRoute(method: string, requestPath: string): boolean {
+  const path = requestPath.toLowerCase();
+  return GUEST_API_ROUTES.some(([allowed, pattern]) => allowed === method && pattern.test(path));
+}
+
 const MAX_LINES = 30;
 const MAX_QUANTITY = 50;
 // Caps the whole order, so 30 lines of 50 cannot print a kitchen ticket metres long.

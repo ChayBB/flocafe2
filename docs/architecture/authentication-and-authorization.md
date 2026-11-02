@@ -249,7 +249,10 @@ disabled surface is not discoverable. The 404 check appears in three places in
 A table QR opens the Server App as a guest bound to that table. Three `/api/guest/*` routes are
 reachable without signing in: the table's name, the menu, and order creation. They act as a
 hidden `Guest` user (`guest-self-order`) that has no usable password, no staff code, and does not
-appear in staff or owner lists; the order lines are rebuilt from the catalog so a guest cannot
+appear in staff or owner lists. Its account row says `server`, but `resolveEffectivePermissions()`
+gives it only `catalog.view`, `orders.create` and `printing.execute`, whatever its role or overrides
+say, and `requireAuth` answers `403` `guest_scope` to a Guest token on any main API route other than
+the menu reads, order creation, adding items and the kitchen ticket. The order lines are rebuilt from the catalog so a guest cannot
 choose a price, order creation is limited to 12 per 10 minutes per address, and a guest cannot
 read orders or customers. The `guest_qr_ordering_enabled` setting (the "Take orders by QR code"
 checkbox on the OrderFlow settings tab, on by default) closes all three routes with `403`
