@@ -847,6 +847,77 @@ async function runTests() {
     }
   }
 
+  console.log('\nTest 11: kitchen tickets print combined or one per menu line');
+  {
+    const tickets: string[] = [];
+    const kitchenServer = net.createServer((socket) => {
+      const index = tickets.push('') - 1;
+      socket.on('data', (chunk) => {
+        tickets[index] += chunk.toString('latin1');
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      kitchenServer.once('error', reject);
+      kitchenServer.listen(0, '127.0.0.1', () => resolve());
+    });
+    const kitchenAddress = kitchenServer.address();
+    const kitchenPrinter = await request(app)
+      .post('/api/printers')
+      .send({
+        name: 'Kitchen Layout Printer',
+        connection_type: 'network',
+        ip_address: '127.0.0.1',
+        port: typeof kitchenAddress === 'object' && kitchenAddress ? kitchenAddress.port : 0,
+        is_default: true,
+      });
+    assert(
+      kitchenPrinter.status === 201,
+      `kitchen printer fixture is created (got ${kitchenPrinter.status})`,
+    );
+    const kitchenOrderId = Number(
+      db
+        .prepare(
+          `INSERT INTO orders (order_number, status, type, subtotal, total, created_at, updated_at)
+         VALUES ('ORD-KOT-LAYOUT', 'pending', 'dine_in', 20, 20, datetime('now'), datetime('now'))`,
+        )
+        .run().lastInsertRowid,
+    );
+    for (const name of ['Pad Thai', 'Iced Tea']) {
+      db.prepare(
+        `INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, total, created_at, updated_at)
+         VALUES (?, ?, ?, 10, 1, 10, 10, datetime('now'), datetime('now'))`,
+      ).run(kitchenOrderId, `prod-${name}`, name);
+    }
+    const printKitchen = async (layout: string) => {
+      db.prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES ('kot_print_layout', ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ).run(layout);
+      tickets.length = 0;
+      const res = await request(app)
+        .post('/api/printers/print-kot')
+        .send({ orderId: kitchenOrderId, stationName: 'Kitchen' });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return res.status;
+    };
+    try {
+      assert((await printKitchen('combined')) === 200, 'combined kitchen ticket prints');
+      assert(
+        tickets.length === 1 && tickets[0].includes('Pad Thai') && tickets[0].includes('Iced Tea'),
+        `combined layout prints both items on one ticket (got ${tickets.length})`,
+      );
+      assert((await printKitchen('separate')) === 200, 'separate kitchen tickets print');
+      assert(
+        tickets.length === 2 &&
+          tickets.some((t) => t.includes('Pad Thai') && !t.includes('Iced Tea')) &&
+          tickets.some((t) => t.includes('Iced Tea') && !t.includes('Pad Thai')),
+        `separate layout prints one ticket per item (got ${tickets.length})`,
+      );
+    } finally {
+      kitchenServer.close();
+    }
+  }
+
   console.log('\n' + '='.repeat(50));
   console.log(`${passed}/${passed + failed} passed, ${failed} failed`);
 

@@ -55,6 +55,8 @@ export interface PosSettingsState {
   // Kitchen workflow toggles synced from backend settings.
   kdsEnabled: boolean;
   kotPrintingEnabled: boolean;
+  // One kitchen ticket per menu line instead of one per order.
+  kotPrintSeparate: boolean;
   // Whether WhatsApp messaging is enabled for this tenant.
   whatsappEnabled: boolean;
   // Print language policies synced from backend settings.
@@ -97,6 +99,7 @@ export interface PosSettingsState {
   setPrinterTrimDecimals: (v: boolean) => void;
   setKdsEnabled: (v: boolean) => void;
   setKotPrintingEnabled: (v: boolean) => void;
+  setKotPrintSeparate: (v: boolean) => void;
   setWhatsappEnabled: (v: boolean) => void;
   setBillLanguagePolicy: (policy: ReceiptLanguagePolicy) => void;
   setKotLanguagePolicy: (policy: KotLanguagePolicy) => void;
@@ -183,6 +186,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       printerTrimDecimals: false,
       kdsEnabled: true,
       kotPrintingEnabled: true,
+      kotPrintSeparate: false,
       // Default false so sidebar hides WhatsApp nav until tenant enables it.
       // Synced from /api/whatsapp/status on auth load.
       whatsappEnabled: false,
@@ -228,6 +232,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       setPrinterTrimDecimals: (v) => set({ printerTrimDecimals: v }),
       setKdsEnabled: (v) => set({ kdsEnabled: v }),
       setKotPrintingEnabled: (v) => set({ kotPrintingEnabled: v }),
+      setKotPrintSeparate: (v) => set({ kotPrintSeparate: v }),
       setWhatsappEnabled: (v: boolean) => set({ whatsappEnabled: v }),
       setBillLanguagePolicy: (billLanguagePolicy) => set({ billLanguagePolicy }),
       setKotLanguagePolicy: (kotLanguagePolicy) => set({ kotLanguagePolicy }),

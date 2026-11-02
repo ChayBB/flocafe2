@@ -18,7 +18,11 @@ import {
   normalizeBusinessDayStartTime,
   utcDayBounds,
 } from '../shared/business-date';
-import { getCurrencyFractionDigits, resolveRegionalSnapshot, resolveTenantCurrency } from './countries';
+import {
+  getCurrencyFractionDigits,
+  resolveRegionalSnapshot,
+  resolveTenantCurrency,
+} from './countries';
 import { clockNow } from './lib/clock';
 
 const USER_ROLE_SQL_CHECK = `CHECK (role IN (${ROLE_KEYS.map((role) => `'${role}'`).join(', ')}))`;
@@ -1491,6 +1495,11 @@ export function isGuestQrOrderingEnabled(): boolean {
 /** KOT ticket printing on/off switch (gates automatic and manual prints). Defaults to enabled. */
 export function isKotPrintingEnabled(): boolean {
   return getSettingValue('kot_printing_enabled') !== 'false';
+}
+
+/** Kitchen tickets print one per menu line ('separate') or all lines on one ticket ('combined'). */
+export function isKotPrintSeparate(): boolean {
+  return getSettingValue('kot_print_layout') === 'separate';
 }
 
 /** Whether the tableside "server" role may print bills/order-slips. Defaults to disabled. */
@@ -3403,7 +3412,9 @@ export function getKdsStationCategoryIds(
 }
 
 /** The KDS station picker lists the menu categories, so each display can show one category. */
-export function listKdsStationCategories(dbInstance: Database.Database): { id: string; name: string }[] {
+export function listKdsStationCategories(
+  dbInstance: Database.Database,
+): { id: string; name: string }[] {
   return dbInstance
     .prepare(
       `SELECT id, name FROM categories
@@ -3456,8 +3467,11 @@ export function annotateKdsItems<T extends { items?: any[] }>(
     }
   }
   const setting = (key: string) =>
-    (dbInstance.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value?: string } | undefined)
-      ?.value;
+    (
+      dbInstance.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+        | { value?: string }
+        | undefined
+    )?.value;
   let currency: string | undefined;
   let storeTimezone: string | undefined;
   try {
@@ -7691,7 +7705,9 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     name: 'add_table_owner',
     up: () => {
       if (!getColumns(db, 'tables').includes('owner_user_id')) {
-        db.exec(`ALTER TABLE tables ADD COLUMN owner_user_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL`);
+        db.exec(
+          `ALTER TABLE tables ADD COLUMN owner_user_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL`,
+        );
       }
     },
   },
@@ -7800,7 +7816,9 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
           UNIQUE (user_id, business_date)
         )
       `);
-      db.exec('CREATE INDEX IF NOT EXISTS idx_staff_attendance_date ON staff_attendance(business_date)');
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_staff_attendance_date ON staff_attendance(business_date)',
+      );
       if (!getColumns(db, 'users').includes('hourly_rate')) {
         db.exec('ALTER TABLE users ADD COLUMN hourly_rate REAL DEFAULT NULL');
       }
@@ -7854,7 +7872,8 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
         'bill_requested_by_name',
         'bill_payment_received_at',
       ]) {
-        if (!columns.includes(column)) db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT DEFAULT NULL`);
+        if (!columns.includes(column))
+          db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT DEFAULT NULL`);
       }
       // The request ends when the order's last open bill is paid.
       db.exec(`

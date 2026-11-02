@@ -1027,6 +1027,14 @@ export default function POSPage() {
           .get('/settings/kot_printing_enabled')
           .then((res) => setKotPrintingEnabled(res.data.setting?.value !== 'false'))
           .catch(() => {});
+        api
+          .get('/settings/kot_print_layout')
+          .then((res) =>
+            usePosSettingsStore
+              .getState()
+              .setKotPrintSeparate(res.data.setting?.value === 'separate'),
+          )
+          .catch(() => {});
 
         // 2. Fetch other menu data
         const requests: Promise<{ data: Record<string, unknown> }>[] = [

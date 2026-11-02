@@ -18,6 +18,7 @@ import {
   now,
   attachEffectiveAddons,
   isKotPrintingEnabled,
+  isKotPrintSeparate,
   isServerBillPrintingEnabled,
   parseItemJson,
   getSettingValue,
@@ -1314,12 +1315,16 @@ router.post(
         isKotItemPending(item?.status),
       );
 
+      const separate = isKotPrintSeparate();
+      const tickets = (ticketItems: any[]) =>
+        separate ? ticketItems.map((item) => [item]) : [ticketItems];
+
       if (stationName) {
         const station = stationName || 'Kitchen';
-        if (kotSourceItems.length > 0) {
+        for (const ticket of kotSourceItems.length > 0 ? tickets(kotSourceItems) : []) {
           const result = await printKOTDetailed(
             order,
-            kotSourceItems,
+            ticket,
             station,
             useUnicode,
             undefined,
@@ -1327,13 +1332,15 @@ router.post(
             arabicShapingOverride,
             kotLanguage,
           );
-          success = result.ok;
-          failure = result.ok ? null : result;
+          success = success && result.ok;
           warnings.push(...(result.warnings || []));
+          if (!result.ok && !failure) failure = result;
         }
       } else {
         const groups = routeItemsToStations(db, kotSourceItems).filter((g) => g.items.length > 0);
-        for (const group of groups) {
+        for (const group of groups.flatMap((g) =>
+          tickets(g.items).map((items) => ({ ...g, items })),
+        )) {
           const result = await printKOTDetailed(
             order,
             group.items,

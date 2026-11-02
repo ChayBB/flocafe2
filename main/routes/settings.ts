@@ -181,6 +181,7 @@ const OPTIONAL_SETTING_DEFAULTS: Record<string, string> = {
   theme_mode: 'system',
   // Orders screen layout (#639): master/detail split view is the default.
   orders_layout: 'split',
+  kot_print_layout: 'combined',
 };
 
 /** Single authority for the orders_layout enum; both write transports gate on it. */
@@ -745,11 +746,16 @@ router.put('/guest-qr', requirePermission('settings.manage'), (req: Request, res
     if (publicBaseUrl === null) {
       return res
         .status(400)
-        .json({ code: 'public_base_url_invalid', error: 'public_base_url must be an https address' });
+        .json({
+          code: 'public_base_url_invalid',
+          error: 'public_base_url must be an https address',
+        });
     }
     const trustedProxy = normalizeTrustedProxy(req.body?.trusted_proxy ?? '');
     if (trustedProxy === null) {
-      return res.status(400).json({ code: 'trusted_proxy_invalid', error: 'trusted_proxy must be an IP address' });
+      return res
+        .status(400)
+        .json({ code: 'trusted_proxy_invalid', error: 'trusted_proxy must be an IP address' });
     }
     upsertSettings(getDatabase(), {
       [GUEST_QR_PUBLIC_URL_KEY]: publicBaseUrl,
@@ -763,15 +769,19 @@ router.put('/guest-qr', requirePermission('settings.manage'), (req: Request, res
 });
 
 // Every table QR printed before stops working; reprint them afterwards.
-router.post('/guest-qr/rotate', requirePermission('settings.manage'), (_req: Request, res: Response) => {
-  try {
-    rotateGuestQrSecret();
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error('[API] Internal error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+router.post(
+  '/guest-qr/rotate',
+  requirePermission('settings.manage'),
+  (_req: Request, res: Response) => {
+    try {
+      rotateGuestQrSecret();
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
 
 // ─── Product analytics sharing level (must come BEFORE /:key wildcard) ──────
 
@@ -1678,6 +1688,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'server_app_enabled',
   'guest_qr_ordering_enabled',
   'kot_printing_enabled',
+  'kot_print_layout',
   'server_app_bill_printing_enabled',
   'split_checks_enabled',
   BILL_LANGUAGE_POLICY_KEY,
@@ -1955,6 +1966,9 @@ router.put(
       }
       if (req.params.key === 'orders_layout' && !isOrdersLayout(value)) {
         return res.status(400).json({ error: 'orders_layout must be "split" or "cards"' });
+      }
+      if (req.params.key === 'kot_print_layout' && value !== 'separate' && value !== 'combined') {
+        return res.status(400).json({ error: 'kot_print_layout must be "separate" or "combined"' });
       }
       let valueToPersist: unknown = value;
       if (req.params.key === 'require_open_shift') {

@@ -642,7 +642,20 @@ export const usePrinterStore = create<PrinterState>()(
         }
         try {
           const hw = get().hardwarePrinter;
-          if (hw && get().printMethod === 'escpos') {
+          const usesBackendPrinter = Boolean(hw && get().printMethod === 'escpos');
+          const ticketItems = opts?.items ?? order.items ?? [];
+          if (
+            !usesBackendPrinter &&
+            usePosSettingsStore.getState().kotPrintSeparate &&
+            ticketItems.length > 1
+          ) {
+            const warnings: PrintWarning[] = [];
+            for (const item of ticketItems) {
+              warnings.push(...(await get().printKot(order, { ...opts, items: [item] })));
+            }
+            return warnings;
+          }
+          if (usesBackendPrinter) {
             try {
               const response = await api.post<{ warnings?: PrintWarning[] }>(
                 '/printers/print-kot',
