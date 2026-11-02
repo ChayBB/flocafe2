@@ -132,6 +132,15 @@ the station list, and print on the default kitchen printer.
 KOT printing can be disabled for the business. When it is disabled, neither automatic nor manual KOT
 print requests are sent.
 
+**Settings > Printers > Print layout** (`kot_print_layout`) chooses whether a kitchen ticket holds
+every item sent together (`combined`, the default) or each menu line prints on its own ticket
+(`separate`). Items from different orders never share a ticket.
+
+The backend sends jobs to each printer one at a time, in the order they arrive, with a short pause
+between them (`main/printers/print-queue.ts`). A printer is identified by its IP address and port,
+or by its OS queue name. Jobs for different printers do not wait for each other, a failed job does
+not hold up the next one, and more than five jobs waiting for one printer is logged.
+
 ## Troubleshooting
 
 ### Quick checks

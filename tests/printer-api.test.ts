@@ -33,7 +33,12 @@ const request = require('supertest');
 const { initDatabase, getDatabase, closeDatabase, now } = require('../main/db');
 const { printerRoutes } = require('../main/routes/printers');
 const { kitchenStationRoutes } = require('../main/routes/kitchen-stations');
-const { printReceipt, printReceiptDetailed, osPrinterName } = require('../main/printers/thermal');
+const {
+  printReceipt,
+  printReceiptDetailed,
+  osPrinterName,
+  printViaNetwork,
+} = require('../main/printers/thermal');
 const { cloudSync } = require('../main/services/cloud-sync');
 const { printerService } = require('../frontend/src/lib/printer/PrinterService');
 
@@ -889,7 +894,51 @@ async function runTests() {
     await request(app).delete(`/api/printers/${printer.id}`);
   }
 
-  console.log('\nTest 12: kitchen tickets print combined or one per menu line');
+  console.log('\nTest 12: jobs sent together reach one printer one connection at a time');
+  {
+    let open = 0;
+    let maxOpen = 0;
+    const received: string[] = [];
+    const queueServer = net.createServer((socket) => {
+      open++;
+      maxOpen = Math.max(maxOpen, open);
+      let text = '';
+      socket.on('data', (chunk) => {
+        text += chunk.toString('latin1');
+      });
+      socket.on('close', () => {
+        received.push(text);
+        open--;
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      queueServer.once('error', reject);
+      queueServer.listen(0, '127.0.0.1', () => resolve());
+    });
+    const queueAddress = queueServer.address();
+    const queuePort = typeof queueAddress === 'object' && queueAddress ? queueAddress.port : 0;
+    try {
+      const results = await Promise.all(
+        ['ticket-1', 'ticket-2', 'ticket-3'].map((text) =>
+          printViaNetwork('127.0.0.1', queuePort, Buffer.from(text)),
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert(
+        results.every((result: { ok: boolean }) => result.ok),
+        'every queued job prints',
+      );
+      assert(maxOpen === 1, `the printer never has two jobs open at once (got ${maxOpen})`);
+      assert(
+        received.join(',') === 'ticket-1,ticket-2,ticket-3',
+        `jobs arrive whole and in order (got ${received.join(',')})`,
+      );
+    } finally {
+      queueServer.close();
+    }
+  }
+
+  console.log('\nTest 13: kitchen tickets print combined or one per menu line');
   {
     const tickets: string[] = [];
     const kitchenServer = net.createServer((socket) => {

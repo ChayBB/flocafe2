@@ -130,6 +130,7 @@ import {
   parseAddons,
 } from './formatting-helpers';
 import { clockNow } from '../lib/clock';
+import { enqueuePrintJob, networkPrinterKey, osPrinterKey } from './print-queue';
 
 export {
   type PrintWarning,
@@ -3877,6 +3878,15 @@ export async function printViaNetwork(
   data: Buffer,
   signal?: AbortSignal,
 ): Promise<DispatchResult> {
+  return enqueuePrintJob(networkPrinterKey(ip, port), () => sendViaNetwork(ip, port, data, signal));
+}
+
+async function sendViaNetwork(
+  ip: string,
+  port: number,
+  data: Buffer,
+  signal?: AbortSignal,
+): Promise<DispatchResult> {
   return new Promise((resolve) => {
     const client = new net.Socket();
     let settled = false;
@@ -3970,6 +3980,14 @@ export async function printViaUSB(
   printerName?: string,
   signal?: AbortSignal,
 ): Promise<DispatchResult> {
+  return enqueuePrintJob(osPrinterKey(printerName), () => sendViaUSB(data, printerName, signal));
+}
+
+async function sendViaUSB(
+  data: Buffer,
+  printerName?: string,
+  signal?: AbortSignal,
+): Promise<DispatchResult> {
   console.log('[Printer] printViaUSB called, platform:', process.platform, 'printer:', printerName);
 
   if (process.platform === 'darwin' || process.platform === 'linux') {
@@ -3986,6 +4004,16 @@ export async function printViaUSB(
 
 // MAS-build counterpart to printViaCups: submits raw bytes to CUPS via local IPP.
 async function printViaLocalIpp(
+  data: Buffer,
+  printerName?: string,
+  signal?: AbortSignal,
+): Promise<DispatchResult> {
+  return enqueuePrintJob(osPrinterKey(printerName), () =>
+    sendViaLocalIpp(data, printerName, signal),
+  );
+}
+
+async function sendViaLocalIpp(
   data: Buffer,
   printerName?: string,
   signal?: AbortSignal,
