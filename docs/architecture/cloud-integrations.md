@@ -377,7 +377,12 @@ header. The tunnel works like this:
 - **Sign-in:** the relay sends a `challenge` nonce. The POS answers `auth` with the signature of
   `tunnel:{nonce}`, and the relay replies `ready`.
 - **Requests:** customer requests arrive as `request` messages. The POS replays each one on loopback
-  against the Server App, sending the customer address from `client_ip` as `X-Forwarded-For`.
+  against the Server App, sending the customer address from `client_ip` as `X-Forwarded-For`. A
+  request without a valid `client_ip` answers `400` without reaching the Server App, so guests never
+  share loopback's rate limits. The relay takes that address from its edge header
+  (`CLIENT_IP_HEADER`, default `cf-connecting-ip`) or, with the header unset, from the socket, never
+  from the customer's own `X-Forwarded-For`. The POS gives up on a request after 12 seconds, before the
+  relay's 15.
 - **Answers:** each answer goes back as a `response` message without cookies.
 - **Trust:** while the tunnel runs, loopback counts as a trusted proxy, so rate limits key on the
   customer.

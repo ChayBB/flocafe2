@@ -294,6 +294,45 @@ test.describe('Server App guest from a table QR', () => {
   });
 });
 
+test('guests at one table ordering at the same moment share one bill, and every order needs a key', async ({
+  page,
+  request,
+}) => {
+  const table = await createTable(page);
+  const post = (data: Record<string, unknown>) =>
+    request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+      data: {
+        table_id: table.id,
+        table_token: table.token,
+        items: [{ product_id: 'e2e-product', quantity: 1 }],
+        ...data,
+      },
+    });
+
+  const keyless = await post({});
+  expect(keyless.status()).toBe(400);
+  expect((await keyless.json()).code).toBe('idempotency_key_required');
+
+  const run = Math.random().toString(36).slice(2, 10);
+  const sent = await Promise.all(
+    ['a', 'b'].map((phone) => post({ idempotency_key: `guest-${run}-${phone}` })),
+  );
+  for (const response of sent) expect(response.status()).toBe(201);
+  // A retry with a key already used is a replay, not another dish.
+  expect((await post({ idempotency_key: `guest-${run}-a` })).status()).toBe(201);
+
+  const orders = (
+    await (
+      await page.request.get(`${E2E_BASE_URL}/api/orders`, {
+        headers: manager(),
+        params: { table_id: table.id, type: 'dine_in', per_page: 5 },
+      })
+    ).json()
+  ).orders as { items: { quantity: number; status: string }[] }[];
+  expect(orders).toHaveLength(1);
+  expect(orders[0].items.reduce((sum, item) => sum + item.quantity, 0)).toBe(2);
+});
+
 test('the QR ordering checkbox in OrderFlow settings closes and reopens ordering from a table QR', async ({
   page,
 }) => {

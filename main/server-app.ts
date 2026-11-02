@@ -280,6 +280,20 @@ async function callMainApiAsGuest(
   }
 }
 
+const guestOrderQueues = new Map<string, Promise<unknown>>();
+
+/** Guest orders for one table run one at a time, so two phones ordering at once never open two bills. */
+function oneGuestOrderAtATime<T>(tableId: string, work: () => Promise<T>): Promise<T> {
+  const previous = guestOrderQueues.get(tableId) ?? Promise.resolve();
+  const run = previous.then(work, work);
+  const settled = run.catch(() => undefined);
+  guestOrderQueues.set(tableId, settled);
+  void settled.then(() => {
+    if (guestOrderQueues.get(tableId) === settled) guestOrderQueues.delete(tableId);
+  });
+  return run;
+}
+
 /** The Guest account exists only for audit attribution: it has no usable password and no staff code. */
 function ensureGuestUser(): void {
   const db = getDatabase();
@@ -586,46 +600,69 @@ export function startServerApp(): Promise<void> {
           const note = sanitizeGuestOrderNote(req.body?.special_instructions);
           if (note === false) return res.status(400).json({ error: 'The order note is too long' });
 
-          const rawKey = req.body?.idempotency_key;
-          const key =
-            typeof rawKey === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(rawKey)
-              ? rawKey
-              : randomUUID();
+          // The page keeps one key until the order goes through, so a retry after a lost answer is a replay.
+          const key = req.body?.idempotency_key;
+          if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(key)) {
+            return res
+              .status(400)
+              .json({ error: 'An order key is required', code: 'idempotency_key_required' });
+          }
           const headers = { 'Idempotency-Key': `guest-${tableId}-${key}` };
 
           ensureGuestUser();
-          const open = db
-            .prepare(
-              `SELECT id FROM orders WHERE table_id = ? AND type = 'dine_in'
-               AND status IN ('pending', 'preparing', 'ready') ORDER BY id DESC LIMIT 1`,
-            )
-            .get(tableId) as { id: number } | undefined;
-          const existingItemIds = new Set(
-            open
-              ? (
-                  db.prepare('SELECT id FROM order_items WHERE order_id = ?').all(open.id) as {
-                    id: number;
-                  }[]
-                ).map((row) => row.id)
-              : [],
-          );
-
-          const result = await trackHttpRequestWork(
-            req,
-            open
-              ? callMainApiAsGuest(req, 'POST', `/orders/${open.id}/items`, {
-                  body: { items: sanitized.items, special_instructions: note ?? undefined },
-                  headers,
-                })
-              : callMainApiAsGuest(req, 'POST', '/orders', {
-                  body: {
-                    table_id: tableId,
-                    type: 'dine_in',
-                    special_instructions: note ?? undefined,
-                    items: sanitized.items,
-                  },
-                  headers,
-                }),
+          const { result, existingItemIds, replayed } = await oneGuestOrderAtATime(
+            tableId,
+            async () => {
+              // A retry whose first try went through answers from the stored result: the bill it opened
+              // would now send the retry down the add-items route, where the same key reads as a new request.
+              const stored = db
+                .prepare(
+                  'SELECT response_json FROM order_idempotency WHERE user_id = ? AND idempotency_key = ?',
+                )
+                .get(GUEST_USER_ID, headers['Idempotency-Key']) as
+                | { response_json: string }
+                | undefined;
+              if (stored) {
+                return {
+                  result: { status: 201, data: JSON.parse(stored.response_json) },
+                  existingItemIds: new Set<number>(),
+                  replayed: true,
+                };
+              }
+              const open = db
+                .prepare(
+                  `SELECT id FROM orders WHERE table_id = ? AND type = 'dine_in'
+                 AND status IN ('pending', 'preparing', 'ready') ORDER BY id DESC LIMIT 1`,
+                )
+                .get(tableId) as { id: number } | undefined;
+              const existingItemIds = new Set(
+                open
+                  ? (
+                      db.prepare('SELECT id FROM order_items WHERE order_id = ?').all(open.id) as {
+                        id: number;
+                      }[]
+                    ).map((row) => row.id)
+                  : [],
+              );
+              const result = await trackHttpRequestWork(
+                req,
+                open
+                  ? callMainApiAsGuest(req, 'POST', `/orders/${open.id}/items`, {
+                      body: { items: sanitized.items, special_instructions: note ?? undefined },
+                      headers,
+                    })
+                  : callMainApiAsGuest(req, 'POST', '/orders', {
+                      body: {
+                        table_id: tableId,
+                        type: 'dine_in',
+                        special_instructions: note ?? undefined,
+                        items: sanitized.items,
+                      },
+                      headers,
+                    }),
+              );
+              return { result, existingItemIds, replayed: false };
+            },
           );
           if (result.status >= 400 || !result.data?.order) {
             return res
@@ -634,6 +671,11 @@ export function startServerApp(): Promise<void> {
           }
 
           const order = result.data.order;
+          if (replayed) {
+            return res
+              .status(201)
+              .json({ success: true, order_number: order.order_number ?? null });
+          }
           const newItems = (order.items || []).filter(
             (item: { id: number }) => !existingItemIds.has(item.id),
           );

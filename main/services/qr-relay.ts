@@ -1,4 +1,10 @@
-import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
+import {
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  sign,
+  type KeyObject,
+} from 'node:crypto';
 import * as http from 'node:http';
 import { isIP } from 'node:net';
 import * as os from 'node:os';
@@ -6,7 +12,11 @@ import QRCode from 'qrcode';
 import { WebSocket, type RawData } from 'ws';
 import { getSettingValue, upsertSettings } from '../db';
 import { getServerAppPort } from '../server-app-state';
-import { GUEST_QR_PUBLIC_URL_KEY, normalizePublicBaseUrl, setRelayLoopbackTrusted } from '../lib/guest-qr';
+import {
+  GUEST_QR_PUBLIC_URL_KEY,
+  normalizePublicBaseUrl,
+  setRelayLoopbackTrusted,
+} from '../lib/guest-qr';
 
 /**
  * The QR-ordering relay: the POS pairs with a relay server by a short code, then keeps one outbound
@@ -19,7 +29,8 @@ export const QR_RELAY_PRIVATE_KEY = 'qr_relay_private_key';
 export const QR_RELAY_STORE_KEY = 'qr_relay_store_id';
 
 const REQUEST_TIMEOUT_MS = 10_000;
-const LOCAL_TIMEOUT_MS = 15_000;
+// Shorter than the relay's own 15-second wait, so the customer gets this POS's answer, not a relay timeout.
+const LOCAL_TIMEOUT_MS = 12_000;
 const PING_MS = 25_000;
 const RECONNECT_MIN_MS = 1_000;
 const RECONNECT_MAX_MS = 60_000;
@@ -34,13 +45,27 @@ const GUEST_ROUTES: [string, RegExp][] = [
 ];
 const STATIC_PATH =
   /^\/(server-standalone(\/[\w.-]*)*|_next\/static\/[\w./@-]+|favicon\.ico|icons\/[\w.-]+|fonts\/[\w.-]+|[\w.-]+\.(png|svg|ico|webmanifest|woff2?))$/;
-const FORWARDED_REQUEST_HEADERS = ['accept', 'accept-language', 'content-type', 'if-none-match', 'if-modified-since', 'user-agent'];
-const RETURNED_RESPONSE_HEADERS = ['content-type', 'cache-control', 'etag', 'last-modified', 'content-language'];
+const FORWARDED_REQUEST_HEADERS = [
+  'accept',
+  'accept-language',
+  'content-type',
+  'if-none-match',
+  'if-modified-since',
+  'user-agent',
+];
+const RETURNED_RESPONSE_HEADERS = [
+  'content-type',
+  'cache-control',
+  'etag',
+  'last-modified',
+  'content-language',
+];
 
 /** Which method and path the tunnel may pass to the Server App; everything else is refused here. */
 export function isRelayPathAllowed(method: string, pathname: string): boolean {
   if (pathname.includes('..') || pathname.includes('//')) return false;
-  if (GUEST_ROUTES.some(([allowed, pattern]) => allowed === method && pattern.test(pathname))) return true;
+  if (GUEST_ROUTES.some(([allowed, pattern]) => allowed === method && pattern.test(pathname)))
+    return true;
   return (method === 'GET' || method === 'HEAD') && STATIC_PATH.test(pathname);
 }
 
@@ -59,7 +84,11 @@ export function normalizeRelayServerUrl(value: unknown): string | null {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-export type QrRelayErrorCode = 'server_url_invalid' | 'relay_unreachable' | 'relay_bad_response' | 'not_pairing';
+export type QrRelayErrorCode =
+  | 'server_url_invalid'
+  | 'relay_unreachable'
+  | 'relay_bad_response'
+  | 'not_pairing';
 
 export class QrRelayError extends Error {
   constructor(public code: QrRelayErrorCode) {
@@ -101,7 +130,11 @@ function signText(text: string): string {
   return sign(null, Buffer.from(text), key).toString('base64url');
 }
 
-async function relayPost(serverUrl: string, path: string, body: unknown): Promise<Record<string, unknown>> {
+async function relayPost(
+  serverUrl: string,
+  path: string,
+  body: unknown,
+): Promise<Record<string, unknown>> {
   let response: Response;
   try {
     response = await fetch(`${serverUrl}${path}`, {
@@ -114,7 +147,8 @@ async function relayPost(serverUrl: string, path: string, body: unknown): Promis
     throw new QrRelayError('relay_unreachable');
   }
   const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok || !data || typeof data !== 'object') throw new QrRelayError('relay_bad_response');
+  if (!response.ok || !data || typeof data !== 'object')
+    throw new QrRelayError('relay_bad_response');
   return data;
 }
 
@@ -134,7 +168,12 @@ export async function startQrRelayPairing(rawServerUrl: unknown): Promise<void> 
     device_name: os.hostname(),
   });
   const { pairing_id: id, code, expires_at: expiresAt } = data;
-  if (typeof id !== 'string' || typeof code !== 'string' || !/^\d{6}$/.test(code) || typeof expiresAt !== 'string') {
+  if (
+    typeof id !== 'string' ||
+    typeof code !== 'string' ||
+    !/^\d{6}$/.test(code) ||
+    typeof expiresAt !== 'string'
+  ) {
     throw new QrRelayError('relay_bad_response');
   }
   const approveUrl = `${serverUrl}/admin/pair?code=${code}`;
@@ -143,7 +182,11 @@ export async function startQrRelayPairing(rawServerUrl: unknown): Promise<void> 
     id,
     code,
     expiresAt,
-    qrDataUrl: await QRCode.toDataURL(approveUrl, { errorCorrectionLevel: 'M', margin: 1, width: 256 }),
+    qrDataUrl: await QRCode.toDataURL(approveUrl, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 256,
+    }),
   };
   lastError = null;
 }
@@ -162,7 +205,10 @@ export async function checkQrRelayPairing(): Promise<void> {
     if (typeof data.store_id !== 'string' || !data.store_id || !publicBaseUrl) {
       throw new QrRelayError('relay_bad_response');
     }
-    upsertSettings({ [QR_RELAY_STORE_KEY]: data.store_id, [GUEST_QR_PUBLIC_URL_KEY]: publicBaseUrl });
+    upsertSettings({
+      [QR_RELAY_STORE_KEY]: data.store_id,
+      [GUEST_QR_PUBLIC_URL_KEY]: publicBaseUrl,
+    });
     pairing = null;
     startQrRelay();
   } else if (data.status === 'expired' || data.status === 'rejected') {
@@ -187,7 +233,11 @@ export async function unpairQrRelay(): Promise<void> {
       signature: signText(`unpair:${storeId}`),
     }).catch(() => undefined);
   }
-  upsertSettings({ [QR_RELAY_PRIVATE_KEY]: '', [QR_RELAY_STORE_KEY]: '', [GUEST_QR_PUBLIC_URL_KEY]: '' });
+  upsertSettings({
+    [QR_RELAY_PRIVATE_KEY]: '',
+    [QR_RELAY_STORE_KEY]: '',
+    [GUEST_QR_PUBLIC_URL_KEY]: '',
+  });
   lastError = null;
 }
 
@@ -199,7 +249,9 @@ export function getQrRelayStatus() {
     connected,
     store_id: storeId,
     public_base_url: storeId ? getSettingValue(GUEST_QR_PUBLIC_URL_KEY) || '' : '',
-    pairing: pairing ? { code: pairing.code, qr_data_url: pairing.qrDataUrl, expires_at: pairing.expiresAt } : null,
+    pairing: pairing
+      ? { code: pairing.code, qr_data_url: pairing.qrDataUrl, expires_at: pairing.expiresAt }
+      : null,
     last_error: lastError,
   };
 }
@@ -317,8 +369,11 @@ function onMessage(ws: WebSocket, storeId: string, data: RawData): void {
 }
 
 async function forward(ws: WebSocket, id: string, message: Record<string, unknown>): Promise<void> {
-  const reply = (status: number, headers: Record<string, string> = {}, body: Buffer = Buffer.alloc(0)) =>
-    send(ws, { type: 'response', id, status, headers, body: body.toString('base64') });
+  const reply = (
+    status: number,
+    headers: Record<string, string> = {},
+    body: Buffer = Buffer.alloc(0),
+  ) => send(ws, { type: 'response', id, status, headers, body: body.toString('base64') });
   const method = typeof message.method === 'string' ? message.method.toUpperCase() : '';
   let target: URL;
   try {
@@ -326,59 +381,72 @@ async function forward(ws: WebSocket, id: string, message: Record<string, unknow
   } catch {
     return reply(400);
   }
-  if (target.host !== 'relay.invalid' || !isRelayPathAllowed(method, target.pathname)) return reply(404);
-  const body = typeof message.body === 'string' ? Buffer.from(message.body, 'base64') : Buffer.alloc(0);
+  if (target.host !== 'relay.invalid' || !isRelayPathAllowed(method, target.pathname))
+    return reply(404);
+  // Without the customer's address every guest would share loopback's rate limits, and loopback skips some.
+  const clientIp = typeof message.client_ip === 'string' ? message.client_ip : '';
+  if (!isIP(clientIp)) return reply(400);
+  const body =
+    typeof message.body === 'string' ? Buffer.from(message.body, 'base64') : Buffer.alloc(0);
   if (body.length > MAX_REQUEST_BODY) return reply(413);
   if (inFlight >= MAX_IN_FLIGHT) return reply(503);
 
-  const given = (message.headers && typeof message.headers === 'object' ? message.headers : {}) as Record<string, unknown>;
+  const given = (
+    message.headers && typeof message.headers === 'object' ? message.headers : {}
+  ) as Record<string, unknown>;
   const headers: Record<string, string> = {};
   for (const name of FORWARDED_REQUEST_HEADERS) {
     if (typeof given[name] === 'string') headers[name] = given[name] as string;
   }
-  if (typeof message.client_ip === 'string' && isIP(message.client_ip)) headers['x-forwarded-for'] = message.client_ip;
+  headers['x-forwarded-for'] = clientIp;
   if (body.length > 0) headers['content-length'] = String(body.length);
 
   inFlight += 1;
   try {
-    const result = await new Promise<{ status: number; headers: Record<string, string>; body: Buffer }>(
-      (resolve, reject) => {
-        const request = http.request(
-          {
-            host: '127.0.0.1',
-            port: getServerAppPort(),
-            method,
-            path: `${target.pathname}${target.search}`,
-            headers,
-            timeout: LOCAL_TIMEOUT_MS,
-          },
-          (response) => {
-            const chunks: Buffer[] = [];
-            let size = 0;
-            response.on('data', (chunk: Buffer) => {
-              size += chunk.length;
-              if (size > MAX_RESPONSE_BODY) {
-                request.destroy(new Error('response too large'));
-                return;
-              }
-              chunks.push(chunk);
+    const result = await new Promise<{
+      status: number;
+      headers: Record<string, string>;
+      body: Buffer;
+    }>((resolve, reject) => {
+      const request = http.request(
+        {
+          host: '127.0.0.1',
+          port: getServerAppPort(),
+          method,
+          path: `${target.pathname}${target.search}`,
+          headers,
+          timeout: LOCAL_TIMEOUT_MS,
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          response.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > MAX_RESPONSE_BODY) {
+              request.destroy(new Error('response too large'));
+              return;
+            }
+            chunks.push(chunk);
+          });
+          response.on('end', () => {
+            const returned: Record<string, string> = {};
+            for (const name of RETURNED_RESPONSE_HEADERS) {
+              const value = response.headers[name];
+              if (typeof value === 'string') returned[name] = value;
+            }
+            resolve({
+              status: response.statusCode || 502,
+              headers: returned,
+              body: Buffer.concat(chunks),
             });
-            response.on('end', () => {
-              const returned: Record<string, string> = {};
-              for (const name of RETURNED_RESPONSE_HEADERS) {
-                const value = response.headers[name];
-                if (typeof value === 'string') returned[name] = value;
-              }
-              resolve({ status: response.statusCode || 502, headers: returned, body: Buffer.concat(chunks) });
-            });
-            response.on('error', reject);
-          },
-        );
-        request.on('timeout', () => request.destroy(new Error('timeout')));
-        request.on('error', reject);
-        request.end(body.length > 0 ? body : undefined);
-      },
-    );
+          });
+          response.on('error', reject);
+        },
+      );
+      request.on('timeout', () => request.destroy(new Error('timeout')));
+      request.on('error', reject);
+      request.end(body.length > 0 ? body : undefined);
+    });
     reply(result.status, result.headers, result.body);
   } catch {
     reply(502);
