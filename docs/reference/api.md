@@ -399,7 +399,9 @@ served, then prints the bill. It sets `bill_requested_at`, `bill_requested_by` a
 entry. It answers `409` for a completed or cancelled order, `409` `weight_pending` while a live
 item still waits for its weight or kitchen price, and `409` `served_unconfirmed` until every live
 item is confirmed served. Paying the order's last unpaid bill sets
-`bill_payment_received_at` (a trigger on `bills.payment_status`). `GET /api/bill-requests`
+`bill_payment_received_at` (a trigger on `bills.payment_status`). Until then the table takes no more
+food: `POST /:id/items` on that order, and `POST /` for a dine-in order on that table, answer `409`
+`bill_awaiting_payment` unless the actor has `payments.take`. `GET /api/bill-requests`
 (`payments.take`, router `main/routes/bill-requests.ts`) returns
 `{ requests: [{ id, order_number, total, table_name, bill_requested_at, bill_requested_by_name }] }`
 for open orders still waiting, which the POS polls every 5 seconds to beep for a

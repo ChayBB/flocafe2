@@ -171,6 +171,22 @@ const orderItemCancelRateLimit = expressRateLimit({
 const MAX_ORDER_IDEMPOTENCY_KEY_LENGTH = 128;
 const MAX_ORDER_ITEMS = 200;
 
+/** Once a table's bill is printed it takes no more food until the cashier receives the payment. */
+function assertTableNotAwaitingPayment(
+  order:
+    | { bill_requested_at?: string | null; bill_payment_received_at?: string | null }
+    | undefined,
+  actorId: string,
+): void {
+  if (!order?.bill_requested_at || order.bill_payment_received_at) return;
+  // Staff who take payments can still add to the bill before they receive it.
+  if (hasPermission(actorId, 'payments.take')) return;
+  throw Object.assign(new Error('This table is waiting for the cashier to receive its payment'), {
+    statusCode: 409,
+    code: 'bill_awaiting_payment',
+  });
+}
+
 function structuredOperationFailure(
   req: Request,
   capturePoint: string,
@@ -1669,6 +1685,19 @@ router.post(
             }
           }
         }
+        if (type === 'dine_in' && table_id) {
+          assertTableNotAwaitingPayment(
+            db
+              .prepare(
+                `SELECT bill_requested_at, bill_payment_received_at FROM orders
+                 WHERE table_id = ? AND status NOT IN ('completed', 'cancelled')
+                   AND bill_requested_at IS NOT NULL AND bill_payment_received_at IS NULL
+                 LIMIT 1`,
+              )
+              .get(table_id) as { bill_requested_at: string | null } | undefined,
+            String(authenticatedUserId),
+          );
+        }
         // Generate order number inside transaction to prevent race conditions
         const orderNumber = generateOrderNumber();
 
@@ -2070,16 +2099,15 @@ router.post(
             : statusCode >= 500
               ? 'fc.backend.order.create.persistence'
               : 'fc.backend.order.create.other_validation';
-      return res
-        .status(statusCode)
-        .json(
-          structuredOperationFailure(
-            req,
-            point,
-            operationCommitted ? 'applied' : 'not_applied',
-            error.statusCode ? error.message : 'Internal server error',
-          ),
-        );
+      return res.status(statusCode).json({
+        ...structuredOperationFailure(
+          req,
+          point,
+          operationCommitted ? 'applied' : 'not_applied',
+          error.statusCode ? error.message : 'Internal server error',
+        ),
+        ...(error.code === 'bill_awaiting_payment' ? { code: error.code } : {}),
+      });
     }
   },
 );
@@ -2195,6 +2223,7 @@ router.post(
             statusCode: 400,
           });
         }
+        assertTableNotAwaitingPayment(currentOrder, idempotencyUserId);
         const refundedBill = db
           .prepare(
             `SELECT 1 FROM bills WHERE order_id = ? AND payment_status IN ('refunded', 'partially_refunded') LIMIT 1`,
@@ -2386,16 +2415,15 @@ router.post(
         : statusCode >= 500
           ? 'fc.backend.order.append.persistence'
           : 'fc.backend.order.append.validation';
-      return res
-        .status(statusCode)
-        .json(
-          structuredOperationFailure(
-            req,
-            point,
-            operationCommitted ? 'applied' : 'not_applied',
-            message,
-          ),
-        );
+      return res.status(statusCode).json({
+        ...structuredOperationFailure(
+          req,
+          point,
+          operationCommitted ? 'applied' : 'not_applied',
+          message,
+        ),
+        ...(error.code === 'bill_awaiting_payment' ? { code: error.code } : {}),
+      });
     }
   },
 );

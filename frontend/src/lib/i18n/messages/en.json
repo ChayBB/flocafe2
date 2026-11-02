@@ -1753,6 +1753,8 @@
     "newItems": "New items",
     "noTablesHint": "Tableside ordering is for dine-in service. Ask an owner or manager to add tables, or to turn off Tableside Ordering in Settings.",
     "noTablesTitle": "No tables set up",
+    "tableAwaitingPayment": "Waiting for payment",
+    "tableAwaitingPaymentLocked": "Bill printed. This table can order again once the cashier receives the payment.",
     "openOrder": "Open order",
     "orderSent": "Order sent",
     "orderSlipDeliveryCharge": "Delivery Charge",

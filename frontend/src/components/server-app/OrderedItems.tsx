@@ -286,6 +286,7 @@ export function OrderedItemsScreen({
   timezone,
   onBack,
   onAddItems,
+  addItemsLocked = false,
   onTakeaway,
   onCancel,
   onConfirmServed,
@@ -299,6 +300,8 @@ export function OrderedItemsScreen({
   timezone?: string;
   onBack: () => void;
   onAddItems: () => void;
+  /** The bill is out, so the table takes no more food until it is paid. */
+  addItemsLocked?: boolean;
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
   onConfirmServed: (item: OrderedItem) => Promise<void>;
@@ -471,7 +474,8 @@ export function OrderedItemsScreen({
           type="button"
           data-testid="server-app-ordered-add"
           onClick={onAddItems}
-          className="flex h-12 items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand"
+          disabled={addItemsLocked}
+          className="flex h-12 items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand disabled:opacity-40"
         >
           <Plus size={17} />
           {t('addFoodItems')}

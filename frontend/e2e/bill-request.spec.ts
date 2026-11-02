@@ -37,7 +37,7 @@ async function countBeeps(page: Page) {
   });
 }
 
-test('printing a fully served table’s bill makes the POS time the wait for payment, with a two-beep alert', async ({
+test('printing a fully served table’s bill makes the POS time the wait for payment, with a two-beep alert, and closes the table to new food until paid', async ({
   page,
   context,
 }) => {
@@ -130,6 +130,20 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
   await expect(phone.getByText('The cashier has been told', { exact: true }).first()).toBeVisible();
   await expect(phone.getByText('Bill printed; the cashier has been told')).toHaveCount(0);
 
+  // The table takes no more food: the menu is locked and the table turns amber with a clock.
+  await expect(phone.getByTestId('server-app-ordered-add')).toBeDisabled();
+  await phone.getByTestId('server-app-ordered-exit').click();
+  await expect(phone.getByTestId('server-app-awaiting-payment')).toBeVisible();
+  await expect(phone.getByTestId('pos-product-card').first()).toBeDisabled();
+  await expect(phone.getByText('The cashier has been told', { exact: true }).first()).toBeHidden({
+    timeout: 15000,
+  });
+  await openServerAppTables(phone);
+  const tile = phone.getByRole('button', { name: new RegExp(label) });
+  await expect(tile).toHaveAttribute('data-table-tone', 'awaiting', { timeout: 15000 });
+  await expect(tile.getByTestId('table-awaiting-payment')).toBeVisible();
+  await expect(tile).toContainText('Waiting for payment');
+
   // POS: two beeps, no top bar; the order row turns pink and the wait counts up.
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __beeps: number }).__beeps), {
@@ -177,4 +191,15 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
       .filter({ hasText: `#${created.order_number}` })
       .first(),
   ).not.toHaveAttribute('data-bill-awaiting', 'true');
+
+  // Once paid the table is free and takes orders again.
+  await phone.reload();
+  await openServerAppTables(phone);
+  await expect(phone.getByRole('button', { name: new RegExp(label) })).not.toHaveAttribute(
+    'data-table-tone',
+    'awaiting',
+  );
+  await phone.getByRole('button', { name: new RegExp(label) }).click();
+  await expect(phone.getByTestId('pos-product-card').first()).toBeEnabled();
+  await expect(phone.getByTestId('server-app-awaiting-payment')).toHaveCount(0);
 });

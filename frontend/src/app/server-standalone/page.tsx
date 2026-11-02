@@ -18,6 +18,7 @@ import {
   MoreVertical,
   ArrowLeftRight,
   Merge,
+  Clock,
 } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -88,6 +89,8 @@ type Order = {
   customer?: { id: string; name: string; phone?: string } | null;
   /** Menu lines still waiting or cooking, ready to serve, and served. */
   kitchen_counts?: { waiting: number; ready: number; served: number };
+  bill_requested_at?: string | null;
+  bill_payment_received_at?: string | null;
 };
 type DraftLine = CartItem;
 type ServerAppInfo = {
@@ -166,6 +169,11 @@ function sendAttemptSignature(
 }
 
 /** Staff who own tables see only those; everyone else sees every table. Ownership never restricts ordering. */
+/** A table whose bill is printed waits for the cashier and takes no more orders. */
+function awaitingPayment(order: Order | null | undefined): boolean {
+  return Boolean(order?.bill_requested_at && !order.bill_payment_received_at);
+}
+
 function ownedOrAllTables<T extends { owner_user_id?: string | null }>(
   tables: T[],
   userId: string | undefined,
@@ -626,7 +634,14 @@ export default function ServerStandalonePage() {
   async function requestBill() {
     if (!api || !currentOrder) return;
     try {
-      await api.post(`/api/orders/${currentOrder.id}/bill-request`, {});
+      const { data } = await api.post(`/api/orders/${currentOrder.id}/bill-request`, {});
+      // The table stops taking orders as soon as its bill is out.
+      if (data?.order)
+        setCurrentOrder((order) =>
+          order && order.id === data.order.id
+            ? { ...order, ...data.order, items: order.items }
+            : order,
+        );
     } catch (error: unknown) {
       const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
       if (code === 'weight_pending') toast.error(t('billBlockedPricePending'));
@@ -995,7 +1010,12 @@ export default function ServerStandalonePage() {
       setMobileCartOpen(false);
       toast.success(t('orderSent'));
     } catch (error: unknown) {
-      toastApiError(error, t('couldNotSendOrder'), apiErrorT);
+      if (
+        (error as { response?: { data?: { code?: string } } })?.response?.data?.code ===
+        'bill_awaiting_payment'
+      )
+        toast.error(t('tableAwaitingPaymentLocked'));
+      else toastApiError(error, t('couldNotSendOrder'), apiErrorT);
     } finally {
       sendInFlightRef.current = false;
       setSending(false);
@@ -1131,7 +1151,12 @@ export default function ServerStandalonePage() {
         if ((await printOrderSlip(orderId)) === 'failed') toast.error(t('billPrintFailed'));
       })();
     } catch (error: unknown) {
-      toastApiError(error, t('couldNotSendOrder'), apiErrorT);
+      if (
+        (error as { response?: { data?: { code?: string } } })?.response?.data?.code ===
+        'bill_awaiting_payment'
+      )
+        toast.error(t('tableAwaitingPaymentLocked'));
+      else toastApiError(error, t('couldNotSendOrder'), apiErrorT);
     } finally {
       sendInFlightRef.current = false;
       setSending(false);
@@ -1139,6 +1164,9 @@ export default function ServerStandalonePage() {
   }
 
   const activeTable = tables.find((table) => table.id === selectedTableId) || null;
+  const orderingLocked =
+    awaitingPayment(currentOrder) ||
+    awaitingPayment(activeTable?.activeOrder || activeTable?.current_order);
   const headerTableText = activeTable
     ? t('tableLabel', { name: activeTable.name ?? String(activeTable.number) })
     : t('selectTable');
@@ -1467,6 +1495,7 @@ export default function ServerStandalonePage() {
             onClick={sendDraft}
             disabled={
               !selectedTableId ||
+              orderingLocked ||
               orderLoadedTableId !== selectedTableId ||
               draft.length === 0 ||
               sending
@@ -1569,14 +1598,18 @@ export default function ServerStandalonePage() {
                 {ownedOrAllTables(tables, user?.id).map((table) => {
                   const selected = table.id === selectedTableId;
                   const order = table.activeOrder || table.current_order;
-                  // Serving tables are light green, cleaning ones light yellow, free ones white.
+                  // Serving tables are light green, ones waiting to pay amber with a clock, cleaning
+                  // ones light yellow, free ones white.
                   const tone = order
-                    ? 'serving'
+                    ? awaitingPayment(order)
+                      ? 'awaiting'
+                      : 'serving'
                     : table.status === 'cleaning'
                       ? 'cleaning'
                       : 'available';
                   const toneClass = {
                     serving: 'border-green-300 bg-green-100',
+                    awaiting: 'border-amber-300 bg-amber-50',
                     cleaning: 'border-yellow-300 bg-yellow-100',
                     available: 'border-gray-200 bg-white',
                   }[tone];
@@ -1594,29 +1627,41 @@ export default function ServerStandalonePage() {
                         }
                       }}
                       data-table-tone={tone}
-                      className={`min-h-14 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
+                      className={`flex min-h-14 items-center gap-2 rounded-lg border px-2 py-2 text-start text-gray-900 disabled:opacity-50 ${toneClass} ${selected ? 'ring-2 ring-brand' : ''}`}
                     >
-                      <span className="block truncate text-sm font-semibold">
-                        {table.name || table.number}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {table.name || table.number}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          {tone === 'awaiting'
+                            ? t('tableAwaitingPayment')
+                            : order
+                              ? t('openOrder')
+                              : tone === 'cleaning'
+                                ? tTables('statusCleaning')
+                                : tTables('statusAvailable')}
+                          {order?.kitchen_counts && (
+                            <Ltr
+                              as="span"
+                              data-testid="table-kitchen-counts"
+                              title={t('kitchenCountsTitle', order.kitchen_counts)}
+                              className="ms-1 tabular-nums text-gray-500"
+                            >
+                              {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-
+                              {order.kitchen_counts.served}
+                            </Ltr>
+                          )}
+                        </span>
                       </span>
-                      <span className="text-xs text-gray-600">
-                        {order
-                          ? t('openOrder')
-                          : tone === 'cleaning'
-                            ? tTables('statusCleaning')
-                            : tTables('statusAvailable')}
-                        {order?.kitchen_counts && (
-                          <Ltr
-                            as="span"
-                            data-testid="table-kitchen-counts"
-                            title={t('kitchenCountsTitle', order.kitchen_counts)}
-                            className="ms-1 tabular-nums text-gray-500"
-                          >
-                            {order.kitchen_counts.waiting}-{order.kitchen_counts.ready}-
-                            {order.kitchen_counts.served}
-                          </Ltr>
-                        )}
-                      </span>
+                      {tone === 'awaiting' && (
+                        <span
+                          data-testid="table-awaiting-payment"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600"
+                        >
+                          <Clock size={17} />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1635,6 +1680,15 @@ export default function ServerStandalonePage() {
                 />
               </div>
             )}
+            {orderingLocked && (
+              <div
+                data-testid="server-app-awaiting-payment"
+                className="mb-3 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+              >
+                <Clock size={17} className="shrink-0 text-amber-600" />
+                {t('tableAwaitingPaymentLocked')}
+              </div>
+            )}
             <ProductGrid
               categories={categories}
               products={products}
@@ -1643,7 +1697,7 @@ export default function ServerStandalonePage() {
               search={query}
               setSearch={setQuery}
               currency={regional?.currency || ''}
-              disabled={sending}
+              disabled={sending || orderingLocked}
               onProductClick={(product, quantity) => {
                 if (sendInFlightRef.current) return;
                 if (productNeedsCustomizer(product)) {
@@ -1708,6 +1762,7 @@ export default function ServerStandalonePage() {
             setOrderedItemsOpen(false);
             setTablePickerOpen(false);
           }}
+          addItemsLocked={orderingLocked}
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
