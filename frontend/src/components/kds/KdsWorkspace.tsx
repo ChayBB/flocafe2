@@ -81,7 +81,7 @@ function announceKdsMessages(fresh: KdsMessage[]) {
     (message) => message.kind === 'emergency' || message.kind === 'kot_unprinted',
   );
   if (fresh.some((message) => message.kind !== 'takeaway')) playKdsAlert(emergency ? 3 : 1);
-  speakKds(fresh.map((message) => message.text).join('. '), kdsSpeechLang());
+  speakKds(fresh.map((message) => message.speech ?? message.text).join('. '), kdsSpeechLang());
 }
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
@@ -192,6 +192,13 @@ export function KdsWorkspace({
         id: `alert:${alert.id}`,
         kind: alert.kind,
         at: alert.created_at,
+        // Order numbers are shown but never read out.
+        speech:
+          alert.kind === 'kot_unprinted'
+            ? alert.table
+              ? t('messageKotUnprinted', { place: t('tableLabel', { name: alert.table }) })
+              : t('messageKotUnprintedNoTable')
+            : undefined,
         text:
           alert.kind === 'kot_unprinted'
             ? t('messageKotUnprinted', {

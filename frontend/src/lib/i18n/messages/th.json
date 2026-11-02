@@ -563,6 +563,7 @@
     "messageTakeaway": "{place}: {item} เปลี่ยนเป็นสั่งกลับบ้าน",
     "messageCancelled": "{place}: {item} ยกเลิกแล้ว",
     "messageKotUnprinted": "ใบสั่งอาหาร {place} ยังไม่ได้พิมพ์",
+    "messageKotUnprintedNoTable": "มีใบสั่งอาหารที่ยังไม่ได้พิมพ์",
     "messageEmergency": "เหตุฉุกเฉิน",
     "messageFrom": "จาก {name}",
     "readAloudTable": "โต๊ะ {table} {items}",

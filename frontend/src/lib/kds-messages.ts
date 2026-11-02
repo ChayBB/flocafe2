@@ -13,6 +13,8 @@ export interface KdsMessage {
   id: string;
   kind: KdsMessageKind;
   text: string;
+  /** What is read aloud when it differs from the text, e.g. without an order number. */
+  speech?: string;
   at: string;
 }
 

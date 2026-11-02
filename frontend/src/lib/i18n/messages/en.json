@@ -563,6 +563,7 @@
     "messageTakeaway": "{place}: {item} changed to take-away",
     "messageCancelled": "{place}: {item} cancelled",
     "messageKotUnprinted": "Kitchen ticket for {place} did not print",
+    "messageKotUnprintedNoTable": "A kitchen ticket did not print",
     "messageEmergency": "Emergency",
     "messageFrom": "from {name}",
     "readAloudTable": "Table {table}: {items}",
