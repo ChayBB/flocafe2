@@ -653,6 +653,11 @@ router.get(
         if (statuses.length === 1 && statuses[0] === 'active') {
           wheres.push(activeOrderPredicate);
           params.push(isKdsEnabled() ? 1 : 0);
+        } else if (statuses.length === 1 && statuses[0] === 'bill_requested') {
+          // The bill is printed and the table waits for the cashier to receive the money.
+          wheres.push(`orders.bill_requested_at IS NOT NULL
+            AND orders.bill_payment_received_at IS NULL
+            AND orders.status NOT IN ('completed', 'cancelled')`);
         } else if (statuses.length === 1) {
           wheres.push('orders.status = ?');
           params.push(statuses[0]);

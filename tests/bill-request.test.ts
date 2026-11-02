@@ -154,6 +154,15 @@ async function main() {
     assertEqualOrThrow(listed.bill_requested_by_name, 'แมว', 'the list names who asked');
     const forbidden = await api(baseUrl, '/api/bill-requests', { headers: serverAuth });
     assertEqualOrThrow(forbidden.status, 403, 'only staff who take payments see the list');
+    const billRequestedIds = async () =>
+      (
+        (await api(baseUrl, '/api/orders?status=bill_requested', { headers: cashierAuth })).data
+          .orders as any[]
+      ).map((order) => order.id);
+    assertOrThrow(
+      (await billRequestedIds()).includes(orderId),
+      'the orders list filters to tables whose bill is printed and unpaid',
+    );
 
     // A printed bill closes the table to new food until the cashier receives the payment.
     db.prepare(
@@ -224,6 +233,10 @@ async function main() {
     assertOrThrow(
       !(await pending()).some((entry) => entry.id === orderId),
       'a paid table leaves the waiting list',
+    );
+    assertOrThrow(
+      !(await billRequestedIds()).includes(orderId),
+      'and leaves the printed-bill filter',
     );
     const reopened = await addItem(serverAuth);
     assertOrThrow(

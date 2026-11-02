@@ -1679,6 +1679,7 @@ export default function OrdersPage() {
         >
           <option value="">{tOrders('allStatuses')}</option>
           <option value="active">{tOrders('active')}</option>
+          <option value="bill_requested">{tOrders('billRequestedFilter')}</option>
           <option value="completed">{tOrders('completed')}</option>
           <option value="cancelled">{tOrders('cancelled')}</option>
         </select>

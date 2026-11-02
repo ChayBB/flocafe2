@@ -658,7 +658,7 @@
     "inventory": "สินค้าคงคลัง"
   },
   "orders": {
-    "active": "ดำเนินการอยู่",
+    "active": "ให้บริการอยู่",
     "addItem": "เพิ่มสินค้า",
     "addItems": "เพิ่มสินค้าเข้าคำสั่งซื้อ",
     "addItemsCount": "เพิ่มสินค้า {count} รายการ",
@@ -667,6 +667,7 @@
     "all": "ทั้งหมด",
     "allCategories": "ทุกหมวดหมู่",
     "allStatuses": "ทุกสถานะ",
+    "billRequestedFilter": "พิมพ์บิลแล้ว/รอยืนยันยอด",
     "allTables": "ทุกโต๊ะ",
     "allTypes": "ทุกประเภท",
     "applyDiscount": "ใช้ส่วนลด",
