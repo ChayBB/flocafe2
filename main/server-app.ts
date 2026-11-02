@@ -227,7 +227,9 @@ async function forwardToMainApiImpl(req: Request, res: Response, targetPath: str
 }
 
 function guestOrderingClosed(res: Response) {
-  return res.status(403).json({ code: 'guest_ordering_disabled', error: 'Ordering by QR code is turned off' });
+  return res
+    .status(403)
+    .json({ code: 'guest_ordering_disabled', error: 'Ordering by QR code is turned off' });
 }
 
 /** Calls the main API on behalf of the Guest account that table-QR visitors order as. */
@@ -235,10 +237,15 @@ async function callMainApiAsGuest(
   req: Request,
   method: 'GET' | 'POST',
   apiPath: string,
-  options: { body?: unknown; query?: Record<string, string>; headers?: Record<string, string> } = {},
+  options: {
+    body?: unknown;
+    query?: Record<string, string>;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<{ status: number; data: any }> {
   const target = new URL(`/api${apiPath}`, `http://127.0.0.1:${getServerPort()}`);
-  for (const [key, value] of Object.entries(options.query ?? {})) target.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(options.query ?? {}))
+    target.searchParams.set(key, value);
   const reservation = (req as any).databaseAdmissionReservation as
     | DatabaseAdmissionReservation
     | undefined;
@@ -327,10 +334,14 @@ export function startServerApp(): Promise<void> {
       });
     });
 
-    const configuredApiLimit = Number.parseInt(process.env.FLO_SERVER_APP_API_RATE_LIMIT_MAX || '', 10);
+    const configuredApiLimit = Number.parseInt(
+      process.env.FLO_SERVER_APP_API_RATE_LIMIT_MAX || '',
+      10,
+    );
     const serverAppApiRateLimit = expressRateLimit({
       windowMs: 60 * 1000,
-      limit: Number.isFinite(configuredApiLimit) && configuredApiLimit > 0 ? configuredApiLimit : 600,
+      limit:
+        Number.isFinite(configuredApiLimit) && configuredApiLimit > 0 ? configuredApiLimit : 600,
       standardHeaders: true,
       legacyHeaders: false,
     });
@@ -379,7 +390,9 @@ export function startServerApp(): Promise<void> {
         const identifier = String(req.body?.identifier ?? req.body?.email ?? '').trim();
         const password = req.body?.password;
         if (!identifier || !password)
-          return res.status(400).json({ error: 'Staff name or email and code or password required' });
+          return res
+            .status(400)
+            .json({ error: 'Staff name or email and code or password required' });
         const secret = String(password);
 
         const db = getDatabase();
@@ -575,7 +588,9 @@ export function startServerApp(): Promise<void> {
 
           const rawKey = req.body?.idempotency_key;
           const key =
-            typeof rawKey === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(rawKey) ? rawKey : randomUUID();
+            typeof rawKey === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(rawKey)
+              ? rawKey
+              : randomUUID();
           const headers = { 'Idempotency-Key': `guest-${tableId}-${key}` };
 
           ensureGuestUser();
@@ -662,25 +677,64 @@ export function startServerApp(): Promise<void> {
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
     );
-    app.post('/api/tables/:id/move-order', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
-      forwardToMainApi(req, res, `/tables/${encodeURIComponent(String(req.params.id))}/move-order`),
+    app.post(
+      '/api/tables/:id/move-order',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
+        forwardToMainApi(
+          req,
+          res,
+          `/tables/${encodeURIComponent(String(req.params.id))}/move-order`,
+        ),
     );
-    app.post('/api/orders/:id/merge-table', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
-      forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/merge-table`),
+    app.post(
+      '/api/orders/:id/merge-table',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
+        forwardToMainApi(
+          req,
+          res,
+          `/orders/${encodeURIComponent(String(req.params.id))}/merge-table`,
+        ),
     );
     app.post('/api/kds-alerts', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, '/kds-alerts'),
     );
-    app.post('/api/orders/:id/bill-request', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
-      forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/bill-request`),
-    );
-    for (const action of ['cancel', 'takeaway', 'confirm-served'] as const) {
-      app.patch(`/api/orders/:id/items/:itemId/${action}`, serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
+    app.post(
+      '/api/orders/:id/bill-request',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
         forwardToMainApi(
           req,
           res,
-          `/orders/${encodeURIComponent(String(req.params.id))}/items/${encodeURIComponent(String(req.params.itemId))}/${action}`,
+          `/orders/${encodeURIComponent(String(req.params.id))}/bill-request`,
         ),
+    );
+    app.post(
+      '/api/orders/:id/items/confirm-served',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
+        forwardToMainApi(
+          req,
+          res,
+          `/orders/${encodeURIComponent(String(req.params.id))}/items/confirm-served`,
+        ),
+    );
+    for (const action of ['cancel', 'takeaway', 'confirm-served'] as const) {
+      app.patch(
+        `/api/orders/:id/items/:itemId/${action}`,
+        serverAppApiRateLimit,
+        requireServerAppAuth,
+        (req, res) =>
+          forwardToMainApi(
+            req,
+            res,
+            `/orders/${encodeURIComponent(String(req.params.id))}/items/${encodeURIComponent(String(req.params.itemId))}/${action}`,
+          ),
       );
     }
     app.get('/api/customers-search', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>

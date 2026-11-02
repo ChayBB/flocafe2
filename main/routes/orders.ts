@@ -5719,6 +5719,98 @@ router.patch(
   },
 );
 
+/** Confirms one ready or served item reached the table; runs inside the caller's transaction. */
+function confirmItemServed(
+  db: ReturnType<typeof getDatabase>,
+  orderId: string,
+  itemId: string,
+  actorId: string,
+): void {
+  const item = db
+    .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
+    .get(itemId, orderId) as any;
+  if (!item) throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
+  if (item.status !== 'served' && item.status !== 'ready') {
+    throw Object.assign(new Error('Only ready or served items can be confirmed at the table'), {
+      statusCode: 409,
+    });
+  }
+  // Taking a ready dish to the table serves it, so staff need not wait for the kitchen to mark it.
+  if (item.status === 'ready') {
+    db.prepare("UPDATE order_items SET status = 'served', updated_at = ? WHERE id = ?").run(
+      now(),
+      itemId,
+    );
+  }
+  if (!item.served_confirmed_at) {
+    db.prepare(
+      'UPDATE order_items SET served_confirmed_at = ?, served_confirmed_by = ?, updated_at = ? WHERE id = ?',
+    ).run(now(), actorId, now(), itemId);
+    recordOrderAudit(db, {
+      orderId,
+      orderItemId: itemId,
+      actorUserId: actorId,
+      action: 'item_served_confirmed',
+      details: { product_name: item.product_name, from_status: item.status },
+    });
+  }
+}
+
+function orderWithItems(db: ReturnType<typeof getDatabase>, orderId: string) {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
+    string,
+    unknown
+  >;
+  const items = attachEffectiveAddons(
+    db,
+    db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as {
+      id: number;
+    }[],
+  );
+  return { ...order, items };
+}
+
+// POST /api/orders/:orderId/items/confirm-served — confirm several items reached the table at once.
+router.post(
+  '/:orderId/items/confirm-served',
+  orderItemCancelRateLimit,
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.orderId);
+      const actorId = String((req as any).user?.userId || '');
+      const itemIds: unknown = req.body?.item_ids;
+      if (
+        !Array.isArray(itemIds) ||
+        itemIds.length === 0 ||
+        itemIds.length > MAX_ORDER_ITEMS ||
+        !itemIds.every((id) => Number.isInteger(id) && id > 0)
+      ) {
+        return res.status(400).json({ error: 'item_ids must be a list of item ids' });
+      }
+      const db = getDatabase();
+      // All or nothing: one item that cannot be confirmed leaves the others unconfirmed too.
+      const order = withTxn(() => {
+        if (!db.prepare('SELECT id FROM orders WHERE id = ?').get(orderId)) {
+          throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+        }
+        for (const itemId of new Set(itemIds as number[])) {
+          confirmItemServed(db, orderId, String(itemId), actorId);
+        }
+        return orderWithItems(db, orderId);
+      });
+      notifyKdsUpdate();
+      res.json({ order });
+    } catch (err) {
+      const error = err as { statusCode?: number; message?: string };
+      if (!error.statusCode) console.error('[Orders] Confirm served error:', error);
+      res
+        .status(error.statusCode || 500)
+        .json({ error: error.statusCode ? error.message : 'Internal server error' });
+    }
+  },
+);
+
 // PATCH /api/orders/:orderId/items/:itemId/confirm-served — service staff confirm a ready or served item reached the table.
 router.patch(
   '/:orderId/items/:itemId/confirm-served',
@@ -5733,50 +5825,8 @@ router.patch(
       const order = withTxn(() => {
         const currentOrder = db.prepare('SELECT id FROM orders WHERE id = ?').get(orderId);
         if (!currentOrder) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
-        const item = db
-          .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
-          .get(itemId, orderId) as any;
-        if (!item)
-          throw Object.assign(new Error('Item not found in this order'), { statusCode: 404 });
-        if (item.status !== 'served' && item.status !== 'ready') {
-          throw Object.assign(
-            new Error('Only ready or served items can be confirmed at the table'),
-            {
-              statusCode: 409,
-            },
-          );
-        }
-        // Taking a ready dish to the table serves it, so staff need not wait for the kitchen to mark it.
-        if (item.status === 'ready') {
-          db.prepare("UPDATE order_items SET status = 'served', updated_at = ? WHERE id = ?").run(
-            now(),
-            itemId,
-          );
-        }
-        if (!item.served_confirmed_at) {
-          db.prepare(
-            'UPDATE order_items SET served_confirmed_at = ?, served_confirmed_by = ?, updated_at = ? WHERE id = ?',
-          ).run(now(), actorId, now(), itemId);
-          recordOrderAudit(db, {
-            orderId,
-            orderItemId: itemId,
-            actorUserId: actorId,
-            action: 'item_served_confirmed',
-            details: { product_name: item.product_name, from_status: item.status },
-          });
-        }
-        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
-          string,
-          unknown
-        >;
-        const items = attachEffectiveAddons(
-          db,
-          db
-            .prepare('SELECT * FROM order_items WHERE order_id = ?')
-            .all(orderId)
-            .map(parseItemJson) as { id: number }[],
-        );
-        return { ...updatedOrder, items };
+        confirmItemServed(db, orderId, itemId, actorId);
+        return orderWithItems(db, orderId);
       });
       notifyKdsUpdate();
       res.json({ order });

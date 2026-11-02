@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
 import { formatItemHeading } from '@/lib/printer/item-heading';
 import { parseDbTimestamp } from '@/lib/utils';
@@ -279,6 +280,100 @@ export function OrderedItemList({
   );
 }
 
+/** Dishes ready or served but not yet confirmed at the table, in list order. */
+export function itemsToConfirmServed(items: OrderedItem[]): OrderedItem[] {
+  return items.filter(
+    (item) => (item.status === 'ready' || item.status === 'served') && !item.served_confirmed_at,
+  );
+}
+
+/** Every dish starts ticked; untick any that has not reached the table, then confirm them together. */
+function ConfirmServedDialog({
+  items,
+  onClose,
+  onConfirm,
+}: {
+  items: OrderedItem[];
+  onClose: () => void;
+  onConfirm: (items: OrderedItem[]) => Promise<boolean>;
+}) {
+  const t = useTranslations('serverApp');
+  const tCommon = useTranslations('common');
+  const [unticked, setUnticked] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const chosen = items.filter((item) => !unticked.has(item.id));
+  return (
+    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
+      <DialogContent
+        data-testid="server-app-confirm-served-dialog"
+        className="flex max-h-[85svh] flex-col gap-3 p-4 sm:max-w-md"
+      >
+        <DialogHeader>
+          <DialogTitle>{t('confirmServedManyTitle')}</DialogTitle>
+        </DialogHeader>
+        <ul className="-mx-1 flex-1 overflow-y-auto">
+          {items.map((item) => {
+            const ticked = !unticked.has(item.id);
+            return (
+              <li key={item.id}>
+                <label
+                  data-testid="server-app-confirm-served-row"
+                  className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg px-1 hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={ticked}
+                    disabled={saving}
+                    onChange={() =>
+                      setUnticked((current) => {
+                        const next = new Set(current);
+                        if (ticked) next.add(item.id);
+                        else next.delete(item.id);
+                        return next;
+                      })
+                    }
+                    className="h-5 w-5 shrink-0 accent-emerald-600"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    <Ltr className="font-semibold tabular-nums">{item.quantity}</Ltr>
+                    {' × '}
+                    {formatItemHeading(item.product_name, item.variant_selection)}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="h-12 rounded-lg border border-border text-sm font-semibold"
+          >
+            {tCommon('cancel')}
+          </button>
+          <button
+            type="button"
+            data-testid="server-app-confirm-served-submit"
+            disabled={saving || chosen.length === 0}
+            onClick={async () => {
+              setSaving(true);
+              const done = await onConfirm(chosen);
+              setSaving(false);
+              if (done) onClose();
+            }}
+            className="flex h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <CheckCheck size={17} />
+            {t('confirmServedManySubmit', { count: chosen.length })}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** Full-screen list of what a table has ordered and where each item stands in the kitchen. */
 export function OrderedItemsScreen({
   tableName,
@@ -291,6 +386,7 @@ export function OrderedItemsScreen({
   onTakeaway,
   onCancel,
   onConfirmServed,
+  onConfirmServedMany,
   onPrintBill,
   onMoveTable,
   onMergeTable,
@@ -306,6 +402,8 @@ export function OrderedItemsScreen({
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
   onConfirmServed: (item: OrderedItem) => Promise<void>;
+  /** Confirms several dishes reached the table in one go; resolves false when it failed. */
+  onConfirmServedMany: (items: OrderedItem[]) => Promise<boolean>;
   /** Prints the table's bill and tells the POS the table is waiting to pay. */
   onPrintBill: () => Promise<void>;
   onMoveTable?: () => void;
@@ -316,6 +414,7 @@ export function OrderedItemsScreen({
   const [filter, setFilter] = useState<KitchenStage | 'all'>('all');
   const [printing, setPrinting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmingMany, setConfirmingMany] = useState(false);
   const tableActions = [
     onMoveTable && { key: 'move', label: t('moveTable'), icon: ArrowLeftRight, run: onMoveTable },
     onMergeTable && { key: 'merge', label: t('mergeTable'), icon: Merge, run: onMergeTable },
@@ -332,6 +431,7 @@ export function OrderedItemsScreen({
   const awaitingPrice = live.filter((item) => item.weight_pending).length;
   const billReady = live.length > 0 && notAtTable === 0 && awaitingPrice === 0;
   const counts = stageCounts(items);
+  const toConfirm = itemsToConfirmServed(live);
   const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
   const tabs: { key: KitchenStage | 'all'; count: number }[] = [
     { key: 'all', count: live.length },
@@ -484,6 +584,17 @@ export function OrderedItemsScreen({
       />
 
       <footer className="grid grid-cols-2 gap-2 border-t border-border bg-card p-3">
+        {toConfirm.length >= 2 && (
+          <button
+            type="button"
+            data-testid="server-app-confirm-served-many"
+            onClick={() => setConfirmingMany(true)}
+            className="col-span-2 flex h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white"
+          >
+            <CheckCheck size={17} />
+            {t('confirmServedMany', { count: toConfirm.length })}
+          </button>
+        )}
         <button
           type="button"
           data-testid="server-app-ordered-add"
@@ -504,6 +615,13 @@ export function OrderedItemsScreen({
           {t('exitOrderedItems')}
         </button>
       </footer>
+      {confirmingMany && (
+        <ConfirmServedDialog
+          items={toConfirm}
+          onClose={() => setConfirmingMany(false)}
+          onConfirm={onConfirmServedMany}
+        />
+      )}
     </div>
   );
 }

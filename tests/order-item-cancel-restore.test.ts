@@ -470,6 +470,65 @@ async function main() {
         null,
         'moving the item back out of served clears the confirmation',
       );
+
+      // Several dishes are confirmed at once, all or nothing.
+      const batch = seedOrderWithItem(db, 'CONFIRM-BATCH', 'prod-cancel', 'ready');
+      const addItem = (status: string) =>
+        Number(
+          db
+            .prepare(`INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, tax_amount, total, status, created_at, updated_at)
+              VALUES (?, 'prod-cancel', 'Item', 100, 1, 100, 0, 100, ?, ?, ?)`)
+            .run(batch.orderId, status, now(), now()).lastInsertRowid,
+        );
+      const servedItem = addItem('served');
+      const cooking = addItem('preparing');
+      const confirmMany = (itemIds: unknown) =>
+        api(baseUrl, `/api/orders/${batch.orderId}/items/confirm-served`, {
+          method: 'POST',
+          body: { item_ids: itemIds },
+          headers: waiterAuth,
+        });
+      const confirmedRows = () =>
+        db
+          .prepare(
+            'SELECT id FROM order_items WHERE order_id = ? AND served_confirmed_at IS NOT NULL',
+          )
+          .all(batch.orderId) as { id: number }[];
+      const mixed = await confirmMany([batch.itemId, servedItem, cooking]);
+      assertEqualOrThrow(mixed.status, 409, 'a dish still cooking refuses the whole batch');
+      assertEqualOrThrow(confirmedRows().length, 0, 'a refused batch confirms nothing');
+      assertEqualOrThrow((await confirmMany([])).status, 400, 'an empty batch is refused');
+      assertEqualOrThrow((await confirmMany(['x'])).status, 400, 'item ids must be numbers');
+      const many = await confirmMany([batch.itemId, servedItem]);
+      assertEqualOrThrow(
+        many.status,
+        200,
+        `a server confirms two dishes at once (status ${many.status})`,
+      );
+      assertEqualOrThrow(
+        confirmedRows()
+          .map((row) => row.id)
+          .sort((a, b) => a - b)
+          .join(','),
+        [batch.itemId, servedItem].sort((a, b) => a - b).join(','),
+        'both dishes are confirmed and the cooking one is not',
+      );
+      assertEqualOrThrow(
+        (db.prepare('SELECT status FROM order_items WHERE id = ?').get(batch.itemId) as any).status,
+        'served',
+        'the ready dish in the batch is served',
+      );
+      assertEqualOrThrow(
+        (
+          db
+            .prepare(
+              "SELECT COUNT(*) AS n FROM order_audit_log WHERE order_id = ? AND action = 'item_served_confirmed'",
+            )
+            .get(String(batch.orderId)) as any
+        ).n,
+        2,
+        'each dish has its own audit entry',
+      );
     }
 
     console.log('\n─── Paid and terminal guards ───');

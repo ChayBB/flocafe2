@@ -677,6 +677,24 @@ export default function ServerStandalonePage() {
     if (tableId) await loadOrder(tableId).catch(() => {});
   }
 
+  /** Confirms several dishes reached the table together; all or none are saved. */
+  async function confirmServedMany(items: OrderedItem[]): Promise<boolean> {
+    if (!api || !currentOrder || sendInFlightRef.current) return false;
+    const tableId = selectedTableIdRef.current;
+    let done = false;
+    try {
+      await api.post(`/api/orders/${currentOrder.id}/items/confirm-served`, {
+        item_ids: items.map((item) => item.id),
+      });
+      toast.success(t('itemsServedConfirmed', { count: items.length }));
+      done = true;
+    } catch (error: unknown) {
+      toastApiError(error, t('itemChangeFailed'), apiErrorT);
+    }
+    if (tableId) await loadOrder(tableId).catch(() => {});
+    return done;
+  }
+
   function clearSelectedTable() {
     selectedTableIdRef.current = '';
     orderLookupFailedRef.current = false;
@@ -1766,6 +1784,7 @@ export default function ServerStandalonePage() {
           onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
+          onConfirmServedMany={confirmServedMany}
           onPrintBill={requestBill}
           onMoveTable={() => setTransferMode('move')}
           onMergeTable={() => setTransferMode('merge')}
