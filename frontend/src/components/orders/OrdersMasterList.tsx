@@ -1,7 +1,7 @@
 'use client';
 
 import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
-import { Utensils, ShoppingBag, Truck, Globe, Clock } from 'lucide-react';
+import { Utensils, ShoppingBag, Truck, Globe, Clock, UserRound } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { Order } from '@/lib/types';
 import { Ltr } from '@/components/layout/Ltr';
@@ -17,10 +17,14 @@ import {
 function OrderTypeIcon({ type }: { type: Order['type'] }) {
   const cls = 'shrink-0 text-muted-foreground';
   switch (type) {
-    case 'dine_in': return <Utensils size={13} className={cls} />;
-    case 'delivery': return <Truck size={13} className={cls} />;
-    case 'online': return <Globe size={13} className={cls} />;
-    default: return <ShoppingBag size={13} className={cls} />;
+    case 'dine_in':
+      return <Utensils size={13} className={cls} />;
+    case 'delivery':
+      return <Truck size={13} className={cls} />;
+    case 'online':
+      return <Globe size={13} className={cls} />;
+    default:
+      return <ShoppingBag size={13} className={cls} />;
   }
 }
 
@@ -90,7 +94,9 @@ export function OrdersMasterList({
                     </span>
                   )}
                   {badge && (
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.bg} ${badge.text}`}>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.bg} ${badge.text}`}
+                    >
                       {tOrders(badge.labelKey)}
                     </span>
                   )}
@@ -112,8 +118,17 @@ export function OrdersMasterList({
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {tOrders('itemCount', { count: itemCount })}
+                <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="shrink-0">{tOrders('itemCount', { count: itemCount })}</span>
+                  {(order.user_name || order.table_owner_name) && (
+                    <span
+                      data-testid="order-staff-name"
+                      className="inline-flex min-w-0 items-center gap-1"
+                    >
+                      <UserRound size={12} className="shrink-0" />
+                      <span className="truncate">{order.user_name || order.table_owner_name}</span>
+                    </span>
+                  )}
                 </span>
                 <span className="text-sm font-bold text-foreground">
                   {awaitingWeight ? 'XXXX' : fmt(Number(order.bill?.total ?? order.total))}

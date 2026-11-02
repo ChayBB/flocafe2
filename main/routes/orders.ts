@@ -1182,7 +1182,7 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
     for (const t of rows) tablesById.set(t.id, t);
   }
   const ownerIds = Array.from(
-    new Set(parsedOrders.map((o: any) => o.table_owner_user_id).filter(Boolean)),
+    new Set(parsedOrders.flatMap((o: any) => [o.table_owner_user_id, o.user_id]).filter(Boolean)),
   );
   const ownerNameById = new Map<string, string>();
   if (ownerIds.length > 0) {
@@ -1323,6 +1323,7 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
       items: itemList,
       table,
       table_owner_name: tableOwnerName,
+      user_name: order.user_id ? (ownerNameById.get(order.user_id) ?? null) : null,
       customer,
       bill,
       bills,

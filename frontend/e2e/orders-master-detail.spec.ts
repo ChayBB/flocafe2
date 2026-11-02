@@ -231,6 +231,35 @@ test.describe('orders master/detail is the default layout', () => {
     await expect(page.getByText('This order is no longer in the current list.')).toHaveCount(0);
   });
 
+  test('finds a paid order by its amount from the search box', async ({ page }) => {
+    const order = await createTakeaway(page, 'Amount search check');
+    await login(page);
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    const headers = { Authorization: `Bearer ${token}` };
+    const bill = await page.request.post(`${BASE}/api/bills/generate`, {
+      headers,
+      data: { order_id: order.id },
+    });
+    const billBody = (await bill.json()).bill as { id: number; total: number };
+    const paid = await page.request.post(`${BASE}/api/bills/${billBody.id}/payments`, {
+      headers,
+      data: { payments: [{ method: 'cash', amount: billBody.total }] },
+    });
+    expect(paid.ok(), await paid.text()).toBeTruthy();
+
+    await page.goto(`${BASE}/orders`);
+    await page.getByRole('button', { name: 'All', exact: true }).first().click();
+    await page
+      .getByPlaceholder('Search by order number, name, phone, table, staff, or amount…')
+      .fill(String(billBody.total));
+    const row = page
+      .getByRole('button')
+      .filter({ hasText: `#${order.order_number}` })
+      .first();
+    await expect(row).toBeVisible({ timeout: 15000 });
+    await expect(row.getByTestId('order-staff-name')).not.toBeEmpty();
+  });
+
   test('ignores an older order search response after a newer filter request completes', async ({
     page,
   }) => {

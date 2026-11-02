@@ -215,6 +215,8 @@ export interface Order {
   /** Staff owner of the table when the order was opened; kept for staff performance reporting. */
   table_owner_user_id?: string | null;
   table_owner_name?: string | null;
+  /** The staff member who took the order. */
+  user_name?: string | null;
   customer_id: number | string | null;
   /** Address confirmed for this delivery; printed in full on the courier slip. */
   delivery_address?: string | null;
