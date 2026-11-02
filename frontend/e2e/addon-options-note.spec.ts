@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_KDS_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
-import { getE2eToken } from './helpers/test-auth';
+import { E2E_PASSWORD, getE2eToken, setLanguage } from './helpers/test-auth';
 import {
   kdsItemLine,
   optionsNote,
@@ -170,6 +170,20 @@ test('a one-kind option folds once picked, and the size and option go into the s
     await page.getByRole('button', { name: 'Kanban' }).click();
     const kdsRow = page.getByTestId('kds-item-row').filter({ hasText: productName });
     await expect(kdsRow).toHaveText(`1×${productName}Shrimp ${run} (Large plate)`);
+
+    // The order screen names the item the same way, without the choice repeated below it.
+    await page.goto(`${E2E_BASE_URL}/auth/login`);
+    await page.getByLabel('Email').fill('owner@flo.local');
+    await page.getByLabel('Password').fill(E2E_PASSWORD);
+    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
+    await setLanguage(page, 'en');
+    await page.goto(`${E2E_BASE_URL}/orders`);
+    await page.getByText(orders.orders[0].order_number).first().click();
+    const item = page.getByTestId('order-detail-item').filter({ hasText: productName });
+    await expect(item).toContainText(`${productName}Shrimp ${run} (Large plate)`);
+    await expect(item).not.toContainText(`+ Shrimp ${run}`);
+    await expect(item).not.toContainText('"');
   } finally {
     await cleanup();
   }

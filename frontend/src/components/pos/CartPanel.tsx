@@ -35,6 +35,7 @@ import { calculateAppliedCharges } from '@/lib/charges';
 import { chargesForOrderType, useChargesStore } from '@/store/charges';
 import { getCurrencyFractionDigits } from '@countries';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
+import { kdsItemLine } from '@/lib/item-options-note';
 
 interface Props {
   tables: Table[];
@@ -511,68 +512,75 @@ export default function CartPanel({
           </div>
         ) : (
           <div className="space-y-3">
-            {cart.items.map((item) => (
-              <div
-                key={item.id}
-                data-testid="cart-item"
-                className="border-b border-border/60 pb-3 last:border-b-0 last:pb-0"
-              >
-                <div className="flex items-start gap-2">
-                  <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-foreground">
-                    {item.variant
-                      ? `${item.product.name} (${item.variant.name})`
-                      : item.product.name}
-                  </p>
-                  <button
-                    onClick={() => cart.removeItem(item.id)}
-                    className="touch-target -me-2 -mt-2 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400 active:bg-red-50 dark:active:bg-red-950/40"
-                    aria-label={t('remove')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <div className="min-w-0">
-                  {item.addons.length > 0 && (
-                    <div className="mt-0.5">
-                      {item.addons.map((a) => (
-                        <p key={a.id} className="break-words text-xs text-muted-foreground">
-                          + {a.name}
-                          {(a.quantity || 1) > 1 ? ` ×${a.quantity}` : ''}{' '}
-                          {Number(a.price) > 0 && `(${fmt(Number(a.price) * (a.quantity || 1))})`}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                  {item.special_instructions && (
-                    <p className="text-xs text-muted-foreground italic mt-0.5 break-words">
-                      {item.special_instructions}
+            {cart.items.map((item) => {
+              const line = kdsItemLine({
+                product_name: item.product.name,
+                variant_selection: item.variant ? { name: item.variant.name } : null,
+                addons: item.addons,
+                special_instructions: item.special_instructions,
+              });
+              const pricedAddons = item.addons.filter((a) => Number(a.price) > 0);
+              return (
+                <div
+                  key={item.id}
+                  data-testid="cart-item"
+                  className="border-b border-border/60 pb-3 last:border-b-0 last:pb-0"
+                >
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-foreground">
+                      {line.name}
                     </p>
-                  )}
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">
-                    {fmt(
-                      cartVariantUnitPrice(
-                        item,
-                        cart.orderType === 'online' && cart.onlinePlatform.trim().length > 0,
-                      ),
+                    <button
+                      onClick={() => cart.removeItem(item.id)}
+                      className="touch-target -me-2 -mt-2 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-400 active:bg-red-50 dark:active:bg-red-950/40"
+                      aria-label={t('remove')}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="min-w-0">
+                    {pricedAddons.length > 0 && (
+                      <div className="mt-0.5">
+                        {pricedAddons.map((a) => (
+                          <p key={a.id} className="break-words text-xs text-muted-foreground">
+                            + {a.name}
+                            {(a.quantity || 1) > 1 ? ` ×${a.quantity}` : ''}{' '}
+                            {`(${fmt(Number(a.price) * (a.quantity || 1))})`}
+                          </p>
+                        ))}
+                      </div>
                     )}
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    {onEditItem && (
-                      <button
-                        onClick={() => onEditItem(item)}
-                        className="touch-target shrink-0 gap-1 rounded-full bg-amber-100 px-3 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 dark:active:bg-amber-950/60 transition-colors hover:bg-amber-200 active:bg-amber-200"
-                      >
-                        <SquarePen size={12} />
-                        {tCommon('edit')}
-                      </button>
+                    {line.instructions && (
+                      <p className="text-xs text-muted-foreground italic mt-0.5 break-words">
+                        {line.instructions}
+                      </p>
                     )}
-                    <ItemQuantityControl item={item} updateQuantity={cart.updateQuantity} />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {fmt(
+                        cartVariantUnitPrice(
+                          item,
+                          cart.orderType === 'online' && cart.onlinePlatform.trim().length > 0,
+                        ),
+                      )}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {onEditItem && (
+                        <button
+                          onClick={() => onEditItem(item)}
+                          className="touch-target shrink-0 gap-1 rounded-full bg-amber-100 px-3 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 dark:active:bg-amber-950/60 transition-colors hover:bg-amber-200 active:bg-amber-200"
+                        >
+                          <SquarePen size={12} />
+                          {tCommon('edit')}
+                        </button>
+                      )}
+                      <ItemQuantityControl item={item} updateQuantity={cart.updateQuantity} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

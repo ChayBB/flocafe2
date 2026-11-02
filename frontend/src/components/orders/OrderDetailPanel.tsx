@@ -49,7 +49,7 @@ import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { parseDbTimestamp } from '@/lib/utils';
-import { formatItemHeading } from '@/lib/printer/item-heading';
+import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
 import {
@@ -609,7 +609,7 @@ function OrderDetailContent({
           />
           {shownItems.map((item: OrderItem) => {
             const dotConfig = itemStatusDot[item.status] || itemStatusDot.pending;
-            const heading = formatItemHeading(item.product_name, item.variant_selection);
+            const { name: heading, instructions } = kdsItemLine(item);
             return (
               <div key={item.id} data-testid="order-detail-item" className="text-sm">
                 <div className="flex items-center justify-between gap-2">
@@ -692,16 +692,9 @@ function OrderDetailContent({
                       )}
                   </div>
                 </div>
-                {item.addons && item.addons.length > 0 && (
-                  <div className="ps-6 mt-0.5 text-xs text-muted-foreground">
-                    {item.addons
-                      .map((a) => `+ ${a.name}${(a.quantity || 1) > 1 ? ` ×${a.quantity}` : ''}`)
-                      .join(' · ')}
-                  </div>
-                )}
-                {item.special_instructions && (
+                {instructions && (
                   <div className="ps-6 mt-0.5 text-xs text-red-500/90 italic">
-                    &quot;{item.special_instructions}&quot;
+                    &quot;{instructions}&quot;
                   </div>
                 )}
               </div>
@@ -732,8 +725,7 @@ function OrderDetailContent({
                   className="flex items-center justify-between text-xs opacity-70"
                 >
                   <span className="line-through text-muted-foreground truncate">
-                    {cItem.quantity}x{' '}
-                    {formatItemHeading(cItem.product_name, cItem.variant_selection)}
+                    {cItem.quantity}x {kdsItemLine(cItem).name}
                   </span>
                   {cItem.status === 'cancelled' &&
                     !isPaid &&

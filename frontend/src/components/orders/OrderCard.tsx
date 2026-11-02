@@ -45,7 +45,7 @@ import { useTranslations, type AppConfig } from 'use-intl';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { parseDbTimestamp } from '@/lib/utils';
-import { formatItemHeading } from '@/lib/printer/item-heading';
+import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
 
@@ -735,7 +735,7 @@ export function OrderCard({
           />
           {displayedItems.map((item: OrderItem) => {
             const dotConfig = itemStatusDot[item.status] || itemStatusDot.pending;
-            const heading = formatItemHeading(item.product_name, item.variant_selection);
+            const { name: heading, instructions } = kdsItemLine(item);
             return (
               <div key={item.id} className="text-xs">
                 <div className="flex items-center justify-between gap-1">
@@ -822,19 +822,9 @@ export function OrderCard({
                   </div>
                 </div>
 
-                {/* Add-ons subline */}
-                {item.addons && item.addons.length > 0 && (
-                  <div className="ps-4 mt-0.5 text-[11px] text-muted-foreground truncate">
-                    {item.addons
-                      .map((a) => `+ ${a.name}${(a.quantity || 1) > 1 ? ` ×${a.quantity}` : ''}`)
-                      .join(' · ')}
-                  </div>
-                )}
-
-                {/* Special instructions / notes subline */}
-                {item.special_instructions && (
+                {instructions && (
                   <div className="ps-4 mt-0.5 text-[11px] text-red-500/90 italic truncate">
-                    &quot;{item.special_instructions}&quot;
+                    &quot;{instructions}&quot;
                   </div>
                 )}
               </div>
@@ -893,8 +883,7 @@ export function OrderCard({
                   className="flex items-center justify-between text-xs opacity-70"
                 >
                   <span className="line-through text-muted-foreground truncate">
-                    {cItem.quantity}x{' '}
-                    {formatItemHeading(cItem.product_name, cItem.variant_selection)}
+                    {cItem.quantity}x {kdsItemLine(cItem).name}
                   </span>
                   {cItem.status === 'cancelled' &&
                     !isPaid &&
