@@ -3286,6 +3286,21 @@ export function buildZReportBody(
   printer?: { columns?: number; capabilities?: ThermalPrinterCapabilities },
   warnings?: PrintWarning[],
 ): Buffer {
+  const { lines, language: lang, columns } = buildZReportLines(z, language, printer);
+  return buildEscPos(
+    lines,
+    false,
+    { cutMode: 'full', language: lang, columns, capabilities: printer?.capabilities },
+    warnings,
+  );
+}
+
+/** The Z report as thermal lines, before encoding, so a raster-capable printer can draw its script. */
+function buildZReportLines(
+  z: any,
+  language?: string,
+  printer?: { columns?: number; capabilities?: ThermalPrinterCapabilities },
+): { lines: string[]; language: string; columns: number } {
   const cols = printer?.columns || columnsForPaperWidth('80mm') || 48;
   const lang = normalizePrintLanguage(language ?? z?.__language);
   const additionalLanguage = z?.__additionalLanguage
@@ -3574,12 +3589,7 @@ export function buildZReportBody(
   );
   sections.push('{CUT}');
 
-  return buildEscPos(
-    sections,
-    false,
-    { cutMode: 'full', language: lang, columns: cols, capabilities: printer?.capabilities },
-    warnings,
-  );
+  return { lines: sections, language: lang, columns: cols };
 }
 
 function zLayoutContext(
@@ -3736,8 +3746,28 @@ export async function printZReport(
     const zWithMarker = { ...z, __isReprint: !!z?.__isReprint };
     // The route carries the resolved Z-report language policy in the snapshot;
     // direct callers retain the English store-language default.
-    const warnings: PrintWarning[] = [];
-    const baseBody = buildZReportBody(zWithMarker, undefined, { columns, capabilities }, warnings);
+    let warnings: PrintWarning[] = [];
+    let baseBody = buildZReportBody(zWithMarker, undefined, { columns, capabilities }, warnings);
+    // Text the printer's code page cannot hold (Thai labels, say) is drawn as an image, like receipts.
+    if (hasFinancialPrintWarning(warnings) && rasterCapabilityEnabled(capabilities)) {
+      const { lines, language } = buildZReportLines(zWithMarker, undefined, {
+        columns,
+        capabilities,
+      });
+      const raster = await rasterizeDocumentLines(lines, warnings, {
+        useUnicode: false,
+        cutMode: 'full',
+        arabicShaping: capabilities.shaping.arabic,
+        columns,
+        language,
+        capabilities,
+        requestPrefix: 'z-report',
+      });
+      if (!raster.rasterFailed && raster.rasterSelected) {
+        baseBody = raster.data;
+        warnings = raster.warnings;
+      }
+    }
     if (hasFinancialPrintWarning(warnings)) {
       return { ok: false, detail: makeFinancialPrintRefusalMessage(warnings), warnings };
     }

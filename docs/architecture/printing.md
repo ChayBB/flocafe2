@@ -303,7 +303,8 @@ Raster is an additive, profile-owned capability, not a rendering mode a document
 profile that declares `raster.enabled` may render text it cannot represent as bitmaps; a profile
 that does not never takes that path. The two declared modes are `mixed`, which rasterizes only the
 rows that need it, and `whole-receipt`, which rasterizes the entire receipt and must be opted into
-explicitly by the caller.
+explicitly by the caller. A Z report whose labels the code page cannot hold, such as Thai with an
+English second line, takes the `mixed` path in `printZReport`; without raster it is refused.
 
 ### The diagnostic probe is not reachable from the UI
 
