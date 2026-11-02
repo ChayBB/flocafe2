@@ -56,6 +56,20 @@ async function main() {
     null,
     'plain http elsewhere is refused',
   );
+  for (const inside of [
+    'https://10.0.0.5',
+    'https://192.168.1.20:8443',
+    'https://169.254.169.254',
+    'https://127.0.0.1',
+    'https://[::1]',
+    'https://[::ffff:127.0.0.1]',
+  ]) {
+    assertEqualOrThrow(
+      relayClient.normalizeRelayServerUrl(inside),
+      null,
+      `an https relay at ${inside} is refused`,
+    );
+  }
   for (const [method, pathname, allowed] of [
     ['GET', '/api/guest/menu', true],
     ['GET', '/api/guest/table', true],
@@ -104,6 +118,13 @@ async function main() {
       failed = error.code === 'server_url_invalid';
     }
     assertOrThrow(failed, 'a bad relay address is refused');
+    failed = false;
+    try {
+      await relayClient.startQrRelayPairing('https://localhost:9');
+    } catch (error: any) {
+      failed = error.code === 'server_url_invalid';
+    }
+    assertOrThrow(failed, 'an https relay name that resolves to this host is refused');
 
     await relayClient.startQrRelayPairing(relay.url);
     let status = relayClient.getQrRelayStatus();

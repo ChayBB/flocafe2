@@ -361,6 +361,12 @@ A QR ordering relay lets customers order from a table QR over mobile data withou
 installing a VPN. [`main/services/qr-relay.ts`](../../main/services/qr-relay.ts) is the POS side;
 the relay server is a separate project.
 
+The relay address must be `https` to a public host; plain `http` is accepted only on this machine,
+for development and tests. An `https` address that is, or resolves to, a private, loopback,
+link-local (including cloud metadata), or reserved address answers `server_url_invalid`. The check
+uses `isBlockedSsrfTarget()` before every relay request and inside the tunnel's own name lookup, so a
+name that later resolves inside the shop is refused too.
+
 Pairing (`POST /api/qr-relay/pair`) generates a new Ed25519 key pair and keeps the private key in
 the `qr_relay_private_key` setting, which the wildcard settings read refuses. It sends only the
 public key (SPKI DER, base64) and the device name to `{server}/api/pos/pair/start`. The relay

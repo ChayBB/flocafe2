@@ -5,6 +5,7 @@ import {
   sign,
   type KeyObject,
 } from 'node:crypto';
+import * as dns from 'node:dns';
 import * as http from 'node:http';
 import { isIP } from 'node:net';
 import * as os from 'node:os';
@@ -12,6 +13,7 @@ import QRCode from 'qrcode';
 import { WebSocket, type RawData } from 'ws';
 import { getSettingValue, upsertSettings } from '../db';
 import { getServerAppPort } from '../server-app-state';
+import { isBlockedSsrfTarget } from '../middleware/security';
 import {
   GUEST_QR_PUBLIC_URL_KEY,
   normalizePublicBaseUrl,
@@ -69,7 +71,10 @@ export function isRelayPathAllowed(method: string, pathname: string): boolean {
   return (method === 'GET' || method === 'HEAD') && STATIC_PATH.test(pathname);
 }
 
-/** https anywhere; plain http only to this machine, for development and tests. */
+/**
+ * https to a public host; plain http only to this machine, for development and tests. An https
+ * relay is never an address inside the shop, on this host, or the cloud metadata service.
+ */
 export function normalizeRelayServerUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value.trim() === '' || value.length > 200) return null;
   let url: URL;
@@ -81,7 +86,44 @@ export function normalizeRelayServerUrl(value: unknown): string | null {
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if (!(url.protocol === 'https:' || (url.protocol === 'http:' && loopback))) return null;
   if (url.username || url.password || url.search || url.hash) return null;
+  const literal = url.hostname.replace(/^\[|\]$/g, '');
+  if (url.protocol === 'https:' && isIP(literal) && isBlockedSsrfTarget(literal)) return null;
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
+/** Name lookup for an https relay that refuses a name resolving inside the shop or this host. */
+function publicRelayLookup(
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (
+    error: NodeJS.ErrnoException | null,
+    address: string | dns.LookupAddress[],
+    family?: number,
+  ) => void,
+): void {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error, '');
+    if (addresses.length === 0 || addresses.some(({ address }) => isBlockedSsrfTarget(address))) {
+      const blocked: NodeJS.ErrnoException = new Error('Relay resolves to a disallowed address');
+      blocked.code = 'EBLOCKED';
+      return callback(blocked, '');
+    }
+    if (options.all) return callback(null, addresses);
+    callback(null, addresses[0].address, addresses[0].family);
+  });
+}
+
+async function assertPublicRelay(serverUrl: string): Promise<void> {
+  const { protocol, hostname } = new URL(serverUrl);
+  if (protocol !== 'https:') return;
+  await new Promise<void>((resolve, reject) =>
+    publicRelayLookup(hostname.replace(/^\[|\]$/g, ''), {}, (error) => {
+      if (!error) return resolve();
+      reject(
+        new QrRelayError(error.code === 'EBLOCKED' ? 'server_url_invalid' : 'relay_unreachable'),
+      );
+    }),
+  );
 }
 
 export type QrRelayErrorCode =
@@ -135,6 +177,7 @@ async function relayPost(
   path: string,
   body: unknown,
 ): Promise<Record<string, unknown>> {
+  await assertPublicRelay(serverUrl);
   let response: Response;
   try {
     response = await fetch(`${serverUrl}${path}`, {
@@ -307,6 +350,7 @@ function connect(): void {
       headers: { 'X-Flo-Store': storeId },
       handshakeTimeout: REQUEST_TIMEOUT_MS,
       maxPayload: MAX_REQUEST_BODY * 2,
+      ...(serverUrl.startsWith('https:') ? { lookup: publicRelayLookup } : {}),
     });
   } catch (error) {
     lastError = 'relay_unreachable';
