@@ -189,7 +189,15 @@ export async function printWebBill(
       }
     };
 
+    let printing = false;
     const triggerPrint = () => {
+      if (settled || printing) return;
+      printing = true;
+      // The logo and payment QR are images: printing before they decode leaves them blank.
+      void whenImagesReady(printWindow.document).then(printNow);
+    };
+
+    const printNow = () => {
       if (settled) return;
       try {
         if (printWindow.closed) {
@@ -234,6 +242,20 @@ export async function printWebBill(
       settle(err instanceof Error ? err : new Error(String(err)));
     }
   }).then(() => warnings);
+}
+
+const IMAGE_WAIT_MS = 2000;
+
+/** Resolves once every image in the document has loaded (or failed), or after a short cap. */
+function whenImagesReady(doc: Document): Promise<void> {
+  const pending = Array.from(doc.images).map((img) =>
+    img.decode ? img.decode().catch(() => undefined) : Promise.resolve(),
+  );
+  if (pending.length === 0) return Promise.resolve();
+  return Promise.race([
+    Promise.all(pending).then(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, IMAGE_WAIT_MS)),
+  ]);
 }
 
 // Document → HTML rendering
@@ -558,21 +580,21 @@ function getPaperStyles(size: PaperSize): string {
     .reprint-banner { text-align: center; font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #c00; border: 3px solid #c00; padding: 6px; margin-bottom: 15px; }
     .online-order-banner { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 1px; border: 2px solid #333; padding: 6px; margin-bottom: 15px; }
     .online-order-banner .online-order-detail { font-size: 13px; font-weight: normal; letter-spacing: normal; margin-top: 2px; }
-    .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ccc; }
+    .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px dashed #999; }
     .receipt-logo { max-width: 80%; max-height: 120px; object-fit: contain; margin: 0 auto 8px auto; display: block; }
     .header h1 { font-size: 24px; margin-bottom: 5px; }
     .bill-details { margin-bottom: 15px; }
     .bill-details table { width: 100%; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .items-table th, .items-table td { padding: 8px; text-align: start; }
-    .items-table th { font-weight: bold; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+    .items-table th { font-weight: bold; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
     .tax-table, .payments-table { width: 50%; margin-inline-start: 50%; border-collapse: collapse; margin-bottom: 15px; }
     .tax-table th, .tax-table td, .payments-table th, .payments-table td { padding: 6px 8px; }
     .tax-table th, .payments-table th { text-align: start; }
     .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .totals-table td { padding: 6px 8px; }
-    .total-row { border-top: 2px solid #333; font-size: 16px; }
-    .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; }
+    .total-row { border-top: 2px dashed #333; font-size: 16px; }
+    .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #999; }
     .payment-qr { display: block; width: 45mm; max-width: 80%; margin: 8px auto 0; }
     .payment-qr-caption { margin: 4px 0 0; text-align: center; font-size: 1.6em; font-weight: 700; }
     .text-end { text-align: end !important; }

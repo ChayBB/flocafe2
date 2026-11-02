@@ -195,7 +195,8 @@ The business settings `receipt_logo` and `receipt_logo_raster` carry the browser
 precomputed thermal data; `bill_show_logo` controls whether a bill renderer includes the logo.
 `processReceiptLogoFile()` uses a browser canvas to resize wide images to at most 576 pixels,
 composite transparency on white, and generate packed 1-bit raster variants for 384- and 576-dot
-printers. Browser bills center the image above the business header. The classic ESC/POS renderer and
+printers. Browser bills center the image above the business header, use dashed rules, and call
+`print()` only after the logo and payment QR images decode (capped at two seconds). The classic ESC/POS renderer and
 frontend receipt encoders select a raster variant for the paper width and emit it with `GS v 0`.
 Kitchen tickets do not use the bill logo setting.
 
