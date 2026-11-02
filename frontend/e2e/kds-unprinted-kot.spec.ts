@@ -1,14 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { E2E_KDS_BASE_URL } from './helpers/urls';
 
-test('a kitchen ticket that did not print shows as a pale chip that prints it again or drops it, read without an order number', async ({
+test('a kitchen ticket that did not print shows silently as a pale chip that prints it again or drops it', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const run = Math.random().toString(36).slice(2, 7);
   await page.addInitScript(() => {
-    const w = window as unknown as { __spoken: string[] } & Record<string, unknown>;
+    const w = window as unknown as { __spoken: string[]; __tones: number } & Record<
+      string,
+      unknown
+    >;
     w.__spoken = [];
+    w.__tones = 0;
     class FakeUtterance {
       lang = '';
       rate = 1;
@@ -29,7 +33,9 @@ test('a kitchen ticket that did not print shows as a pale chip that prints it ag
           type: '',
           frequency: { value: 0 },
           connect: (node: unknown) => node,
-          start() {},
+          start() {
+            w.__tones += 1;
+          },
           stop() {},
         };
       }
@@ -134,11 +140,13 @@ test('a kitchen ticket that did not print shows as a pale chip that prints it ag
     page.locator('[data-testid="kds-message"][data-kind="emergency"]', { hasText: run }),
   ).toHaveCount(0);
 
-  const spoken = () =>
-    page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.join(' | '));
-  await expect.poll(spoken).toContain(`Kitchen ticket for Table T${run} did not print`);
-  await expect.poll(spoken).toContain('A kitchen ticket did not print');
-  expect(await spoken()).not.toContain('ORD-');
+  // Shown in the message bar only: no beep, nothing read out.
+  await page.waitForTimeout(1500);
+  const sound = await page.evaluate(() => {
+    const w = window as unknown as { __spoken: string[]; __tones: number };
+    return { spoken: w.__spoken, tones: w.__tones };
+  });
+  expect(sound).toEqual({ spoken: [], tones: 0 });
 
   // Print again: a failed try keeps the choice open, the next one clears the chip.
   await tableNotice.click();

@@ -31,13 +31,7 @@ import { resolveTaxComponents } from '@/lib/printer/tax-components';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslations, useLocale, type AppConfig } from 'use-intl';
-import {
-  PAYMENT_METHODS,
-  isBankAccountMethod,
-  isQrCodeMethod,
-  type CustomPaymentMethod,
-} from '@/lib/payment-methods';
-import QrPaymentPanel from '@/components/pos/QrPaymentPanel';
+import { PAYMENT_METHODS, type CustomPaymentMethod } from '@/lib/payment-methods';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatNumber } from '@/hooks/useFormatNumber';
 import { useCurrencyUnitAdapter } from '@/hooks/useCurrencyUnitAdapter';
@@ -718,7 +712,11 @@ export default function PaymentModal({
     setAppliedEqualShare((current) => (current?.index === idx || takesOver ? null : current));
     setPayments((current) =>
       current.map((payment, index) =>
-        index === idx ? { ...payment, amount: value } : takesOver ? { ...payment, amount: '' } : payment,
+        index === idx
+          ? { ...payment, amount: value }
+          : takesOver
+            ? { ...payment, amount: '' }
+            : payment,
       ),
     );
   };
@@ -1905,82 +1903,82 @@ export default function PaymentModal({
 
             {!justPaid && (
               <>
-              {splitSettingState === 'error' && (
-                <div className="w-full space-y-1" data-testid="split-check-section">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {splitSettingDenied
-                      ? t('splitCheckSettingDenied')
-                      : t('splitCheckAvailabilityFailed')}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={loadSplitCheckSetting}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {t('splitCheckCheckAvailability')}
-                  </Button>
-                </div>
-              )}
-              {splitSettingState === 'ready' && splitChecksEnabled && (
-                <div className="w-full space-y-1" data-testid="split-check-section">
-                  <p className="text-xs font-semibold text-foreground">
-                    {t('splitItemsIntoChecks')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{t('splitCheckHint')}</p>
-                  {'open' in splitEligibility ? (
+                {splitSettingState === 'error' && (
+                  <div className="w-full space-y-1" data-testid="split-check-section">
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {splitSettingDenied
+                        ? t('splitCheckSettingDenied')
+                        : t('splitCheckAvailabilityFailed')}
+                    </p>
                     <Button
+                      type="button"
                       variant="outline"
-                      onClick={handleOpenSplitCheck}
-                      disabled={
-                        openingSplitCheck ||
-                        processing ||
-                        attemptLocked ||
-                        applyingDiscount ||
-                        Boolean(updatingChargeId) ||
-                        chargeStateUncertain
-                      }
+                      onClick={loadSplitCheckSetting}
                       className="w-full"
                       size="lg"
                     >
-                      <Users size={16} className="me-2" />
-                      {t('splitCheck')}
-                    </Button>
-                  ) : 'unknown' in splitEligibility ? (
-                    <Button
-                      variant="outline"
-                      onClick={handleOpenSplitCheck}
-                      disabled={
-                        openingSplitCheck ||
-                        processing ||
-                        attemptLocked ||
-                        applyingDiscount ||
-                        Boolean(updatingChargeId) ||
-                        chargeStateUncertain
-                      }
-                      className="w-full"
-                      size="lg"
-                    >
-                      <Users size={16} className="me-2" />
                       {t('splitCheckCheckAvailability')}
                     </Button>
-                  ) : (
-                    <div className="w-full space-y-1">
-                      <Button variant="outline" disabled className="w-full" size="lg">
+                  </div>
+                )}
+                {splitSettingState === 'ready' && splitChecksEnabled && (
+                  <div className="w-full space-y-1" data-testid="split-check-section">
+                    <p className="text-xs font-semibold text-foreground">
+                      {t('splitItemsIntoChecks')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{t('splitCheckHint')}</p>
+                    {'open' in splitEligibility ? (
+                      <Button
+                        variant="outline"
+                        onClick={handleOpenSplitCheck}
+                        disabled={
+                          openingSplitCheck ||
+                          processing ||
+                          attemptLocked ||
+                          applyingDiscount ||
+                          Boolean(updatingChargeId) ||
+                          chargeStateUncertain
+                        }
+                        className="w-full"
+                        size="lg"
+                      >
                         <Users size={16} className="me-2" />
                         {t('splitCheck')}
                       </Button>
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        {t(splitEligibility.reason)}
-                      </p>
-                    </div>
-                  )}
-                  {splitOpenReason && (
-                    <p className="text-xs text-red-600 dark:text-red-400">{t(splitOpenReason)}</p>
-                  )}
-                </div>
-              )}
+                    ) : 'unknown' in splitEligibility ? (
+                      <Button
+                        variant="outline"
+                        onClick={handleOpenSplitCheck}
+                        disabled={
+                          openingSplitCheck ||
+                          processing ||
+                          attemptLocked ||
+                          applyingDiscount ||
+                          Boolean(updatingChargeId) ||
+                          chargeStateUncertain
+                        }
+                        className="w-full"
+                        size="lg"
+                      >
+                        <Users size={16} className="me-2" />
+                        {t('splitCheckCheckAvailability')}
+                      </Button>
+                    ) : (
+                      <div className="w-full space-y-1">
+                        <Button variant="outline" disabled className="w-full" size="lg">
+                          <Users size={16} className="me-2" />
+                          {t('splitCheck')}
+                        </Button>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          {t(splitEligibility.reason)}
+                        </p>
+                      </div>
+                    )}
+                    {splitOpenReason && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{t(splitOpenReason)}</p>
+                    )}
+                  </div>
+                )}
               </>
             )}
             {/* Equal-share shortcut: divides the remaining balance by payer count. It sits at the foot of
@@ -2110,7 +2108,6 @@ export default function PaymentModal({
                 )}
               </div>
             )}
-
           </div>
 
           <div className="space-y-3">
@@ -2171,15 +2168,6 @@ export default function PaymentModal({
                         {t('equalShareBadge')}
                       </p>
                     )}
-                    {payment.payment_method_id !== undefined &&
-                      (isQrCodeMethod(label) || isBankAccountMethod(label)) &&
-                      (parseFloat(payment.amount) || 0) > 0 && (
-                        <QrPaymentPanel
-                          amount={parseFloat(payment.amount)}
-                          orderId={bill.order_id}
-                          kind={isBankAccountMethod(label) ? 'bank' : 'promptpay'}
-                        />
-                      )}
                   </div>
                 );
               })}

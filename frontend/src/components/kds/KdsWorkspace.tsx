@@ -73,15 +73,15 @@ function liveItems(order: UseKdsConnectionResult['orders'][number]) {
   );
 }
 
-/** Adds new notices to the message bar; each beeps (take-away already beeps on its own) and is read out. */
+/** Adds new notices to the message bar; each beeps (take-away already beeps on its own) and is read out, except an unprinted ticket, which only shows. */
 function announceKdsMessages(fresh: KdsMessage[]) {
   if (fresh.length === 0) return;
   addKdsMessages(fresh);
-  const emergency = fresh.some(
-    (message) => message.kind === 'emergency' || message.kind === 'kot_unprinted',
-  );
-  if (fresh.some((message) => message.kind !== 'takeaway')) playKdsAlert(emergency ? 3 : 1);
-  speakKds(fresh.map((message) => message.speech ?? message.text).join('. '), kdsSpeechLang());
+  const loud = fresh.filter((message) => message.kind !== 'kot_unprinted');
+  if (loud.length === 0) return;
+  const emergency = loud.some((message) => message.kind === 'emergency');
+  if (loud.some((message) => message.kind !== 'takeaway')) playKdsAlert(emergency ? 3 : 1);
+  speakKds(loud.map((message) => message.speech ?? message.text).join('. '), kdsSpeechLang());
 }
 
 function serviceChangesById(orders: UseKdsConnectionResult['orders']): Map<number, string | null> {
@@ -201,13 +201,6 @@ export function KdsWorkspace({
         kind: alert.kind,
         at: alert.created_at,
         ref: alert.ref ?? undefined,
-        // Order numbers are shown but never read out.
-        speech:
-          alert.kind === 'kot_unprinted'
-            ? alert.table
-              ? t('messageKotUnprinted', { place: t('tableLabel', { name: alert.table }) })
-              : t('messageKotUnprintedNoTable')
-            : undefined,
         text:
           alert.kind === 'kot_unprinted'
             ? [
