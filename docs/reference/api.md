@@ -411,8 +411,9 @@ current-ticket menu uses to move a table's open order to a free table.
 `POST /api/kds-alerts` (`server-app.use`, router `main/routes/kds-alerts.ts`, forwarded by the Server App)
 sends an emergency call to the kitchen; the Server App has no button for it. Body: `message` (up to 120
 characters, may be empty) and `table`; it answers `201` `{ alert: { id, kind, message, table, sent_by,
-created_at } }` and `400` for a longer message. A kitchen ticket that fails to print adds an alert of
-`kind` `kot_unprinted` whose `message` is the order number. Alerts are held in memory for 30 minutes (at most 20)
+ref, created_at } }` and `400` for a longer message. A kitchen ticket that fails to print adds an alert of
+`kind` `kot_unprinted` whose `message` is the order number and whose `ref` is the
+`/unprinted-kots` id a display can reprint or drop. Alerts are held in memory for 30 minutes (at most 20)
 and are not audited. `GET /api/kds/orders` on both ports, `GET /api/kitchen/orders`, and every WebSocket
 `initial_data` frame carry them as `alerts` next to `orders` and `counts`; each display keeps its own
 acknowledged list.
@@ -763,6 +764,8 @@ The role gate is a `router.use` layer below the `/pairing` mount, so it also app
 | `PATCH` | `/items/:id/status` | `ROLE_ACCESS.kitchen` + KDS-enabled       | path: `id`; body: `status`, `expected_status` | Body `status` in `pending`, `preparing`, `ready`, `served`, plus optional `expected_status` for a compare-and-set. Station and category scope are re-checked inside the write transaction. |
 | `GET`   | `/speech`           | `ROLE_ACCESS.kitchen` + KDS-enabled       | none                                          | `{ engine, voices }`: `engine` is `local` when local voice services are configured; `voices` lists the ones answering as `{ id, name }`.                                                   |
 | `POST`  | `/speech`           | `ROLE_ACCESS.kitchen` + KDS-enabled       | body: `text` (max 500), `lang`, `voice`?      | WAV audio of the text; `204` when this computer has no voice for `lang`.                                                                                                                   |
+| `POST`  | `/unprinted-kots/:id/reprint` | `ROLE_ACCESS.kitchen` + KDS-enabled | path: `id` | Prints a missing kitchen ticket again for the station that missed it; `200` also clears the warning, `502` when it still fails, `404` when it is no longer listed. |
+| `DELETE` | `/unprinted-kots/:id` | `ROLE_ACCESS.kitchen` + KDS-enabled | path: `id` | Drops a missing-ticket warning without printing; `404` when it is not listed. |
 
 ### Kitchen
 
@@ -976,6 +979,8 @@ The KDS server reads the same database as the main API. Its whole surface:
 | `PATCH` | `/api/kds/items/:id/status` | `ROLE_ACCESS.kitchen`                                    | path: `id`; body: `status`, `expected_status` | `{ success: true }`. `400` for a terminal or voided item, `403` for a station or category the caller does not cover, `409` when the row changed before the write.                                                                                                                  |
 | `GET`   | `/api/kds/speech`           | `ROLE_ACCESS.kitchen`                                    | none                                          | Same as the main API's `GET /api/kds/speech`.                                                                                                                                                                                                                                      |
 | `POST`  | `/api/kds/speech`           | `ROLE_ACCESS.kitchen`                                    | body: `text`, `lang`, `voice`?                | Same as the main API's `POST /api/kds/speech`.                                                                                                                                                                                                                                     |
+| `POST`  | `/api/kds/unprinted-kots/:id/reprint` | `ROLE_ACCESS.kitchen` | path: `id` | Same as the main API's `POST /api/kds/unprinted-kots/:id/reprint`. |
+| `DELETE` | `/api/kds/unprinted-kots/:id` | `ROLE_ACCESS.kitchen` | path: `id` | Same as the main API's `DELETE /api/kds/unprinted-kots/:id`. |
 | `GET`   | `/api/categories`           | `ROLE_ACCESS.kitchen`                                    | none                                          | `{ categories: [ ... ] }` narrowed to the caller's station and category scope.                                                                                                                                                                                                     |
 
 Plus three static handlers: `express.static` over the frontend export, `GET /` redirecting to

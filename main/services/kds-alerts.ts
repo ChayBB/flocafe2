@@ -10,6 +10,8 @@ export interface KdsAlert {
   message: string;
   table: string | null;
   sent_by: string | null;
+  /** The missing kitchen ticket this alert is about, so a display can reprint or drop it. */
+  ref?: string | null;
   created_at: string;
 }
 
@@ -25,6 +27,7 @@ export function addKdsAlert(input: {
   table?: string | null;
   sentBy?: string | null;
   kind?: KdsAlert['kind'];
+  ref?: string | null;
 }): KdsAlert {
   const alert: KdsAlert = {
     id: randomUUID(),
@@ -34,6 +37,7 @@ export function addKdsAlert(input: {
       .slice(0, KDS_ALERT_MESSAGE_MAX),
     table: input.table ? String(input.table).trim().slice(0, 40) || null : null,
     sent_by: input.sentBy ?? null,
+    ref: input.ref ?? null,
     created_at: new Date().toISOString(),
   };
   alerts = [...recentKdsAlerts(), alert].slice(-KDS_ALERT_LIMIT);

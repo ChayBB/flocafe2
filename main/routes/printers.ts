@@ -1301,158 +1301,167 @@ router.post(
   '/print-kot',
   requirePermission('printing.execute'),
   asyncHandler(async (req: Request, res: Response) => {
-    // Enforce master KOT printing toggle for all automatic and manual print requests.
-    if (!isKotPrintingEnabled()) {
-      return res.status(403).json({ error: 'KOT printing is disabled for this business' });
+    const outcome = await printOrderKot(req.body ?? {}, getHttpRequestSignal(req));
+    res.status(outcome.status).json(outcome.body);
+  }),
+);
+
+/** Prints an order's kitchen tickets and keeps track of any station whose ticket failed. */
+export async function printOrderKot(
+  body: Record<string, any>,
+  signal?: AbortSignal,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  // Enforce master KOT printing toggle for all automatic and manual print requests.
+  if (!isKotPrintingEnabled()) {
+    return { status: 403, body: { error: 'KOT printing is disabled for this business' } };
+  }
+  try {
+    const { orderId, stationName, items, useUnicode = false } = body;
+    // Global text shaping setting; explicit boolean overrides printer profile capability.
+    const arabicShapingOverride =
+      typeof body.arabicShaping === 'boolean' ? body.arabicShaping : undefined;
+
+    if (!orderId) {
+      return { status: 400, body: { error: 'orderId is required' } };
     }
-    try {
-      const { orderId, stationName, items, useUnicode = false } = req.body;
-      // Global text shaping setting; explicit boolean overrides printer profile capability.
-      const arabicShapingOverride =
-        typeof req.body?.arabicShaping === 'boolean' ? req.body.arabicShaping : undefined;
 
-      if (!orderId) {
-        return res.status(400).json({ error: 'orderId is required' });
-      }
-
-      const db = getDatabase();
-      const printer = db
-        .prepare(
-          `SELECT * FROM printers
+    const db = getDatabase();
+    const printer = db
+      .prepare(
+        `SELECT * FROM printers
        WHERE connection_type != 'webusb'
        ORDER BY is_default DESC, name
        LIMIT 1`,
-        )
-        .get();
+      )
+      .get();
 
-      if (!printer) {
-        return res
-          .status(400)
-          .json({ error: 'No default printer configured. Add a printer in Settings.' });
-      }
-
-      const order: any = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-      if (!order) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-
-      const kotLanguage = resolveTenantKotLanguage(db);
-
-      // Fetch order items from database
-      const orderItems: any[] = getEffectiveOrderItems(db, orderId);
-
-      // Fetch table/customer info if available so backend KOT metadata matches
-      // the browser and WebUSB paths.
-      if (order.table_id) {
-        const table: any = db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id);
-        if (table) {
-          order.table = { name: table.number };
-        }
-      }
-      if (order.customer_id) {
-        const customer = db
-          .prepare('SELECT name FROM customers WHERE id = ?')
-          .get(order.customer_id) as { name: string } | null;
-        if (customer) order.customer = { name: customer.name };
-      }
-
-      // Specific station prints one ticket; unassigned item overrides route by station.
-      let success = true;
-      const warnings: NonNullable<Awaited<ReturnType<typeof printKOTDetailed>>['warnings']> = [];
-      let failure: Awaited<ReturnType<typeof printKOTDetailed>> | null = null;
-      const kotSourceItems = (Array.isArray(items) ? items : orderItems).filter((item: any) =>
-        isKotItemPending(item?.status),
-      );
-
-      const separate = isKotPrintSeparate();
-      const tickets = (ticketItems: any[]) =>
-        separate ? ticketItems.map((item) => [item]) : [ticketItems];
-      const stationFailures = new Map<string, string | null>();
-      const noteTicket = (
-        station: string,
-        result: Awaited<ReturnType<typeof printKOTDetailed>>,
-      ) => {
-        if (!result.ok) stationFailures.set(station, result.detail ?? null);
-        else if (!stationFailures.has(station)) stationFailures.set(station, '');
+    if (!printer) {
+      return {
+        status: 400,
+        body: { error: 'No default printer configured. Add a printer in Settings.' },
       };
+    }
 
-      if (stationName) {
-        const station = stationName || 'Kitchen';
-        for (const ticket of kotSourceItems.length > 0 ? tickets(kotSourceItems) : []) {
-          const result = await printKOTDetailed(
-            order,
-            ticket,
-            station,
-            useUnicode,
-            undefined,
-            getHttpRequestSignal(req),
-            arabicShapingOverride,
-            kotLanguage,
-          );
-          noteTicket(station, result);
-          success = success && result.ok;
-          warnings.push(...(result.warnings || []));
-          if (!result.ok && !failure) failure = result;
-        }
-      } else {
-        const retryStation =
-          typeof req.body?.retryStation === 'string' ? req.body.retryStation : null;
-        const groups = routeItemsToStations(db, kotSourceItems).filter(
-          (g) => g.items.length > 0 && (!retryStation || g.stationName === retryStation),
+    const order: any = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    if (!order) {
+      return { status: 404, body: { error: 'Order not found' } };
+    }
+
+    const kotLanguage = resolveTenantKotLanguage(db);
+
+    // Fetch order items from database
+    const orderItems: any[] = getEffectiveOrderItems(db, orderId);
+
+    // Fetch table/customer info if available so backend KOT metadata matches
+    // the browser and WebUSB paths.
+    if (order.table_id) {
+      const table: any = db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id);
+      if (table) {
+        order.table = { name: table.number };
+      }
+    }
+    if (order.customer_id) {
+      const customer = db
+        .prepare('SELECT name FROM customers WHERE id = ?')
+        .get(order.customer_id) as { name: string } | null;
+      if (customer) order.customer = { name: customer.name };
+    }
+
+    // Specific station prints one ticket; unassigned item overrides route by station.
+    let success = true;
+    const warnings: NonNullable<Awaited<ReturnType<typeof printKOTDetailed>>['warnings']> = [];
+    let failure: Awaited<ReturnType<typeof printKOTDetailed>> | null = null;
+    const kotSourceItems = (Array.isArray(items) ? items : orderItems).filter((item: any) =>
+      isKotItemPending(item?.status),
+    );
+
+    const separate = isKotPrintSeparate();
+    const tickets = (ticketItems: any[]) =>
+      separate ? ticketItems.map((item) => [item]) : [ticketItems];
+    const stationFailures = new Map<string, string | null>();
+    const noteTicket = (station: string, result: Awaited<ReturnType<typeof printKOTDetailed>>) => {
+      if (!result.ok) stationFailures.set(station, result.detail ?? null);
+      else if (!stationFailures.has(station)) stationFailures.set(station, '');
+    };
+
+    if (stationName) {
+      const station = stationName || 'Kitchen';
+      for (const ticket of kotSourceItems.length > 0 ? tickets(kotSourceItems) : []) {
+        const result = await printKOTDetailed(
+          order,
+          ticket,
+          station,
+          useUnicode,
+          undefined,
+          signal,
+          arabicShapingOverride,
+          kotLanguage,
         );
-        for (const group of groups.flatMap((g) =>
-          tickets(g.items).map((items) => ({ ...g, items })),
-        )) {
-          const result = await printKOTDetailed(
-            order,
-            group.items,
-            group.stationName,
-            useUnicode,
-            group.printer || undefined,
-            getHttpRequestSignal(req),
-            arabicShapingOverride,
-            kotLanguage,
-          );
-          noteTicket(group.stationName, result);
-          success = success && result.ok;
-          warnings.push(...(result.warnings || []));
-          if (!result.ok && !failure) failure = result;
-        }
+        noteTicket(station, result);
+        success = success && result.ok;
+        warnings.push(...(result.warnings || []));
+        if (!result.ok && !failure) failure = result;
       }
-
-      for (const [station, detail] of stationFailures) {
-        if (detail === '') {
-          clearUnprintedKot(order.id, station);
-        } else {
-          recordUnprintedKot({
-            orderId: order.id,
-            orderNumber: order.order_number,
-            table: order.table?.name ?? null,
-            station,
-            detail,
-          });
-        }
+    } else {
+      const retryStation = typeof body.retryStation === 'string' ? body.retryStation : null;
+      const groups = routeItemsToStations(db, kotSourceItems).filter(
+        (g) => g.items.length > 0 && (!retryStation || g.stationName === retryStation),
+      );
+      for (const group of groups.flatMap((g) =>
+        tickets(g.items).map((items) => ({ ...g, items })),
+      )) {
+        const result = await printKOTDetailed(
+          order,
+          group.items,
+          group.stationName,
+          useUnicode,
+          group.printer || undefined,
+          signal,
+          arabicShapingOverride,
+          kotLanguage,
+        );
+        noteTicket(group.stationName, result);
+        success = success && result.ok;
+        warnings.push(...(result.warnings || []));
+        if (!result.ok && !failure) failure = result;
       }
+    }
 
-      if (success) {
-        res.json({ success: true, warnings });
+    for (const [station, detail] of stationFailures) {
+      if (detail === '') {
+        clearUnprintedKot(order.id, station);
       } else {
-        res.status(502).json({
+        recordUnprintedKot({
+          orderId: order.id,
+          orderNumber: order.order_number,
+          table: order.table?.name ?? null,
+          station,
+          detail,
+        });
+      }
+    }
+
+    if (success) {
+      return { status: 200, body: { success: true, warnings } };
+    } else {
+      return {
+        status: 502,
+        body: {
           error: failure?.detail || 'KOT print failed. Check printer connection.',
           detail: failure?.detail,
           failure_class: failure?.failureClass,
           code: failure?.code,
           correlation_id: failure?.correlationId,
           stage: failure?.stage,
-        });
-      }
-    } catch (error: any) {
-      console.error('[Print KOT] Error:', error);
-      console.error('[API] Internal error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        },
+      };
     }
-  }),
-);
+  } catch (error: any) {
+    console.error('[Print KOT] Error:', error);
+    console.error('[API] Internal error:', error);
+    return { status: 500, body: { error: 'Internal server error' } };
+  }
+}
 
 router.get(
   '/delivery-slip-payment/:orderId',

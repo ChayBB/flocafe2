@@ -192,6 +192,7 @@ export function KdsWorkspace({
         id: `alert:${alert.id}`,
         kind: alert.kind,
         at: alert.created_at,
+        ref: alert.ref ?? undefined,
         // Order numbers are shown but never read out.
         speech:
           alert.kind === 'kot_unprinted'
@@ -201,11 +202,12 @@ export function KdsWorkspace({
             : undefined,
         text:
           alert.kind === 'kot_unprinted'
-            ? t('messageKotUnprinted', {
-                place: alert.table
+            ? [
+                t('messageKotFailed'),
+                alert.table
                   ? t('tableLabel', { name: alert.table })
                   : t('messageOrder', { number: alert.message }),
-              })
+              ].join(' · ')
             : [
                 t('messageEmergency'),
                 alert.table ? t('tableLabel', { name: alert.table }) : null,
@@ -430,6 +432,16 @@ export function KdsWorkspace({
         <KdsMessageBar
           messages={messages}
           onDismiss={dismissKdsMessage}
+          onReprintKot={async (message) => {
+            if (!message.ref) return false;
+            if ((await conn.reprintUnprintedKot(message.ref)) === 'failed') return false;
+            dismissKdsMessage(message.id);
+            return true;
+          }}
+          onDropKot={(message) => {
+            if (message.ref) void conn.dropUnprintedKot(message.ref);
+            dismissKdsMessage(message.id);
+          }}
           showMessages={soundSettings.showMessages}
           showBell={soundSettings.showBell}
         />

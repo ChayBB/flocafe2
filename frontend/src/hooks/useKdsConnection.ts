@@ -191,6 +191,8 @@ export interface UseKdsConnectionEndpoints {
   /** Path template containing a literal `:itemId` placeholder, e.g. '/kds/items/:itemId/status'. */
   itemStatus?: string;
   stations?: string;
+  /** Missing kitchen tickets a display can print again or drop. */
+  unprintedKots?: string;
 }
 
 export interface UseKdsConnectionOptions {
@@ -208,6 +210,8 @@ export interface KdsAlert {
   message: string;
   table: string | null;
   sent_by: string | null;
+  /** The missing kitchen ticket a `kot_unprinted` alert is about. */
+  ref?: string | null;
   created_at: string;
 }
 
@@ -233,6 +237,9 @@ export interface UseKdsConnectionResult {
   setRememberMe: (v: boolean) => void;
   handleLogin: (e: React.FormEvent) => Promise<void>;
   handleLogout: () => Promise<void>;
+  /** Prints a missing kitchen ticket again; `gone` means it was already printed or dropped. */
+  reprintUnprintedKot: (ref: string) => Promise<'printed' | 'gone' | 'failed'>;
+  dropUnprintedKot: (ref: string) => Promise<void>;
   updateItemStatus: (
     itemId: number,
     status: KitchenStatus,
@@ -246,6 +253,7 @@ const ME_ENDPOINT = '/auth/me';
 const ORDERS_ENDPOINT = '/kitchen/orders';
 const ITEM_STATUS_ENDPOINT = '/order-items/:itemId/status';
 const STATIONS_ENDPOINT = '/kitchen/stations';
+const UNPRINTED_KOTS_ENDPOINT = '/kds/unprinted-kots';
 const KDS_AUTH_BLOCKED_KEY = 'flocafe:kds-auth-blocked';
 
 function isKdsAuthBlocked(): boolean {
@@ -276,6 +284,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
   const ordersPath = endpoints?.orders ?? ORDERS_ENDPOINT;
   const itemStatusPath = endpoints?.itemStatus ?? ITEM_STATUS_ENDPOINT;
   const stationsPath = endpoints?.stations ?? STATIONS_ENDPOINT;
+  const unprintedKotsPath = endpoints?.unprintedKots ?? UNPRINTED_KOTS_ENDPOINT;
   const t = useTranslations('kds');
   const tNav = useTranslations('nav');
   const { confirm, ConfirmDialog } = useConfirm();
@@ -907,6 +916,28 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     };
   }, [api, stationsPath, enabled, userId]);
 
+  const reprintUnprintedKot = useCallback(
+    async (ref: string): Promise<'printed' | 'gone' | 'failed'> => {
+      try {
+        await api.post(`${unprintedKotsPath}/${encodeURIComponent(ref)}/reprint`);
+        return 'printed';
+      } catch (error: unknown) {
+        const status = (error as { response?: { status?: number } }).response?.status;
+        return status === 404 ? 'gone' : 'failed';
+      }
+    },
+    [api, unprintedKotsPath],
+  );
+
+  const dropUnprintedKot = useCallback(
+    async (ref: string) => {
+      try {
+        await api.delete(`${unprintedKotsPath}/${encodeURIComponent(ref)}`);
+      } catch {}
+    },
+    [api, unprintedKotsPath],
+  );
+
   return {
     user,
     orders,
@@ -928,6 +959,8 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     setRememberMe,
     handleLogin,
     handleLogout,
+    reprintUnprintedKot,
+    dropUnprintedKot,
     updateItemStatus,
     ConfirmDialog,
   };

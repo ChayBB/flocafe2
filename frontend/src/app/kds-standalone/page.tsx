@@ -20,8 +20,12 @@ function useKdsEnabledCheck(baseUrl: string): boolean | null {
         if (cancelled) return;
         setEnabled(res.status === 404 ? false : res.ok ? true : null);
       })
-      .catch(() => { if (!cancelled) setEnabled(null); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setEnabled(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [baseUrl]);
   return enabled;
 }
@@ -64,13 +68,16 @@ export default function KdsStandalonePage() {
     orders: '/api/kds/orders',
     itemStatus: '/api/kds/items/:itemId/status',
     stations: '/api/kds/stations',
+    unprintedKots: '/api/kds/unprinted-kots',
   };
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const { kdsDefaultView } = useServerKdsInfo(origin);
   const kdsEnabled = useKdsEnabledCheck(origin);
-  const conn = useKdsConnection(api
-    ? { api, endpoints: standaloneEndpoints, enabled: kdsEnabled === true }
-    : { api: axios.create(), enabled: false });
+  const conn = useKdsConnection(
+    api
+      ? { api, endpoints: standaloneEndpoints, enabled: kdsEnabled === true }
+      : { api: axios.create(), enabled: false },
+  );
 
   if (kdsEnabled === null) {
     return (
@@ -84,9 +91,7 @@ export default function KdsStandalonePage() {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-3 text-center px-6 bg-background text-foreground">
         <h1 className="text-lg font-semibold">{t('disabledTitle')}</h1>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          {t('disabledHint')}
-        </p>
+        <p className="text-sm text-muted-foreground max-w-sm">{t('disabledHint')}</p>
       </div>
     );
   }

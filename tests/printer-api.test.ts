@@ -101,6 +101,9 @@ app.use((req: any, _res: any, next: any) => {
 });
 app.use('/api/printers', printerRoutes);
 app.use('/api/kitchen-stations', kitchenStationRoutes);
+const { handleKdsDismissKot, handleKdsReprintKot } = require('../main/services/kds-kot-actions');
+app.post('/kds/unprinted-kots/:id/reprint', handleKdsReprintKot);
+app.delete('/kds/unprinted-kots/:id', handleKdsDismissKot);
 
 const db = getDatabase();
 // Regional settings come from signup, never a fallback; seed one
@@ -1090,6 +1093,40 @@ async function runTests() {
         `/api/printers/unprinted-kots/${encodeURIComponent(again.id)}`,
       );
       assert(dismissedAgain.status === 404, 'dismissing it again finds nothing');
+
+      await printKitchen();
+      const [fromKds] = await listed();
+      assert(
+        recentKdsAlerts().some(
+          (alert: { kind: string; ref?: string }) =>
+            alert.kind === 'kot_unprinted' && alert.ref === fromKds.id,
+        ),
+        'the kitchen display alert points at the missing ticket',
+      );
+      const kdsReprint = () =>
+        request(app).post(`/kds/unprinted-kots/${encodeURIComponent(fromKds.id)}/reprint`);
+      assert(
+        (await kdsReprint()).status === 502,
+        'a display reprint fails while the printer is off',
+      );
+      assert((await listed()).length === 1, 'a failed display reprint keeps the warning');
+      currentUserId = 'owner-1';
+      await request(app).put(`/api/printers/${alertPrinterId}`).send({ port: okPort });
+      currentUserId = 'server-1';
+      assert((await kdsReprint()).status === 200, 'a display reprints the missing ticket');
+      assert((await listed()).length === 0, 'a display reprint clears the warning');
+      assert((await kdsReprint()).status === 404, 'a cleared warning has nothing to reprint');
+
+      currentUserId = 'owner-1';
+      await request(app).put(`/api/printers/${alertPrinterId}`).send({ port: 1 });
+      currentUserId = 'server-1';
+      await printKitchen();
+      const [toDrop] = await listed();
+      const kdsDrop = () =>
+        request(app).delete(`/kds/unprinted-kots/${encodeURIComponent(toDrop.id)}`);
+      assert((await kdsDrop()).status === 200, 'a display drops a warning without printing');
+      assert((await listed()).length === 0, 'a dropped warning is gone');
+      assert((await kdsDrop()).status === 404, 'dropping it again finds nothing');
     } finally {
       currentUserId = 'owner-1';
       okServer.close();

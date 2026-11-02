@@ -40,7 +40,12 @@ export function recordUnprintedKot(input: {
     created_at: new Date().toISOString(),
   };
   unprinted = [...unprinted, entry];
-  addKdsAlert({ kind: 'kot_unprinted', message: input.orderNumber, table: input.table ?? null });
+  addKdsAlert({
+    kind: 'kot_unprinted',
+    message: input.orderNumber,
+    table: input.table ?? null,
+    ref: id,
+  });
   notifyKdsUpdate();
   return entry;
 }

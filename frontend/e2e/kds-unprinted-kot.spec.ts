@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { E2E_KDS_BASE_URL } from './helpers/urls';
 
-test('the KDS says which table’s kitchen ticket did not print, without reading an order number', async ({
+test('a kitchen ticket that did not print shows as a pale chip that prints it again or drops it, read without an order number', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -57,6 +57,7 @@ test('the KDS says which table’s kitchen ticket did not print, without reading
       message: `ORD-T-${run}`,
       table: `T${run}`,
       sent_by: null,
+      ref: `11:Kitchen-${run}`,
       created_at: new Date().toISOString(),
     },
     {
@@ -65,6 +66,7 @@ test('the KDS says which table’s kitchen ticket did not print, without reading
       message: `ORD-W-${run}`,
       table: null,
       sent_by: null,
+      ref: `12:Kitchen-${run}`,
       created_at: new Date().toISOString(),
     },
   ];
@@ -91,6 +93,26 @@ test('the KDS says which table’s kitchen ticket did not print, without reading
     });
   });
 
+  let reprintAttempts = 0;
+  await page.route('**/api/kds/unprinted-kots/**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      reprintAttempts += 1;
+      await route.fulfill(
+        reprintAttempts === 1
+          ? { status: 502, json: { error: 'printer offline' } }
+          : { status: 200, json: { success: true } },
+      );
+      return;
+    }
+    await route.fulfill({ status: 200, json: { success: true } });
+  });
+  const dropped: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'DELETE' && request.url().includes('/api/kds/unprinted-kots/'))
+      dropped.push(decodeURIComponent(request.url().split('/').pop() || ''));
+  });
+
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
   await expect(
     page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
@@ -103,13 +125,11 @@ test('the KDS says which table’s kitchen ticket did not print, without reading
   await expect(page.getByTestId('kds-workspace')).toBeVisible();
 
   const notices = page.locator('[data-testid="kds-message"][data-kind="kot_unprinted"]');
-  await expect(notices.filter({ hasText: `Table T${run}` })).toContainText(
-    `Kitchen ticket for Table T${run} did not print`,
-    { timeout: 20000 },
-  );
-  await expect(notices.filter({ hasText: `ORD-W-${run}` })).toContainText(
-    `Kitchen ticket for Order ORD-W-${run} did not print`,
-  );
+  const tableNotice = notices.filter({ hasText: `Table T${run}` });
+  const takeawayNotice = notices.filter({ hasText: `ORD-W-${run}` });
+  await expect(tableNotice).toContainText(`Print failed · Table T${run}`, { timeout: 20000 });
+  await expect(tableNotice).toHaveClass(/bg-pink-50/);
+  await expect(takeawayNotice).toContainText(`Print failed · Order ORD-W-${run}`);
   await expect(
     page.locator('[data-testid="kds-message"][data-kind="emergency"]', { hasText: run }),
   ).toHaveCount(0);
@@ -119,4 +139,24 @@ test('the KDS says which table’s kitchen ticket did not print, without reading
   await expect.poll(spoken).toContain(`Kitchen ticket for Table T${run} did not print`);
   await expect.poll(spoken).toContain('A kitchen ticket did not print');
   expect(await spoken()).not.toContain('ORD-');
+
+  // Print again: a failed try keeps the choice open, the next one clears the chip.
+  await tableNotice.click();
+  const dialog = page.getByTestId('kds-kot-dialog');
+  await expect(dialog).toContainText(`Print failed · Table T${run}`);
+  await dialog.getByTestId('kds-kot-reprint').click();
+  await expect(dialog.getByTestId('kds-kot-failed')).toBeVisible();
+  await expect(tableNotice).toHaveCount(1);
+  await dialog.getByTestId('kds-kot-reprint').click();
+  await expect(dialog).toBeHidden();
+  await expect(tableNotice).toHaveCount(0);
+  expect(reprintAttempts).toBe(2);
+
+  // Cancel drops the warning without printing.
+  await takeawayNotice.click();
+  await dialog.getByTestId('kds-kot-drop').click();
+  await expect(dialog).toBeHidden();
+  await expect(takeawayNotice).toHaveCount(0);
+  await expect.poll(() => dropped).toEqual([`12:Kitchen-${run}`]);
+  expect(reprintAttempts).toBe(2);
 });

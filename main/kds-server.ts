@@ -60,6 +60,7 @@ import {
 } from './services/authorization';
 import { recordClockIn, recordClockOut } from './services/attendance';
 import { handleKdsSpeech, handleKdsSpeechEngine } from './services/kds-speech';
+import { handleKdsDismissKot, handleKdsReprintKot } from './services/kds-kot-actions';
 import { recentKdsAlerts } from './services/kds-alerts';
 
 let kdsServer: http.Server | null = null;
@@ -473,7 +474,8 @@ export function startKdsServer(): Promise<void> {
         // item) and age voided items off the board after their grace period.
         const isVisibleItem = (item: any, order: any) =>
           item.status !== 'void_adjustment' &&
-          (!['completed', 'cancelled', 'refunded'].includes(item.status) || isCancelledNoticeKdsVisible(item)) &&
+          (!['completed', 'cancelled', 'refunded'].includes(item.status) ||
+            isCancelledNoticeKdsVisible(item)) &&
           (item.status !== 'voided' || isVoidedItemKdsVisible(item.voided_at)) &&
           isKdsStationItemAllowed(
             stationIds,
@@ -519,7 +521,11 @@ export function startKdsServer(): Promise<void> {
         for (const order of ordersWithItems) {
           for (const item of order.items) counts[item.status] = (counts[item.status] || 0) + 1;
         }
-        res.json({ orders: annotateKdsItems(db, ordersWithItems), counts, alerts: recentKdsAlerts() });
+        res.json({
+          orders: annotateKdsItems(db, ordersWithItems),
+          counts,
+          alerts: recentKdsAlerts(),
+        });
       } catch (error: any) {
         console.error('[API] Internal error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -708,6 +714,8 @@ export function startKdsServer(): Promise<void> {
     // Get categories for filtering
     app.get('/api/kds/speech', requireAuth, handleKdsSpeechEngine);
     app.post('/api/kds/speech', requireAuth, handleKdsSpeech);
+    app.post('/api/kds/unprinted-kots/:id/reprint', requireAuth, handleKdsReprintKot);
+    app.delete('/api/kds/unprinted-kots/:id', requireAuth, handleKdsDismissKot);
 
     app.get('/api/categories', requireAuth, (req: Request, res: Response) => {
       if (!isKdsEnabled()) {

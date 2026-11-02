@@ -15,6 +15,8 @@ export interface KdsMessage {
   text: string;
   /** What is read aloud when it differs from the text, e.g. without an order number. */
   speech?: string;
+  /** The missing kitchen ticket behind a `kot_unprinted` notice. */
+  ref?: string;
   at: string;
 }
 
