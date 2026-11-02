@@ -103,8 +103,8 @@ export function normalizeKitchenStatus(status: unknown): KitchenStatus {
 export const ORDER_TYPE_BADGE_STYLES: Record<string, string> = {
   dine_in: 'bg-transparent text-muted-foreground border-border',
   takeaway: 'bg-transparent text-(--kds-pending-text) border-(--kds-pending-line)',
-  delivery: 'bg-transparent text-(--kds-served-text) border-(--kds-served-line)',
-  online: 'bg-transparent text-(--kds-ready-text) border-(--kds-ready-line)',
+  delivery: 'bg-transparent text-(--kds-ready-text) border-(--kds-ready-line)',
+  online: 'bg-transparent text-(--kds-served-text) border-(--kds-served-line)',
 };
 
 export interface KdsOrderItemAddon {

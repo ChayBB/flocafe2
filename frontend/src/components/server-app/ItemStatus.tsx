@@ -10,12 +10,27 @@ export const KITCHEN_STAGES = ['pending', 'preparing', 'ready', 'served'] as con
 export type KitchenStage = (typeof KITCHEN_STAGES)[number];
 
 export const STAGE_STYLES: Record<KitchenStage, { key: ServerAppKey; className: string }> = {
-  pending: { key: 'statusWaiting', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
-  preparing: { key: 'statusPreparing', className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' },
-  ready: { key: 'statusReady', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
-  served: { key: 'statusServed', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
+  pending: {
+    key: 'statusWaiting',
+    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+  },
+  preparing: {
+    key: 'statusPreparing',
+    className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+  },
+  ready: {
+    key: 'statusReady',
+    className: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  },
+  served: {
+    key: 'statusServed',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  },
 };
-const CANCELLED_STYLE = { key: 'statusCancelled' as ServerAppKey, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+const CANCELLED_STYLE = {
+  key: 'statusCancelled' as ServerAppKey,
+  className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+};
 
 export function isCancelledItem(status: string): boolean {
   return TERMINAL_ITEM_STATUSES.includes(status);
@@ -24,7 +39,9 @@ export function isCancelledItem(status: string): boolean {
 /** The stage an item counts under; `completed` reads as served. */
 export function stageOf(status: string): KitchenStage {
   if (status === 'completed') return 'served';
-  return (KITCHEN_STAGES as readonly string[]).includes(status) ? (status as KitchenStage) : 'pending';
+  return (KITCHEN_STAGES as readonly string[]).includes(status)
+    ? (status as KitchenStage)
+    : 'pending';
 }
 
 /** Per-stage counts of an order's live (not cancelled) items. */

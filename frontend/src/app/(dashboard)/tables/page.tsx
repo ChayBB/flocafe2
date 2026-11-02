@@ -277,14 +277,14 @@ const itemStatusColors: Record<string, { bg: string; text: string; dot: string }
     dot: 'bg-blue-500 dark:bg-blue-400',
   },
   ready: {
-    bg: 'bg-green-50 dark:bg-green-950',
-    text: 'text-green-700 dark:text-green-300',
-    dot: 'bg-green-500 dark:bg-green-400',
-  },
-  served: {
     bg: 'bg-purple-50 dark:bg-purple-950',
     text: 'text-purple-700 dark:text-purple-300',
     dot: 'bg-purple-500 dark:bg-purple-400',
+  },
+  served: {
+    bg: 'bg-green-50 dark:bg-green-950',
+    text: 'text-green-700 dark:text-green-300',
+    dot: 'bg-green-500 dark:bg-green-400',
   },
   cancelled: {
     bg: 'bg-red-50 dark:bg-red-950',
@@ -654,7 +654,9 @@ export default function TablesPage() {
                   {table.owner_name && (
                     <p className="px-4 pt-2 text-xs text-muted-foreground flex items-center gap-1 truncate">
                       <UserCog size={12} className="shrink-0" />
-                      <span className="truncate" title={tTables('tableOwner')}>{table.owner_name}</span>
+                      <span className="truncate" title={tTables('tableOwner')}>
+                        {table.owner_name}
+                      </span>
                     </p>
                   )}
                   {table.status === 'reserved' && table.reservation_customer_name && (
@@ -686,9 +688,9 @@ export default function TablesPage() {
                                   : order.status === 'preparing'
                                     ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                                     : order.status === 'ready'
-                                      ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                                      ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
                                       : order.status === 'served'
-                                        ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
+                                        ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                                         : 'bg-muted text-muted-foreground'
                               }`}
                             >
@@ -816,7 +818,9 @@ export default function TablesPage() {
                 {table.owner_name && (
                   <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1 truncate">
                     <UserCog size={12} className="shrink-0" />
-                    <span className="truncate" title={tTables('tableOwner')}>{table.owner_name}</span>
+                    <span className="truncate" title={tTables('tableOwner')}>
+                      {table.owner_name}
+                    </span>
                   </p>
                 )}
                 {table.status === 'reserved' && table.reservation_customer_name && (

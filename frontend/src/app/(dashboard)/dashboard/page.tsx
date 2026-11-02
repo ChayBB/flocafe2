@@ -196,7 +196,11 @@ function shiftDate(date: string, days: number): string {
 /** Formats a 0-23 local hour index as a locale-appropriate time label on a 24-hour clock (e.g. "14"). */
 function formatHourLabel(hour: number, locale: string): string {
   const reference = new Date(Date.UTC(2000, 0, 1, hour));
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', hourCycle: 'h23', timeZone: 'UTC' }).format(reference);
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    hourCycle: 'h23',
+    timeZone: 'UTC',
+  }).format(reference);
 }
 
 /** Formats a 0=Sunday..6=Saturday index as a locale-appropriate weekday name. */
@@ -209,8 +213,8 @@ function formatWeekdayLabel(dayIndex: number, locale: string): string {
 const orderStatusColor: Record<string, string> = {
   pending: 'text-yellow-600 dark:text-yellow-400',
   preparing: 'text-blue-600 dark:text-blue-400',
-  ready: 'text-green-600 dark:text-green-400',
-  served: 'text-purple-600 dark:text-purple-400',
+  ready: 'text-purple-600 dark:text-purple-400',
+  served: 'text-green-600 dark:text-green-400',
   completed: 'text-muted-foreground',
   cancelled: 'text-red-500 dark:text-red-400',
 };

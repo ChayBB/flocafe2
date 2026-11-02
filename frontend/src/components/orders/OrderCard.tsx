@@ -67,13 +67,13 @@ export const orderStatusBadge: Record<
     labelKey: 'preparing',
   },
   ready: {
-    bg: 'bg-green-100 dark:bg-green-950/40',
-    text: 'text-green-700 dark:text-green-300',
+    bg: 'bg-purple-100 dark:bg-purple-950/40',
+    text: 'text-purple-700 dark:text-purple-300',
     labelKey: 'ready',
   },
   served: {
-    bg: 'bg-purple-100 dark:bg-purple-950/40',
-    text: 'text-purple-700 dark:text-purple-300',
+    bg: 'bg-green-100 dark:bg-green-950/40',
+    text: 'text-green-700 dark:text-green-300',
     labelKey: 'served',
   },
   completed: { bg: 'bg-muted', text: 'text-muted-foreground', labelKey: 'completed' },
@@ -135,8 +135,8 @@ export const whatsappReceiptStatusBadge: Record<
 export const itemStatusDot: Record<OrderItem['status'], { dot: string; labelKey: OrdersKey }> = {
   pending: { dot: 'bg-yellow-400', labelKey: 'itemStatusWaiting' },
   preparing: { dot: 'bg-blue-500', labelKey: 'itemStatusPreparing' },
-  ready: { dot: 'bg-green-500', labelKey: 'itemStatusReady' },
-  served: { dot: 'bg-purple-500', labelKey: 'itemStatusServed' },
+  ready: { dot: 'bg-purple-500', labelKey: 'itemStatusReady' },
+  served: { dot: 'bg-green-500', labelKey: 'itemStatusServed' },
   cancelled: { dot: 'bg-red-400', labelKey: 'itemStatusCancelled' },
   voided: { dot: 'bg-red-500', labelKey: 'itemStatusVoided' },
   void_adjustment: { dot: 'bg-red-300', labelKey: 'itemStatusVoidAdjustment' },
@@ -408,7 +408,7 @@ export function OrderCard({
             <span className="font-bold text-base text-foreground tracking-tight">
               #<Ltr>{order.order_number}</Ltr>
             </span>
-{awaitingWeight && (
+            {awaitingWeight && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
                 {tPos(orderPendingLabelKey(order))}
               </span>
@@ -439,7 +439,11 @@ export function OrderCard({
                   if (bill) onPrint(bill.id);
                   else if (onPrintOrder) onPrintOrder(order);
                 }}
-                disabled={(bill && printingBillId === bill.id) || generatingBillId === order.id || awaitingWeight}
+                disabled={
+                  (bill && printingBillId === bill.id) ||
+                  generatingBillId === order.id ||
+                  awaitingWeight
+                }
                 className="size-9 rounded-lg border-border/70 text-muted-foreground hover:text-foreground touch-manipulation active:scale-95"
                 title={printCount > 0 ? tCommon('reprint') : tCommon('print')}
               >
@@ -524,7 +528,10 @@ export function OrderCard({
               </span>
             )}
             {order.table_owner_name && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground" title={tTables('tableOwner')}>
+              <span
+                className="inline-flex items-center gap-1 text-muted-foreground"
+                title={tTables('tableOwner')}
+              >
                 <UserCog size={12} />
                 {order.table_owner_name}
               </span>
@@ -1081,7 +1088,11 @@ export function OrderCard({
                   if (bill) onPrint(bill.id);
                   else onPrintOrder(order);
                 }}
-                disabled={(bill && printingBillId === bill.id) || generatingBillId === order.id || awaitingWeight}
+                disabled={
+                  (bill && printingBillId === bill.id) ||
+                  generatingBillId === order.id ||
+                  awaitingWeight
+                }
                 className="h-10 px-3 justify-center border-border text-foreground hover:bg-muted active:scale-95 touch-manipulation font-semibold text-xs"
               >
                 {(bill && printingBillId === bill.id) || generatingBillId === order.id ? (
