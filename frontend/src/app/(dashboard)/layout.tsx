@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/s
 import StatusBar from '@/components/layout/StatusBar';
 import GlobalNotifications from '@/components/layout/GlobalNotifications';
 import BillRequestAlerts from '@/components/layout/BillRequestAlerts';
+import UnprintedKotAlerts from '@/components/layout/UnprintedKotAlerts';
 import TitleBar from '@/components/layout/TitleBar';
 import UpdateAvailableDialog from '@/components/updates/UpdateAvailableDialog';
 import ProductAnalyticsDialog from '@/components/analytics/ProductAnalyticsDialog';
@@ -44,6 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <SidebarTrigger className="size-8" aria-label="Open navigation" />
             </div>
             <BillRequestAlerts />
+            <UnprintedKotAlerts />
             {!isPos && <GlobalNotifications />}
             <div
               className={

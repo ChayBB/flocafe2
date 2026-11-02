@@ -1009,6 +1009,93 @@ async function runTests() {
     }
   }
 
+  console.log('\nTest 14: a kitchen ticket that fails to print stays listed until it prints');
+  {
+    const { recentKdsAlerts } = require('../main/services/kds-alerts');
+    const okServer = net.createServer((socket) => socket.resume());
+    await new Promise<void>((resolve, reject) => {
+      okServer.once('error', reject);
+      okServer.listen(0, '127.0.0.1', () => resolve());
+    });
+    const okAddress = okServer.address();
+    const okPort = typeof okAddress === 'object' && okAddress ? okAddress.port : 0;
+    const printerRes = await request(app).post('/api/printers').send({
+      name: 'Unprinted Alert Printer',
+      connection_type: 'network',
+      ip_address: '127.0.0.1',
+      port: 1,
+      is_default: true,
+    });
+    const alertPrinterId = printerRes.body.printer.id;
+    const orderId = Number(
+      db
+        .prepare(
+          `INSERT INTO orders (order_number, status, type, subtotal, total, created_at, updated_at)
+         VALUES ('ORD-UNPRINTED', 'pending', 'dine_in', 10, 10, datetime('now'), datetime('now'))`,
+        )
+        .run().lastInsertRowid,
+    );
+    db.prepare(
+      `INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, total, created_at, updated_at)
+       VALUES (?, 'prod-unprinted', 'Som Tam', 10, 1, 10, 10, datetime('now'), datetime('now'))`,
+    ).run(orderId);
+    const printKitchen = () =>
+      request(app).post('/api/printers/print-kot').send({ orderId, stationName: 'Kitchen' });
+    const listed = async () =>
+      (
+        (await request(app).get('/api/printers/unprinted-kots')).body.unprinted as Array<{
+          id: string;
+          order_id: number;
+          order_number: string;
+          station: string;
+        }>
+      ).filter((entry) => entry.order_id === orderId);
+    try {
+      currentUserId = 'server-1';
+      assert((await printKitchen()).status === 502, 'the ticket fails on a printer that is off');
+      const missing = await listed();
+      assert(
+        missing.length === 1 &&
+          missing[0].order_number === 'ORD-UNPRINTED' &&
+          missing[0].station === 'Kitchen',
+        `the failed ticket is listed for staff with print access (got ${JSON.stringify(missing)})`,
+      );
+      assert(
+        recentKdsAlerts().some(
+          (alert: { kind: string; message: string }) =>
+            alert.kind === 'kot_unprinted' && alert.message === 'ORD-UNPRINTED',
+        ),
+        'kitchen displays are told the ticket is missing',
+      );
+      assert((await printKitchen()).status === 502, 'a second failure');
+      assert((await listed()).length === 1, 'a second failure does not list it twice');
+
+      currentUserId = 'owner-1';
+      await request(app).put(`/api/printers/${alertPrinterId}`).send({ port: okPort });
+      currentUserId = 'server-1';
+      assert((await printKitchen()).status === 200, 'the ticket prints once the printer is back');
+      assert((await listed()).length === 0, 'printing the ticket clears the warning');
+
+      currentUserId = 'owner-1';
+      await request(app).put(`/api/printers/${alertPrinterId}`).send({ port: 1 });
+      currentUserId = 'server-1';
+      await printKitchen();
+      const [again] = await listed();
+      const dismissed = await request(app).delete(
+        `/api/printers/unprinted-kots/${encodeURIComponent(again.id)}`,
+      );
+      assert(dismissed.status === 200, 'staff can dismiss a warning they handled');
+      assert((await listed()).length === 0, 'a dismissed warning is gone');
+      const dismissedAgain = await request(app).delete(
+        `/api/printers/unprinted-kots/${encodeURIComponent(again.id)}`,
+      );
+      assert(dismissedAgain.status === 404, 'dismissing it again finds nothing');
+    } finally {
+      currentUserId = 'owner-1';
+      okServer.close();
+    }
+  }
+
   console.log('\n' + '='.repeat(50));
   console.log(`${passed}/${passed + failed} passed, ${failed} failed`);
 

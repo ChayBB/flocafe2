@@ -1,6 +1,12 @@
 import type { KdsOrder } from '@/hooks/useKdsConnection';
 
-export type KdsMessageKind = 'move' | 'merge' | 'takeaway' | 'cancelled' | 'emergency';
+export type KdsMessageKind =
+  | 'move'
+  | 'merge'
+  | 'takeaway'
+  | 'cancelled'
+  | 'emergency'
+  | 'kot_unprinted';
 
 /** A notice in the KDS message bar, kept until someone acknowledges it. */
 export interface KdsMessage {
@@ -23,12 +29,20 @@ export type KdsBoardChange =
   | { kind: 'merge'; key: string; from: string; to: string }
   | { kind: 'takeaway' | 'cancelled'; key: string; place: string; item: string };
 
-export function kdsItemPlaces(orders: KdsOrder[], placeOf: (order: KdsOrder) => string): Map<number, KdsItemPlace> {
+export function kdsItemPlaces(
+  orders: KdsOrder[],
+  placeOf: (order: KdsOrder) => string,
+): Map<number, KdsItemPlace> {
   const places = new Map<number, KdsItemPlace>();
   for (const order of orders) {
     const place = placeOf(order);
     for (const item of order.items || []) {
-      places.set(item.id, { orderId: order.id, place, change: item.service_change ?? null, name: item.product_name });
+      places.set(item.id, {
+        orderId: order.id,
+        place,
+        change: item.service_change ?? null,
+        name: item.product_name,
+      });
     }
   }
   return places;
@@ -122,7 +136,9 @@ export function addKdsMessages(fresh: KdsMessage[]): void {
 export function cancelKdsTakeawayMessages(cancelled: KdsMessage[]): KdsMessage[] {
   const changed: KdsMessage[] = [];
   const next = getKdsMessages().map((message) => {
-    const replacement = cancelled.find((notice) => message.id.startsWith(`takeaway:${notice.id.split(':')[1]}:`));
+    const replacement = cancelled.find((notice) =>
+      message.id.startsWith(`takeaway:${notice.id.split(':')[1]}:`),
+    );
     if (!replacement) return message;
     changed.push(replacement);
     return replacement;

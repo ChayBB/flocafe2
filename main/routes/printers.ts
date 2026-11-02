@@ -80,6 +80,12 @@ import {
 } from '../countries';
 import { asyncHandler } from '../middleware/async-handler';
 import { getHttpRequestSignal } from '../shutdown';
+import {
+  clearUnprintedKot,
+  dismissUnprintedKot,
+  listUnprintedKots,
+  recordUnprintedKot,
+} from '../services/unprinted-kots';
 import { clockNow } from '../lib/clock';
 
 const router = Router();
@@ -288,6 +294,15 @@ router.get('/supported', requirePermission('printers.manage'), (_req: Request, r
 });
 
 // GET /api/printers/:id
+// GET /api/printers/unprinted-kots — kitchen tickets that failed to print and still need attention.
+router.get(
+  '/unprinted-kots',
+  requirePermission('printing.execute'),
+  (_req: Request, res: Response) => {
+    res.json({ unprinted: listUnprintedKots() });
+  },
+);
+
 router.get('/:id', requirePermission('printers.manage'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -1268,6 +1283,18 @@ export function routeItemsToStations(
   return result;
 }
 
+// DELETE /api/printers/unprinted-kots/:id — staff handled the missing ticket another way.
+router.delete(
+  '/unprinted-kots/:id',
+  requirePermission('printing.execute'),
+  (req: Request, res: Response) => {
+    if (!dismissUnprintedKot(String(req.params.id))) {
+      return res.status(404).json({ error: 'Unprinted ticket not found' });
+    }
+    res.json({ success: true });
+  },
+);
+
 // POST /api/printers/print-kot — print KOT via backend (desktop app).
 // Uses `sales` so the waiter terminal's "server" role can print its own orders.
 router.post(
@@ -1340,6 +1367,14 @@ router.post(
       const separate = isKotPrintSeparate();
       const tickets = (ticketItems: any[]) =>
         separate ? ticketItems.map((item) => [item]) : [ticketItems];
+      const stationFailures = new Map<string, string | null>();
+      const noteTicket = (
+        station: string,
+        result: Awaited<ReturnType<typeof printKOTDetailed>>,
+      ) => {
+        if (!result.ok) stationFailures.set(station, result.detail ?? null);
+        else if (!stationFailures.has(station)) stationFailures.set(station, '');
+      };
 
       if (stationName) {
         const station = stationName || 'Kitchen';
@@ -1354,12 +1389,17 @@ router.post(
             arabicShapingOverride,
             kotLanguage,
           );
+          noteTicket(station, result);
           success = success && result.ok;
           warnings.push(...(result.warnings || []));
           if (!result.ok && !failure) failure = result;
         }
       } else {
-        const groups = routeItemsToStations(db, kotSourceItems).filter((g) => g.items.length > 0);
+        const retryStation =
+          typeof req.body?.retryStation === 'string' ? req.body.retryStation : null;
+        const groups = routeItemsToStations(db, kotSourceItems).filter(
+          (g) => g.items.length > 0 && (!retryStation || g.stationName === retryStation),
+        );
         for (const group of groups.flatMap((g) =>
           tickets(g.items).map((items) => ({ ...g, items })),
         )) {
@@ -1373,9 +1413,24 @@ router.post(
             arabicShapingOverride,
             kotLanguage,
           );
+          noteTicket(group.stationName, result);
           success = success && result.ok;
           warnings.push(...(result.warnings || []));
           if (!result.ok && !failure) failure = result;
+        }
+      }
+
+      for (const [station, detail] of stationFailures) {
+        if (detail === '') {
+          clearUnprintedKot(order.id, station);
+        } else {
+          recordUnprintedKot({
+            orderId: order.id,
+            orderNumber: order.order_number,
+            table: order.table?.name ?? null,
+            station,
+            detail,
+          });
         }
       }
 

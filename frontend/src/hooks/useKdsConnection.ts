@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode, type SetStateAction } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import toast from 'react-hot-toast';
 import type { AxiosInstance } from 'axios';
 import { useTranslations, type AppConfig } from 'use-intl';
@@ -194,10 +201,10 @@ export interface UseKdsConnectionOptions {
   enabled: boolean;
 }
 
-/** An emergency call staff sent to every kitchen display. */
+/** An emergency call staff sent, or a kitchen ticket that did not print; every display shows it. */
 export interface KdsAlert {
   id: string;
-  kind: 'emergency';
+  kind: 'emergency' | 'kot_unprinted';
   message: string;
   table: string | null;
   sent_by: string | null;

@@ -141,6 +141,12 @@ between them (`main/printers/print-queue.ts`). A printer is identified by its IP
 or by its OS queue name. Jobs for different printers do not wait for each other, a failed job does
 not hold up the next one, and more than five jobs waiting for one printer is logged.
 
+A kitchen ticket that fails to print raises an alert on every kitchen display and a red card on every
+POS page for staff who can print, naming the table (or order) and station. **Reprint** sends that
+station's ticket again; **Dismiss** removes the card. The card also clears itself once a later
+ticket for that order and station prints. The list is kept in memory and starts empty after a
+restart. Tickets printed from the browser or WebUSB path report their failure only on that device.
+
 ## Troubleshooting
 
 ### Quick checks

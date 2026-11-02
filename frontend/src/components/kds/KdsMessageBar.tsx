@@ -1,6 +1,14 @@
 'use client';
 
-import { ArrowLeftRight, Ban, Check, Merge, ShoppingBag, TriangleAlert } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Ban,
+  Check,
+  Merge,
+  PrinterX,
+  ShoppingBag,
+  TriangleAlert,
+} from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { KdsBellButton } from '@/components/kds/KdsBellButton';
 import type { KdsMessage } from '@/lib/kds-messages';
@@ -11,6 +19,7 @@ const ICONS = {
   takeaway: ShoppingBag,
   cancelled: Ban,
   emergency: TriangleAlert,
+  kot_unprinted: PrinterX,
 } as const;
 
 /**
@@ -30,15 +39,23 @@ export function KdsMessageBar({
 }) {
   const t = useTranslations('kds');
   return (
-    <div data-testid="kds-message-bar" className="mt-3 flex min-h-14 shrink-0 items-stretch justify-end gap-2">
+    <div
+      data-testid="kds-message-bar"
+      className="mt-3 flex min-h-14 shrink-0 items-stretch justify-end gap-2"
+    >
       {showMessages && (
-        <div data-testid="kds-message-box" className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto rounded-lg border border-border bg-card p-1.5">
+        <div
+          data-testid="kds-message-box"
+          className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto rounded-lg border border-border bg-card p-1.5"
+        >
           {messages.length === 0 ? (
-            <span className="flex items-center px-2 text-sm text-muted-foreground">{t('messagesEmpty')}</span>
+            <span className="flex items-center px-2 text-sm text-muted-foreground">
+              {t('messagesEmpty')}
+            </span>
           ) : (
             messages.map((message) => {
               const Icon = ICONS[message.kind];
-              const emergency = message.kind === 'emergency';
+              const emergency = message.kind === 'emergency' || message.kind === 'kot_unprinted';
               return (
                 <div
                   key={message.id}
@@ -50,10 +67,18 @@ export function KdsMessageBar({
                       : 'border-(--kds-pending-line) bg-(--kds-pending-tint) text-foreground'
                   }`}
                 >
-                  <Icon size={18} className={emergency ? 'text-white' : 'text-(--kds-pending-text)'} />
+                  <Icon
+                    size={18}
+                    className={emergency ? 'text-white' : 'text-(--kds-pending-text)'}
+                  />
                   <span className="max-w-[28rem] truncate">{message.text}</span>
-                  <span className={`text-xs tabular-nums ${emergency ? 'text-white/80' : 'text-muted-foreground'}`}>
-                    {new Date(message.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <span
+                    className={`text-xs tabular-nums ${emergency ? 'text-white/80' : 'text-muted-foreground'}`}
+                  >
+                    {new Date(message.at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </span>
                   <button
                     type="button"

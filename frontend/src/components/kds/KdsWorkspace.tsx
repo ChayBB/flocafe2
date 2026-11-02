@@ -77,7 +77,9 @@ function liveItems(order: UseKdsConnectionResult['orders'][number]) {
 function announceKdsMessages(fresh: KdsMessage[]) {
   if (fresh.length === 0) return;
   addKdsMessages(fresh);
-  const emergency = fresh.some((message) => message.kind === 'emergency');
+  const emergency = fresh.some(
+    (message) => message.kind === 'emergency' || message.kind === 'kot_unprinted',
+  );
   if (fresh.some((message) => message.kind !== 'takeaway')) playKdsAlert(emergency ? 3 : 1);
   speakKds(fresh.map((message) => message.text).join('. '), kdsSpeechLang());
 }
@@ -188,16 +190,23 @@ export function KdsWorkspace({
     announceKdsMessages(
       unseen.map((alert) => ({
         id: `alert:${alert.id}`,
-        kind: 'emergency' as const,
+        kind: alert.kind,
         at: alert.created_at,
-        text: [
-          t('messageEmergency'),
-          alert.table ? t('tableLabel', { name: alert.table }) : null,
-          alert.message || null,
-          alert.sent_by ? t('messageFrom', { name: alert.sent_by }) : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
+        text:
+          alert.kind === 'kot_unprinted'
+            ? t('messageKotUnprinted', {
+                place: alert.table
+                  ? t('tableLabel', { name: alert.table })
+                  : t('messageOrder', { number: alert.message }),
+              })
+            : [
+                t('messageEmergency'),
+                alert.table ? t('tableLabel', { name: alert.table }) : null,
+                alert.message || null,
+                alert.sent_by ? t('messageFrom', { name: alert.sent_by }) : null,
+              ]
+                .filter(Boolean)
+                .join(' · '),
       })),
     );
   }, [conn.alerts, t]);
