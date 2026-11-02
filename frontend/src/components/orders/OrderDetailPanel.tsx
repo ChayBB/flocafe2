@@ -1,6 +1,7 @@
 'use client';
 
 import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
+import { OrderFoodStatusBar } from '@/components/orders/OrderFoodStatusBar';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -289,7 +290,7 @@ function OrderDetailContent({
             <span className="font-bold text-lg text-foreground tracking-tight">
               #<Ltr>{order.order_number}</Ltr>
             </span>
-{awaitingWeight && (
+            {awaitingWeight && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
                 {tPos(orderPendingLabelKey(order))}
               </span>
@@ -320,7 +321,11 @@ function OrderDetailContent({
                   if (bill) onPrint(bill.id);
                   else if (onPrintOrder) onPrintOrder(order);
                 }}
-                disabled={(bill && printingBillId === bill.id) || generatingBillId === order.id || awaitingWeight}
+                disabled={
+                  (bill && printingBillId === bill.id) ||
+                  generatingBillId === order.id ||
+                  awaitingWeight
+                }
                 className="size-9 rounded-lg border-border/70 text-muted-foreground hover:text-foreground"
                 title={printCount > 0 ? tCommon('reprint') : tCommon('print')}
               >
@@ -398,7 +403,10 @@ function OrderDetailContent({
               </span>
             )}
             {order.table_owner_name && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground" title={tTables('tableOwner')}>
+              <span
+                className="inline-flex items-center gap-1 text-muted-foreground"
+                title={tTables('tableOwner')}
+              >
                 <UserCog size={12} />
                 {order.table_owner_name}
               </span>
@@ -418,6 +426,7 @@ function OrderDetailContent({
             </span>
           )}
         </div>
+        {order.status !== 'cancelled' && <OrderFoodStatusBar items={order.items || []} />}
       </div>
 
       {/* ── SCROLLING BODY ─────────────────────────────────────────────────── */}

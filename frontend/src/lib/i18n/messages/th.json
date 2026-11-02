@@ -717,6 +717,7 @@
     "itemStatusServed": "เสิร์ฟแล้ว",
     "itemStatusVoidAdjustment": "รายการปรับยกเลิก",
     "itemStatusVoided": "ยกเลิกแล้ว",
+    "foodStatus": "สถานะอาหาร",
     "itemStatusWaiting": "กำลังรอ",
     "itemVoided": "ยกเลิกสินค้าแล้ว",
     "itemsAdded": "เพิ่มสินค้า {count} รายการเข้าคำสั่งซื้อแล้ว",

@@ -717,6 +717,7 @@
     "itemStatusServed": "Served",
     "itemStatusVoidAdjustment": "Void adjustment",
     "itemStatusVoided": "Voided",
+    "foodStatus": "Food status",
     "itemStatusWaiting": "Waiting",
     "itemVoided": "Item voided",
     "itemsAdded": "Added {count} item(s) to order",
