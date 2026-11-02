@@ -449,7 +449,8 @@ router.get(
       const db = getDatabase();
       const rows = db
         .prepare(
-          `SELECT p.*, c.name AS category_name
+          `SELECT p.*, c.name AS category_name,
+           CASE WHEN p.image_url IS NULL OR p.image_url = '' THEN 0 ELSE 1 END AS has_image
          FROM products p
          LEFT JOIN categories c ON p.category_id = c.id
          WHERE p.deleted_at IS NULL
@@ -457,7 +458,8 @@ router.get(
         )
         .all() as any[];
       const lines = [
-        `id,sku,name,category,price,description,cost,tax_category,tax_behavior,cashback_percent,tags,is_active,${FLO_CSV_ENCODING_COLUMN}`,
+        // `image` is for review only (which products lack a photo); import ignores it.
+        `id,sku,name,category,price,description,cost,tax_category,tax_behavior,cashback_percent,tags,is_active,image,${FLO_CSV_ENCODING_COLUMN}`,
       ];
       for (const p of rows) {
         const tags = formatProductTagsForCsv(p.tags);
@@ -475,6 +477,7 @@ router.get(
             p.cb_percent !== null ? p.cb_percent : '',
             tags,
             p.is_active ? 'yes' : 'no',
+            p.has_image ? 'Yes' : 'No',
             FLO_CSV_ENCODING_QUOTE_V1,
           ]),
         );

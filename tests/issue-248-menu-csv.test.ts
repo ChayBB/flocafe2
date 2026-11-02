@@ -1146,6 +1146,27 @@ async function main() {
       `INSERT INTO addon_group_product (product_id, addon_group_id) VALUES (?, ?), (?, ?)`,
     ).run('prod-rt-plus', 'ag-rt-eq', 'prod-rt-quote', 'ag-rt-quote');
 
+    // The products export says which products have a photo, so missing ones are easy to find.
+    db.prepare('UPDATE products SET image_url = ? WHERE id = ?').run(
+      'data:image/png;base64,iVBORw0KGgo=',
+      'prod-rt-plus',
+    );
+    {
+      const csv = await fetchText(baseUrl, '/api/menu/csv/export/products', authHeader);
+      const [header, ...lines] = csv.replace(/^﻿/, '').split('\n');
+      // Earlier cells may hold quoted commas, so the column is counted from the end.
+      assertEqualOrThrow(header.split(',').at(-2), 'image', 'products export has an image column');
+      // A quoted cell may span lines, so a row is read up to its closing quote-v1 marker.
+      const body = `\n${lines.join('\n')}`;
+      const imageOf = (id: string) => {
+        const start = body.indexOf(`\n${id},`);
+        const end = body.indexOf(',quote-v1', start);
+        return start < 0 || end < 0 ? undefined : body.slice(start, end).split(',').at(-1);
+      };
+      assertEqualOrThrow(imageOf('prod-rt-plus'), 'Yes', 'a product with a photo reads Yes');
+      assertEqualOrThrow(imageOf('prod-rt-quote'), 'No', 'a product without a photo reads No');
+    }
+
     const initialCatCount = (
       db.prepare('SELECT COUNT(*) AS count FROM categories WHERE deleted_at IS NULL').get() as any
     ).count;
