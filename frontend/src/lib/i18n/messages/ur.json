@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "علاقے کا ذمہ دار مقرر کریں",
     "floorRangeHint": "اس سے {count} میزیں بنیں گی۔ ڈیفالٹ کے لیے گنجائش خالی چھوڑیں۔",
     "capacityBlankHint": "خالی گنجائش پر ڈیفالٹ 4 نشستیں لگتی ہیں۔",
-    "tableQrTitle": "آرڈر کے QR کوڈ",
-    "tableQrHint": "اس میز پر سرور ایپ کھولنے کے لیے عملے کے فون سے اسکین کریں۔",
     "tableQrTable": "میز {name}",
     "tableQrServerAppOff": "سرور ایپ بند ہے، اس لیے ترتیبات میں فعال کیے بغیر یہ QR نہیں کھلیں گے۔",
     "tableQrFailed": "QR کوڈ نہیں بن سکے",

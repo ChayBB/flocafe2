@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Alan sorumlusunu belirle",
     "floorRangeHint": "{count} masa oluşturulacak. Varsayılan için kapasiteyi boş bırakın.",
     "capacityBlankHint": "Boş kapasite varsayılan 4 kişiyi kullanır.",
-    "tableQrTitle": "Sipariş QR kodları",
-    "tableQrHint": "Bu masada Garson Uygulamasını açmak için personel telefonuyla tarayın.",
     "tableQrTable": "Masa {name}",
     "tableQrServerAppOff": "Garson Uygulaması kapalı; Ayarlar’da açılana kadar bu QR kodları açılmaz.",
     "tableQrFailed": "QR kodları oluşturulamadı",

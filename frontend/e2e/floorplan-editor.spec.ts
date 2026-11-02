@@ -38,7 +38,10 @@ test.beforeEach(async ({ request }) => {
     .filter((t: { number: string }) => ['T1', 'T2', 'T3'].includes(t.number))
     .map((t: { id: string }) => ({ id: t.id, position_x: null, position_y: null }));
   if (ids.length > 0) {
-    await request.patch(`${BASE}/api/tables/positions`, { headers: auth, data: { positions: ids } });
+    await request.patch(`${BASE}/api/tables/positions`, {
+      headers: auth,
+      data: { positions: ids },
+    });
   }
 });
 
@@ -87,11 +90,9 @@ test('floorplan editor: drag table onto map, save, persist after reload', async 
   if (!canvasBox || !chipBox) throw new Error('missing drag geometry');
   await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(
-    canvasBox.x + canvasBox.width * 0.5,
-    canvasBox.y + canvasBox.height * 0.5,
-    { steps: 8 }
-  );
+  await page.mouse.move(canvasBox.x + canvasBox.width * 0.5, canvasBox.y + canvasBox.height * 0.5, {
+    steps: 8,
+  });
   await page.mouse.up();
 
   await expect(page.getByTestId('floorplan-chip-T1')).toBeVisible();
@@ -155,11 +156,17 @@ test('floorplan editor: drag table back to tray unplaces it', async ({ page, req
   if (!chipBox || !trayBox) throw new Error('missing drag geometry');
   await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(trayBox.x + trayBox.width / 2, trayBox.y + trayBox.height / 2, { steps: 8 });
+  await page.mouse.move(trayBox.x + trayBox.width / 2, trayBox.y + trayBox.height / 2, {
+    steps: 8,
+  });
   // The tray shifts while a chip is dragged: aim again at where it is now
   const liveTrayBox = await tray.boundingBox();
   if (!liveTrayBox) throw new Error('missing tray geometry');
-  await page.mouse.move(liveTrayBox.x + liveTrayBox.width / 2, liveTrayBox.y + liveTrayBox.height / 2, { steps: 4 });
+  await page.mouse.move(
+    liveTrayBox.x + liveTrayBox.width / 2,
+    liveTrayBox.y + liveTrayBox.height / 2,
+    { steps: 4 },
+  );
   // Release only once the tray shows the drop highlight, as a user pausing over it would
   await expect(tray).toHaveClass(/border-brand/);
   await page.mouse.up();
@@ -194,7 +201,9 @@ test('floorplan editor: discard reverts unsaved drags', async ({ page }) => {
   if (!canvasBox || !chipBox) throw new Error('missing drag geometry');
   await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(canvasBox.x + canvasBox.width * 0.2, canvasBox.y + canvasBox.height * 0.2, { steps: 8 });
+  await page.mouse.move(canvasBox.x + canvasBox.width * 0.2, canvasBox.y + canvasBox.height * 0.2, {
+    steps: 8,
+  });
   await page.mouse.up();
 
   await expect(page.getByTestId('floorplan-chip-T2')).toBeVisible();
@@ -257,7 +266,9 @@ test('floorplan editor: quick-add suggests the next number and active floor', as
   await expect(page.getByTestId(`floorplan-chip-${name}`)).toBeVisible();
 });
 
-test('floorplan editor: add a named floor and see it in the all-floors overview', async ({ page }) => {
+test('floorplan editor: add a named floor and see it in the all-floors overview', async ({
+  page,
+}) => {
   await login(page);
 
   await page.getByRole('button', { name: 'Edit layout' }).click();
@@ -271,15 +282,17 @@ test('floorplan editor: add a named floor and see it in the all-floors overview'
   await floorForm.getByRole('button', { name: 'Create Table' }).click();
   await expect(page.getByText('Table created')).toBeVisible();
 
-  // Creating a zone offers its QR codes in a dialog; close it before using the editor
-  await page.getByRole('dialog', { name: 'Order QR codes' }).getByRole('button', { name: 'Close', exact: true }).last().click();
-  await expect(page.getByRole('dialog', { name: 'Order QR codes' })).toBeHidden();
+  // Table QR codes are handed out per seated party, so creating a zone opens no QR dialog
+  await expect(page.getByRole('dialog', { name: 'Order QR codes' })).toHaveCount(0);
 
   // Editor switches to the new floor; its first table starts placed on the canvas
   await expect(page.getByTestId(`floorplan-chip-${floorTable}`)).toBeVisible();
 
   // The all-floors overview shows every floor side by side
-  await page.getByTestId('floorplan-floor-tabs').getByRole('button', { name: 'All floors' }).click();
+  await page
+    .getByTestId('floorplan-floor-tabs')
+    .getByRole('button', { name: 'All floors' })
+    .click();
   await expect(page.getByTestId('floorplan-mini-Ground')).toBeVisible();
   await expect(page.getByTestId('floorplan-mini-First')).toBeVisible();
   await expect(page.getByTestId('floorplan-mini-Patio')).toBeVisible();
@@ -353,16 +366,23 @@ test('floorplan editor: live order status refreshes while editing', async ({ pag
   await page.getByRole('button', { name: 'Edit layout' }).click();
   await expect(page.getByTestId('floorplan-chip-T1')).toContainText(`#${order.order_number}`);
 
-  const waitForOrderStatus = (status: string) => page.waitForResponse(async (response) => {
-    if (response.request().method() !== 'GET' || !response.url().includes('/api/orders')) return false;
-    try {
-      const body = await response.json();
-      return body.orders?.some((candidate: { order_number: string; status: string }) =>
-        candidate.order_number === order.order_number && candidate.status === status);
-    } catch {
-      return false;
-    }
-  }, { timeout: 15_000 });
+  const waitForOrderStatus = (status: string) =>
+    page.waitForResponse(
+      async (response) => {
+        if (response.request().method() !== 'GET' || !response.url().includes('/api/orders'))
+          return false;
+        try {
+          const body = await response.json();
+          return body.orders?.some(
+            (candidate: { order_number: string; status: string }) =>
+              candidate.order_number === order.order_number && candidate.status === status,
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 15_000 },
+    );
 
   await waitForOrderStatus('pending');
   await request.patch(`${BASE}/api/orders/${order.id}/status`, {

@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "구역 담당자 지정",
     "floorRangeHint": "테이블 {count}개를 만듭니다. 기본값을 쓰려면 수용 인원을 비워 두세요.",
     "capacityBlankHint": "수용 인원을 비우면 기본값인 4석이 적용됩니다.",
-    "tableQrTitle": "주문용 QR 코드",
-    "tableQrHint": "직원 휴대폰으로 스캔하면 이 테이블에서 서버 앱이 열립니다.",
     "tableQrTable": "테이블 {name}",
     "tableQrServerAppOff": "서버 앱이 꺼져 있어 설정에서 켜기 전에는 QR이 열리지 않습니다.",
     "tableQrFailed": "QR 코드를 만들 수 없습니다",

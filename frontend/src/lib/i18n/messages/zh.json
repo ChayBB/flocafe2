@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "设置区域负责人",
     "floorRangeHint": "将创建 {count} 张桌台。容纳人数留空则使用默认值。",
     "capacityBlankHint": "容纳人数留空时使用默认的 4 个座位。",
-    "tableQrTitle": "点单二维码",
-    "tableQrHint": "用员工手机扫码，即可在此桌台打开服务员应用。",
     "tableQrTable": "桌台 {name}",
     "tableQrServerAppOff": "服务员应用已关闭，需在设置中启用后这些二维码才能打开。",
     "tableQrFailed": "无法生成二维码",

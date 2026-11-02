@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Chọn người phụ trách khu vực",
     "floorRangeHint": "Thao tác này tạo {count} bàn. Để trống sức chứa để dùng giá trị mặc định.",
     "capacityBlankHint": "Sức chứa để trống sẽ dùng mặc định 4 chỗ.",
-    "tableQrTitle": "Mã QR gọi món",
-    "tableQrHint": "Quét bằng điện thoại nhân viên để mở ứng dụng phục vụ tại bàn này.",
     "tableQrTable": "Bàn {name}",
     "tableQrServerAppOff": "Ứng dụng phục vụ đang tắt nên các mã QR chưa mở được cho đến khi bật trong Cài đặt.",
     "tableQrFailed": "Không tạo được mã QR",

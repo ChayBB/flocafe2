@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Gebiedsverantwoordelijke instellen",
     "floorRangeHint": "Dit maakt {count} tafels aan. Laat de capaciteit leeg voor de standaardwaarde.",
     "capacityBlankHint": "Een lege capaciteit gebruikt de standaard van 4 zitplaatsen.",
-    "tableQrTitle": "Bestel-QR-codes",
-    "tableQrHint": "Scan met de telefoon van het personeel om de Serveer-app aan deze tafel te openen.",
     "tableQrTable": "Tafel {name}",
     "tableQrServerAppOff": "De Serveer-app staat uit; de QR-codes werken pas na inschakelen in Instellingen.",
     "tableQrFailed": "QR-codes konden niet worden gemaakt",

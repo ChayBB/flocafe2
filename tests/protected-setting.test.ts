@@ -41,11 +41,7 @@ const {
   readProtectedSetting,
   writeProtectedSetting,
 } = require('../main/security/protected-setting');
-const {
-  guestTableToken,
-  verifyGuestTableToken,
-  rotateGuestQrSecret,
-} = require('../main/lib/guest-qr');
+const { guestSessionToken, rotateGuestQrSecret } = require('../main/lib/guest-qr');
 const { assertOrThrow, assertEqualOrThrow } = require('./helpers/test-setup');
 
 const KEY = 'guest_qr_secret';
@@ -60,15 +56,19 @@ const stored = () =>
 try {
   initDatabase();
 
-  const token = guestTableToken('T1');
+  const token = guestSessionToken('session-1');
   assertEqualOrThrow(stored(), PROTECTED_SETTING_MARKER, 'SQLite holds only the marker');
   const secret = readProtectedSetting(KEY);
   assertOrThrow(/^[0-9a-f]{64}$/.test(secret), 'a first QR secret is minted');
   assertOrThrow(!fs.readFileSync(file).toString().includes(secret), 'the file is not plaintext');
-  assertOrThrow(verifyGuestTableToken('T1', token), 'table codes verify against the stored secret');
+  assertEqualOrThrow(
+    guestSessionToken('session-1'),
+    token,
+    'table codes come from the stored secret',
+  );
 
   rotateGuestQrSecret();
-  assertOrThrow(!verifyGuestTableToken('T1', token), 'rotating retires the old table codes');
+  assertOrThrow(guestSessionToken('session-1') !== token, 'rotating retires the old table codes');
   assertEqualOrThrow(stored(), PROTECTED_SETTING_MARKER, 'the rotated secret stays out of SQLite');
 
   const legacy = 'ab'.repeat(32);

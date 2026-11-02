@@ -258,8 +258,12 @@ read orders or customers. The `guest_qr_ordering_enabled` setting (the "Take ord
 checkbox on the OrderFlow settings tab, on by default) closes all three routes with `403`
 `guest_ordering_disabled` when it is `false`, and the guest view then asks the customer to call staff.
 A table id alone cannot place an order: the table and order routes also need the token the QR link
-carries (an HMAC of the table id under `guest_qr_secret`), and "Cancel all table QR codes" on the same
-tab replaces the secret so every printed QR stops working. A packaged install keeps that secret in
+carries, an HMAC under `guest_qr_secret` of the table's open guest session. Staff open that session
+for each seated party from the QR button beside the table in the POS cart or the Server App header,
+which shows the QR and prints it as a slip; it ends when the table is freed (bill paid, order
+cancelled or moved), at the next 07:00 store time, or when staff end or renew it, and a code from an
+ended session answers `410` `qr_expired`. "Cancel all table QR codes" on the same tab replaces the
+secret so every code handed out stops working. A packaged install keeps that secret in
 Electron `safeStorage` (`guest_qr_secret.enc`) and only the `safe-storage:v1` marker in SQLite, the
 way it keeps the JWT secret; database exports redact it and a restore keeps this device's copy. For ordering over mobile data the tab
 also sets a public https address for the QR links and the one proxy address whose

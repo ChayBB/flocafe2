@@ -1749,7 +1749,7 @@ function tenantSettingValue(db: ReturnType<typeof getDatabase>, key: string): st
 }
 
 /** Resolves primary and optional secondary receipt languages from tenant policy. */
-function resolveTenantReceiptLanguages(db: ReturnType<typeof getDatabase>): {
+export function resolveTenantReceiptLanguages(db: ReturnType<typeof getDatabase>): {
   primary: string;
   additional?: string;
 } {

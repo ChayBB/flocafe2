@@ -268,6 +268,17 @@ Router: `main/routes/tables.ts`. Full path: `/api/tables`.
 | `POST`   | `/:id/move-order` | `ROLE_ACCESS.sales`        | path: `id`; body: `target_table_id`, `order_id`                                                                      | `{ order, sourceTable, targetTable }`. `400` when `target_table_id` is missing, matches `id`, or names an inactive table; `404` when either table or the active order is not found; `409` when the destination table has an active or held order or is `reserved`. |
 | `PATCH`  | `/:id/status`     | `ROLE_ACCESS.ownerManager` | path: `id`; body: `status`, `reservation_customer_id`                                                                | Body `status`, plus `reservation_customer_id` for reservation state.                                                                                                                                                                                               |
 
+Staff hand a seated party the table's ordering QR through `/:id/guest-session` (`orders.create`).
+`POST` returns the table's open session, or opens one when there is none, as
+`{ table, session: { created_at, expires_at }, url, data_url, store_timezone, public, server_app_enabled, guest_ordering_enabled }`;
+body `renew: true` closes the open session first, so its QR stops working. `POST /:id/guest-session/print`
+(`orders.create` and `printing.execute`) prints the QR slip on the default receipt printer and answers
+`400` `no_printer` without one, or `502` with `document_printer` for a document printer, where the
+page prints the slip through the browser instead. `DELETE /:id/guest-session` ends the session and
+answers `{ closed }`. A session ends at the next 07:00 in the store time zone, when the table turns
+`available` or `cleaning` (its bill paid, its order cancelled or moved), when staff end or renew it,
+or when `guest_qr_secret` is replaced. The Server App forwards all three routes.
+
 Each table carries its open order as `activeOrder` (also `current_order`), or `null`. That order
 includes `kitchen_counts: { waiting, ready, served }`, the number of its menu lines still waiting or
 cooking, ready to serve, and served; cancelled, voided and refunded lines are not counted.
@@ -1045,7 +1056,7 @@ The ten routes that are not forwards:
 | `POST` | `/api/auth/login`      | none, `loginAuthRateLimit` + shared failed-login limiter | Body `identifier` (staff name or email; `email` is still accepted) and `password` (the 4-digit staff code, the PIN, or the account password). `{ access_token, user: { id, name, email, role } }`; the token expires at the next 06:00 in the store time zone. `409 ambiguous_credentials` when several staff with that name match the code. `401` on bad credentials with `attempts_remaining`; `429` after 5 failed attempts across local login listeners; `403` for a role outside `ROLE_ACCESS.serverApp`. |
 | `GET`  | `/api/auth/me`         | `ROLE_ACCESS.serverApp`                                  | `{ user: { id, name, email, role } }`                                                                                                                                                                                                                                                                    |
 | `POST` | `/api/auth/logout`     | `ROLE_ACCESS.serverApp`                                  | `{ success: true }`, revoking the token                                                                                                                                                                                                                                                                  |
-| `GET`  | `/api/guest/table`     | none, `serverAppApiRateLimit`                            | `{ table: { id, name } }` for an active table named by `?table_id=`; `404` otherwise. Used by the table-QR guest view.                                                                                                                                                                                   |
+| `GET`  | `/api/guest/table`     | none, `serverAppApiRateLimit`                            | `{ table: { id, name } }` for an active table named by `?table_id=` whose open session matches `?t=`; `404` for an unknown table, `410` `qr_expired` otherwise. Used by the table-QR guest view.                                                                                                       |
 | `GET`  | `/api/guest/menu`      | none, `serverAppApiRateLimit`                            | `{ categories, products }` fetched from the main API as the Guest account, with product cost and inventory-linking fields removed. One read serves every guest for 30 seconds; a successful catalog write drops it.                                                                                      |
 | `POST` | `/api/guest/order`     | none, `serverAppApiRateLimit` + 12 per 10 minutes per IP | Body `table_id`, `items`, `special_instructions`, `idempotency_key`. Rebuilds the lines from the catalog (add-on names and prices never come from the request); each line's quantity is a whole number from 1 to 50, at most 100 items in all, and a body over 100 KB answers `413` `body_too_large`. It then creates the table's order or appends to its open one as the Guest account and prints the kitchen ticket. Orders for one table run one at a time, so guests ordering together share one bill. `idempotency_key` (8 to 80 letters, digits, `_` or `-`) is required, `400` `idempotency_key_required` without it; a retry with a key already used answers from the stored result without printing again. `201 { success, order_number }`. |
 | `GET`  | `/`                    | none                                                     | Redirect to `/server-standalone`                                                                                                                                                                                                                                                                         |
@@ -1056,11 +1067,12 @@ so `GET /` is two mutually exclusive registrations rather than two routes.
 
 All three `/api/guest/*` routes answer `403` with `code` `guest_ordering_disabled` while the
 `guest_qr_ordering_enabled` setting is `false`. `GET /api/guest/table` (query `t`) and
-`POST /api/guest/order` (body `table_token`) also need the table's QR token, an HMAC of the table id
-under the `guest_qr_secret` setting; without a matching token they answer `404` as for an unknown
-table. `POST /api/tables/order-qr` puts that token in each link as `t`, builds the links on
-`guest_qr_public_base_url` when it is set (otherwise the shop-network address), and reports
-`public`. The Server App's `trust proxy` accepts `X-Forwarded-For` only from the address in
+`POST /api/guest/order` (body `table_token`) also need the token of the table's open guest session,
+an HMAC of the session id under the `guest_qr_secret` setting. An unknown table answers `404`; a
+known table without a matching open session answers `410` `qr_expired`, and the guest view asks for
+a new QR from staff. `POST /api/tables/:id/guest-session` puts that token in the link as `t`, builds
+the link on `guest_qr_public_base_url` when it is set (otherwise the shop-network address), and
+reports `public`. The Server App's `trust proxy` accepts `X-Forwarded-For` only from the address in
 `guest_qr_trusted_proxy`, and from loopback while the built-in relay tunnel runs, so behind a
 QR-ordering proxy every rate limit keys on the customer.
 
@@ -1068,7 +1080,7 @@ The main API manages those settings under `/api/settings/guest-qr`: `GET` (`sett
 `{ public_base_url, trusted_proxy }`; `PUT` (`settings.manage`) takes the same fields, `''` to
 clear, and answers `400` `public_base_url_invalid` for anything but an https address without a query,
 or `trusted_proxy_invalid` for anything but one IP address; `POST /api/settings/guest-qr/rotate`
-(`settings.manage`) replaces `guest_qr_secret`, which retires every printed table QR. The secret is
+(`settings.manage`) replaces `guest_qr_secret`, which retires every table QR handed out. The secret is
 in the sensitive set the wildcard settings read refuses.
 
 `/api/qr-relay` pairs the POS with a QR ordering relay (see

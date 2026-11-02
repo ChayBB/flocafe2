@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Tetapkan penanggung jawab area",
     "floorRangeHint": "Ini membuat {count} meja. Kosongkan kapasitas untuk memakai bawaan.",
     "capacityBlankHint": "Kapasitas kosong memakai bawaan 4 kursi.",
-    "tableQrTitle": "Kode QR pesanan",
-    "tableQrHint": "Pindai dengan ponsel staf untuk membuka Aplikasi Pelayan di meja ini.",
     "tableQrTable": "Meja {name}",
     "tableQrServerAppOff": "Aplikasi Pelayan nonaktif, jadi kode QR tidak akan terbuka sampai diaktifkan di Pengaturan.",
     "tableQrFailed": "Gagal membuat kode QR",

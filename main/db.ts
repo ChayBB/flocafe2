@@ -7926,6 +7926,34 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 131,
+    name: 'add_guest_table_sessions',
+    up: () => {
+      // A table QR orders only while its session is open: staff open one per party, and it ends
+      // when the table is freed (paid, cancelled, moved), at the daily reset, or when staff close it.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS guest_table_sessions (
+          id TEXT PRIMARY KEY,
+          table_id TEXT NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
+          opened_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_reason TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_guest_table_sessions_open
+          ON guest_table_sessions(table_id) WHERE closed_at IS NULL;
+        CREATE TRIGGER IF NOT EXISTS close_guest_table_session_on_table_freed
+        AFTER UPDATE OF status ON tables
+        WHEN NEW.status IN ('available', 'cleaning') AND OLD.status NOT IN ('available', 'cleaning')
+        BEGIN
+          UPDATE guest_table_sessions SET closed_at = CURRENT_TIMESTAMP, closed_reason = 'table_freed'
+          WHERE table_id = NEW.id AND closed_at IS NULL;
+        END;
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

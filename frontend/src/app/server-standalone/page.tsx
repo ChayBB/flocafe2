@@ -29,6 +29,7 @@ import { holdDarkClass } from '@/lib/kds-screen-mode';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
+import GuestTableQrDialog from '@/components/tables/GuestTableQrDialog';
 import {
   OrderedItemList,
   OrderedItemsScreen,
@@ -240,6 +241,8 @@ export default function ServerStandalonePage() {
   const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
   const [guestChecked, setGuestChecked] = useState(false);
   const [guestClosed, setGuestClosed] = useState(false);
+  const [guestExpired, setGuestExpired] = useState(false);
+  const [tableQrOpen, setTableQrOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const guestAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
@@ -551,6 +554,7 @@ export default function ServerStandalonePage() {
         if (cancelled) return;
         setGuestTable(null);
         setGuestClosed(error?.response?.data?.code === 'guest_ordering_disabled');
+        setGuestExpired(error?.response?.data?.code === 'qr_expired');
       })
       .finally(() => {
         if (!cancelled) setGuestChecked(true);
@@ -1071,11 +1075,9 @@ export default function ServerStandalonePage() {
       setMobileCartOpen(false);
       toast.success(t('orderSent'));
     } catch (error: unknown) {
-      if (
-        (error as { response?: { data?: { code?: string } } })?.response?.data?.code ===
-        'bill_awaiting_payment'
-      )
-        toast.error(t('tableAwaitingPaymentLocked'));
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'bill_awaiting_payment') toast.error(t('tableAwaitingPaymentLocked'));
+      else if (code === 'qr_expired') setGuestExpired(true);
       else toastApiError(error, t('couldNotSendOrder'), apiErrorT);
     } finally {
       sendInFlightRef.current = false;
@@ -1280,6 +1282,19 @@ export default function ServerStandalonePage() {
         <Smartphone size={44} className="text-muted-foreground" />
         <h1 className="text-lg font-semibold">{t('disabledTitle')}</h1>
         <p className="max-w-sm text-sm text-muted-foreground">{t('disabledHint')}</p>
+      </div>
+    );
+  }
+
+  if (!user && guestExpired && !showLogin) {
+    return (
+      <div
+        data-testid="server-app-guest-expired"
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground"
+      >
+        <QrCode size={44} className="text-muted-foreground" />
+        <h1 className="text-lg font-semibold">{t('guestExpiredTitle')}</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">{t('guestExpiredHint')}</p>
       </div>
     );
   }
@@ -1603,6 +1618,18 @@ export default function ServerStandalonePage() {
                   {t('selectTable')}
                 </button>
               )}
+              {selectedTableId && (
+                <button
+                  type="button"
+                  onClick={() => setTableQrOpen(true)}
+                  aria-label={tTables('guestQrButton')}
+                  title={tTables('guestQrButton')}
+                  data-testid="server-app-table-qr-button"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border p-2 text-muted-foreground"
+                >
+                  <QrCode size={17} />
+                </button>
+              )}
             </>
           ) : (
             <span
@@ -1646,6 +1673,14 @@ export default function ServerStandalonePage() {
         <main
           className={`mx-auto grid max-w-6xl min-w-0 gap-3 px-4 py-2 md:p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
+          {tableQrOpen && api && selectedTableId && (
+            <GuestTableQrDialog
+              tableId={selectedTableId}
+              api={api}
+              apiPrefix="/api"
+              onClose={() => setTableQrOpen(false)}
+            />
+          )}
           {showTablePicker && (
             <section
               ref={tablePickerRef}

@@ -1,14 +1,30 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, isServerAppEnabled, now, parseRowJson, withTxn } from '../db';
+import {
+  getDatabase,
+  isGuestQrOrderingEnabled,
+  isServerAppEnabled,
+  now,
+  parseRowJson,
+  withTxn,
+} from '../db';
 import * as QRCode from 'qrcode';
 import { getLocalIP } from '../server-state';
 import { getServerAppPort } from '../server-app-state';
-import { guestTableToken, readGuestQrNetwork } from '../lib/guest-qr';
+import { guestSessionToken, readGuestQrNetwork } from '../lib/guest-qr';
+import {
+  closeGuestTableSession,
+  openGuestTableSession,
+  type GuestTableSession,
+} from '../lib/guest-table-session';
 import { randomUUID } from 'crypto';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { GUEST_USER_ID } from '../lib/guest-order';
+import { printTableQrSlip, WINDOWS_DOCUMENT_PRINTER_MARKER } from '../printers/thermal';
+import { resolveTenantReceiptLanguages } from './printers';
+import { storeTimezone } from '../services/attendance';
+import { getHttpRequestSignal } from '../shutdown';
 import { TERMINAL_ITEM_STATUSES } from '../../shared/order-item-status';
 
 const router = Router();
@@ -189,26 +205,30 @@ function ownerZoneConflict(
 }
 
 // Staff who can be assigned as a table's owner. Owners are informational and never gate orders.
-router.get('/owner-candidates', requirePermission('tables.manage'), (_req: Request, res: Response) => {
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      'SELECT id, name, role FROM users WHERE is_active = 1 AND id != ? ORDER BY name COLLATE NOCASE',
-    )
-    .all(GUEST_USER_ID) as { id: string; name: string; role: string }[];
-  const owned = db
-    .prepare('SELECT owner_user_id AS id, floor FROM tables WHERE owner_user_id IS NOT NULL')
-    .all() as { id: string; floor: string | null }[];
-  const zonesByStaff = new Map<string, Set<string>>();
-  for (const row of owned) {
-    const zones = zonesByStaff.get(row.id) ?? new Set<string>();
-    zones.add(row.floor ?? '');
-    zonesByStaff.set(row.id, zones);
-  }
-  res.json({
-    staff: rows.map((member) => ({ ...member, zones: [...(zonesByStaff.get(member.id) ?? [])] })),
-  });
-});
+router.get(
+  '/owner-candidates',
+  requirePermission('tables.manage'),
+  (_req: Request, res: Response) => {
+    const db = getDatabase();
+    const rows = db
+      .prepare(
+        'SELECT id, name, role FROM users WHERE is_active = 1 AND id != ? ORDER BY name COLLATE NOCASE',
+      )
+      .all(GUEST_USER_ID) as { id: string; name: string; role: string }[];
+    const owned = db
+      .prepare('SELECT owner_user_id AS id, floor FROM tables WHERE owner_user_id IS NOT NULL')
+      .all() as { id: string; floor: string | null }[];
+    const zonesByStaff = new Map<string, Set<string>>();
+    for (const row of owned) {
+      const zones = zonesByStaff.get(row.id) ?? new Set<string>();
+      zones.add(row.floor ?? '');
+      zonesByStaff.set(row.id, zones);
+    }
+    res.json({
+      staff: rows.map((member) => ({ ...member, zones: [...(zonesByStaff.get(member.id) ?? [])] })),
+    });
+  },
+);
 
 // Sets (or clears) the single owner of every active table in one zone (floor).
 const MAX_BATCH_TABLES = 100;
@@ -218,7 +238,11 @@ router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Re
   try {
     const db = getDatabase();
     const rawTables = req.body?.tables;
-    if (!Array.isArray(rawTables) || rawTables.length === 0 || rawTables.length > MAX_BATCH_TABLES) {
+    if (
+      !Array.isArray(rawTables) ||
+      rawTables.length === 0 ||
+      rawTables.length > MAX_BATCH_TABLES
+    ) {
       return res
         .status(400)
         .json({ error: `tables must contain between 1 and ${MAX_BATCH_TABLES} entries` });
@@ -240,12 +264,15 @@ router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Re
           .json({ code: 'TABLE_NAME_REQUIRED', error: 'Table number is required' });
       }
       if (seen.has(number.toLowerCase())) {
-        return res
-          .status(400)
-          .json({ code: 'TABLE_NAME_DUPLICATE', error: `Table ${number} is listed twice`, table: number });
+        return res.status(400).json({
+          code: 'TABLE_NAME_DUPLICATE',
+          error: `Table ${number} is listed twice`,
+          table: number,
+        });
       }
       seen.add(number.toLowerCase());
-      const blank = entry?.capacity === undefined || entry?.capacity === null || entry?.capacity === '';
+      const blank =
+        entry?.capacity === undefined || entry?.capacity === null || entry?.capacity === '';
       const capacity = blank ? 4 : normalizeTableCapacity(entry.capacity);
       if (capacity === null) {
         return res.status(400).json({
@@ -265,9 +292,9 @@ router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Re
     }
 
     for (const row of rows) {
-      const existing = db.prepare('SELECT is_active FROM tables WHERE number = ?').get(row.number) as
-        | { is_active: number }
-        | undefined;
+      const existing = db
+        .prepare('SELECT is_active FROM tables WHERE number = ?')
+        .get(row.number) as { is_active: number } | undefined;
       if (existing) {
         return res.status(400).json({
           code: existing.is_active === 0 ? 'TABLE_INACTIVE_DUPLICATE' : 'TABLE_NAME_DUPLICATE',
@@ -284,9 +311,12 @@ router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Re
         return res.status(400).json({ error: 'owner_user_id must be a string' });
       }
       const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(rawOwner);
-      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      if (!user)
+        return res.status(400).json({ error: 'Staff member was not found or is inactive' });
       const owned = db
-        .prepare("SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1")
+        .prepare(
+          "SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1",
+        )
         .get(rawOwner, floor ?? '');
       if (owned && req.body?.move !== true) {
         return res.status(409).json({
@@ -321,38 +351,134 @@ router.post('/batch', requirePermission('tables.manage'), (req: Request, res: Re
   }
 });
 
-// One QR per table that opens the Server App with that table preselected.
-router.post('/order-qr', requirePermission('tables.manage'), async (req: Request, res: Response) => {
-  try {
-    const ids = req.body?.table_ids;
-    if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BATCH_TABLES) {
-      return res
-        .status(400)
-        .json({ error: `table_ids must contain between 1 and ${MAX_BATCH_TABLES} entries` });
-    }
-    const db = getDatabase();
-    // A public address lets customers order over mobile data; otherwise the QR only works on the shop network.
-    const { publicBaseUrl } = readGuestQrNetwork();
-    const baseUrl = publicBaseUrl
+function guestQrBase(): { baseUrl: string; public: boolean } {
+  // A public address lets customers order over mobile data; otherwise the QR only works on the shop network.
+  const { publicBaseUrl } = readGuestQrNetwork();
+  return {
+    baseUrl: publicBaseUrl
       ? `${publicBaseUrl}/server-standalone/`
-      : `http://${getLocalIP()}:${getServerAppPort()}/server-standalone/`;
-    const qrs: { id: string; name: string; url: string; data_url: string }[] = [];
-    for (const id of ids) {
-      if (typeof id !== 'string') continue;
-      const table = db.prepare('SELECT id, number FROM tables WHERE id = ?').get(id) as
-        | { id: string; number: string }
-        | undefined;
-      if (!table) continue;
-      const url = `${baseUrl}?table=${encodeURIComponent(table.id)}&t=${guestTableToken(table.id)}`;
-      const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 256 });
-      qrs.push({ id: table.id, name: table.number, url, data_url: dataUrl });
+      : `http://${getLocalIP()}:${getServerAppPort()}/server-standalone/`,
+    public: Boolean(publicBaseUrl),
+  };
+}
+
+export function guestSessionUrl(baseUrl: string, session: GuestTableSession): string {
+  return `${baseUrl}?table=${encodeURIComponent(session.table_id)}&t=${guestSessionToken(session.id)}`;
+}
+
+function activeTable(id: unknown): { id: string; number: string } | undefined {
+  if (typeof id !== 'string' || !id) return undefined;
+  return getDatabase()
+    .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
+    .get(id) as { id: string; number: string } | undefined;
+}
+
+// Staff hand a seated party the table's QR; `renew` gives a new code and retires the old one.
+router.post(
+  '/:id/guest-session',
+  requirePermission('orders.create'),
+  async (req: Request, res: Response) => {
+    try {
+      const table = activeTable(req.params.id);
+      if (!table) return res.status(404).json({ error: 'Table not found' });
+      const session = openGuestTableSession(
+        getDatabase(),
+        table.id,
+        (req as any).user?.userId ?? null,
+        { renew: req.body?.renew === true },
+      );
+      const base = guestQrBase();
+      const url = guestSessionUrl(base.baseUrl, session);
+      res.json({
+        table: { id: table.id, name: table.number },
+        session: { created_at: session.created_at, expires_at: session.expires_at },
+        url,
+        data_url: await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 320 }),
+        store_timezone: storeTimezone(getDatabase()),
+        public: base.public,
+        server_app_enabled: isServerAppEnabled(),
+        guest_ordering_enabled: isGuestQrOrderingEnabled(),
+      });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-    res.json({ server_app_enabled: isServerAppEnabled(), base_url: baseUrl, public: Boolean(publicBaseUrl), qrs });
-  } catch (error: any) {
-    console.error('[API] Internal error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  },
+);
+
+// Prints the session's QR on the default receipt printer; a document printer or none answers with a
+// code so the page prints it through the browser instead.
+router.post(
+  '/:id/guest-session/print',
+  requirePermission('orders.create'),
+  requirePermission('printing.execute'),
+  async (req: Request, res: Response) => {
+    try {
+      const table = activeTable(req.params.id);
+      if (!table) return res.status(404).json({ error: 'Table not found' });
+      const db = getDatabase();
+      const printer = db
+        .prepare(
+          "SELECT * FROM printers WHERE connection_type != 'webusb' ORDER BY is_default DESC, name LIMIT 1",
+        )
+        .get();
+      if (!printer) {
+        return res.status(400).json({ error: 'No printer configured', code: 'no_printer' });
+      }
+      const session = openGuestTableSession(db, table.id, (req as any).user?.userId ?? null);
+      const language = resolveTenantReceiptLanguages(db).primary;
+      const result = await printTableQrSlip(
+        {
+          tableName: table.number,
+          url: guestSessionUrl(guestQrBase().baseUrl, session),
+          validUntil: formatStoreTime(db, session.expires_at, language),
+        },
+        printer as any,
+        getHttpRequestSignal(req),
+        language,
+      );
+      if (result.ok) return res.json({ success: true });
+      return res.status(502).json({
+        error: result.detail || 'Print failed. Check printer connection.',
+        ...(result.detail?.includes(WINDOWS_DOCUMENT_PRINTER_MARKER)
+          ? { code: 'document_printer' }
+          : {}),
+      });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+function formatStoreTime(
+  db: ReturnType<typeof getDatabase>,
+  sqlTimestamp: string,
+  language: string,
+): string {
+  return new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
+    timeZone: storeTimezone(db),
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(`${sqlTimestamp.replace(' ', 'T')}Z`));
+}
+
+router.delete(
+  '/:id/guest-session',
+  requirePermission('orders.create'),
+  (req: Request, res: Response) => {
+    try {
+      const table = activeTable(req.params.id);
+      if (!table) return res.status(404).json({ error: 'Table not found' });
+      res.json({ closed: closeGuestTableSession(getDatabase(), table.id) });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
 
 router.put('/zone-owner', requirePermission('tables.manage'), (req: Request, res: Response) => {
   try {
@@ -370,11 +496,15 @@ router.put('/zone-owner', requirePermission('tables.manage'), (req: Request, res
     const raw = req.body?.user_id;
     let ownerId: string | null = null;
     if (raw !== null && raw !== undefined && raw !== '') {
-      if (typeof raw !== 'string') return res.status(400).json({ error: 'user_id must be a string' });
+      if (typeof raw !== 'string')
+        return res.status(400).json({ error: 'user_id must be a string' });
       const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(raw);
-      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      if (!user)
+        return res.status(400).json({ error: 'Staff member was not found or is inactive' });
       const owned = db
-        .prepare("SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1")
+        .prepare(
+          "SELECT 1 FROM tables WHERE owner_user_id = ? AND COALESCE(floor, '') != ? LIMIT 1",
+        )
         .get(raw, floor);
       if (owned && req.body?.move !== true) {
         return res.status(409).json({
@@ -412,14 +542,16 @@ router.put('/:id/owner', requirePermission('tables.manage'), (req: Request, res:
     const raw = req.body?.user_id;
     let ownerId: string | null = null;
     if (raw !== null && raw !== undefined && raw !== '') {
-      if (typeof raw !== 'string') return res.status(400).json({ error: 'user_id must be a string' });
+      if (typeof raw !== 'string')
+        return res.status(400).json({ error: 'user_id must be a string' });
       const user = db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').get(raw);
-      if (!user) return res.status(400).json({ error: 'Staff member was not found or is inactive' });
+      if (!user)
+        return res.status(400).json({ error: 'Staff member was not found or is inactive' });
       const conflict = ownerZoneConflict(db, raw, table.id, table.floor);
       if (conflict && req.body?.move === true) {
         // Daily rotation: the staff member leaves their previous zone and takes this one.
         db.prepare(
-          'UPDATE tables SET owner_user_id = NULL, updated_at = ? WHERE owner_user_id = ? AND id != ? AND COALESCE(floor, \'\') != ?',
+          "UPDATE tables SET owner_user_id = NULL, updated_at = ? WHERE owner_user_id = ? AND id != ? AND COALESCE(floor, '') != ?",
         ).run(now(), raw, table.id, table.floor ?? '');
       } else if (conflict) {
         return res.status(409).json({
@@ -436,7 +568,9 @@ router.put('/:id/owner', requirePermission('tables.manage'), (req: Request, res:
       req.params.id,
     );
     const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
-    res.json({ table: tableShape(db, updated as any, activeOrderForTable(db, req.params.id as string)) });
+    res.json({
+      table: tableShape(db, updated as any, activeOrderForTable(db, req.params.id as string)),
+    });
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -940,13 +1074,7 @@ router.post(
         const nowStr = now();
         db.prepare(
           'UPDATE orders SET table_id = ?, table_owner_user_id = (SELECT owner_user_id FROM tables WHERE id = ?), type = ?, updated_at = ? WHERE id = ?',
-        ).run(
-          target_table_id,
-          target_table_id,
-          order.type,
-          nowStr,
-          order.id,
-        );
+        ).run(target_table_id, target_table_id, order.type, nowStr, order.id);
         db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?").run(
           nowStr,
           sourceTableId,

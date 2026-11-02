@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Magtakda ng may-ari ng lugar",
     "floorRangeHint": "Gagawa ito ng {count} mesa. Iwanang blangko ang kapasidad para sa default.",
     "capacityBlankHint": "Ang blangkong kapasidad ay gumagamit ng default na 4 na upuan.",
-    "tableQrTitle": "Mga QR code para sa order",
-    "tableQrHint": "I-scan gamit ang telepono ng staff para buksan ang Server App sa mesang ito.",
     "tableQrTable": "Mesa {name}",
     "tableQrServerAppOff": "Naka-off ang Server App, kaya hindi bubukas ang mga QR hangga’t hindi ito naka-enable sa Mga Setting.",
     "tableQrFailed": "Hindi nagawa ang mga QR code",

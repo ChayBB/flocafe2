@@ -17,6 +17,7 @@ import {
   Users,
   Wallet,
   StickyNote,
+  QrCode,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
@@ -36,6 +37,7 @@ import { chargesForOrderType, useChargesStore } from '@/store/charges';
 import { getCurrencyFractionDigits } from '@countries';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import { kdsItemLine } from '@/lib/item-options-note';
+import GuestTableQrDialog from '@/components/tables/GuestTableQrDialog';
 
 interface Props {
   tables: Table[];
@@ -183,6 +185,8 @@ export default function CartPanel({
 
   const isDeliveryOrder = cart.orderType === 'delivery';
   const [customPaymentMethods, setCustomPaymentMethods] = useState<CustomPaymentMethod[]>([]);
+  const [qrTableId, setQrTableId] = useState<string | null>(null);
+  const tTables = useTranslations('tables');
   useEffect(() => {
     if (!isDeliveryOrder) return;
     api
@@ -319,6 +323,26 @@ export default function CartPanel({
                   </span>
                 </button>
               )}
+            {isRestaurant && cart.tableId && (
+              <button
+                type="button"
+                onClick={() => setQrTableId(cart.tableId)}
+                aria-label={tTables('guestQrButton')}
+                title={tTables('guestQrButton')}
+                data-testid="cart-table-qr-button"
+                className="flex min-h-[38px] items-center justify-center rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <QrCode size={16} />
+              </button>
+            )}
+            {qrTableId && (
+              <GuestTableQrDialog
+                tableId={qrTableId}
+                api={api}
+                apiPrefix=""
+                onClose={() => setQrTableId(null)}
+              />
+            )}
             <div className="flex flex-1 min-w-[160px] items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users size={15} />

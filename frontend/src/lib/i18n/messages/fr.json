@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Définir le responsable de la zone",
     "floorRangeHint": "{count} tables vont être créées. Laissez la capacité vide pour la valeur par défaut.",
     "capacityBlankHint": "Une capacité vide utilise la valeur par défaut de 4 places.",
-    "tableQrTitle": "QR codes de commande",
-    "tableQrHint": "Scannez avec le téléphone du personnel pour ouvrir l’appli serveur à cette table.",
     "tableQrTable": "Table {name}",
     "tableQrServerAppOff": "L’appli serveur est désactivée : ces QR codes ne s’ouvriront qu’une fois activée dans les paramètres.",
     "tableQrFailed": "Impossible de créer les QR codes",

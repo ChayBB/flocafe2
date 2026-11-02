@@ -233,6 +233,11 @@ function guestOrderingClosed(res: Response) {
     .json({ code: 'guest_ordering_disabled', error: 'Ordering by QR code is turned off' });
 }
 
+/** The table exists but this QR's session has ended, so the guest needs a new code from staff. */
+function guestQrExpired(res: Response) {
+  return res.status(410).json({ code: 'qr_expired', error: 'This table QR code has expired' });
+}
+
 /** Calls the main API on behalf of the Guest account that table-QR visitors order as. */
 async function callMainApiAsGuest(
   req: Request,
@@ -554,12 +559,11 @@ export function startServerApp(): Promise<void> {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
       if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
       const tableId = typeof req.query.table_id === 'string' ? req.query.table_id : '';
-      const table = verifyGuestTableToken(tableId, req.query.t)
-        ? (getDatabase()
-            .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
-            .get(tableId) as { id: string; number: string } | undefined)
-        : undefined;
+      const table = getDatabase()
+        .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
+        .get(tableId) as { id: string; number: string } | undefined;
       if (!table) return res.status(404).json({ error: 'Table not found' });
+      if (!verifyGuestTableToken(tableId, req.query.t)) return guestQrExpired(res);
       res.json({ table: { id: table.id, name: table.number } });
     });
 
@@ -601,10 +605,11 @@ export function startServerApp(): Promise<void> {
         try {
           const db = getDatabase();
           const tableId = typeof req.body?.table_id === 'string' ? req.body.table_id : '';
-          const table = verifyGuestTableToken(tableId, req.body?.table_token)
-            ? db.prepare('SELECT id FROM tables WHERE id = ? AND is_active = 1').get(tableId)
-            : undefined;
+          const table = db
+            .prepare('SELECT id FROM tables WHERE id = ? AND is_active = 1')
+            .get(tableId);
           if (!table) return res.status(404).json({ error: 'Table not found' });
+          if (!verifyGuestTableToken(tableId, req.body?.table_token)) return guestQrExpired(res);
 
           const sanitized = sanitizeGuestOrderItems(db, req.body?.items);
           if (!sanitized.ok) return res.status(400).json({ error: sanitized.error });
@@ -732,6 +737,30 @@ export function startServerApp(): Promise<void> {
     );
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
+    );
+    for (const suffix of ['guest-session', 'guest-session/print']) {
+      app.post(
+        `/api/tables/:id/${suffix}`,
+        serverAppApiRateLimit,
+        requireServerAppAuth,
+        (req, res) =>
+          forwardToMainApi(
+            req,
+            res,
+            `/tables/${encodeURIComponent(String(req.params.id))}/${suffix}`,
+          ),
+      );
+    }
+    app.delete(
+      '/api/tables/:id/guest-session',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
+        forwardToMainApi(
+          req,
+          res,
+          `/tables/${encodeURIComponent(String(req.params.id))}/guest-session`,
+        ),
     );
     app.post(
       '/api/tables/:id/move-order',

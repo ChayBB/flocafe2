@@ -8,6 +8,7 @@ import {
   renderPaymentRequestSlipHtml,
   type PaymentRequestSlipData,
 } from './payment-request-slip';
+import { renderTableQrSlip, type TableQrSlipData } from './table-qr-slip';
 import * as net from 'net';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1442,62 +1443,111 @@ export async function printPaymentRequestSlip(
     const printer = targetPrinter || getPrinterConfig();
     if (!printer) return { ok: false, detail: 'No printer configured' };
 
-    const { profile, columns, capabilities } = resolvePrinterContext(printer);
     const context = paymentRequestSlipContext(slip, language);
     const { locale, currency, currencyDisplay, digits, language: slipLanguage } = context;
-    const widthDots = capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576);
-    const maxBandHeight = capabilities.raster?.maxBandHeight ?? 200;
-    const renderWith = (caps: ThermalPrinterCapabilities) =>
+    return await dispatchQrSlip(printer, slipLanguage, 'payment-request', signal, (layout) =>
       renderPaymentRequestSlip(context.slip, {
-        columns,
+        ...layout,
         language: slipLanguage,
         locale,
         currency,
         currencyDisplay,
         digits,
-        useUnicode: false,
-        arabicShaping: caps.shaping.arabic,
-        cutMode: profile.cutMode,
-        capabilities: caps,
-        widthDots,
-        maxBandHeight,
-      });
-
-    let data: Buffer;
-    const warnings: PrintWarning[] = [];
-    if (rasterCapabilityEnabled(capabilities)) {
-      const documentResult = renderWith(capabilities);
-      const nativeResult = renderWith(nativeFallbackCapabilities(capabilities));
-      const rasterized = await rasterizeDocumentLines(
-        documentResult.lines,
-        documentResult.warnings,
-        {
-          useUnicode: false,
-          cutMode: profile.cutMode,
-          arabicShaping: capabilities.shaping.arabic,
-          columns,
-          language: slipLanguage,
-          capabilities,
-          requestPrefix: 'payment-request',
-        },
-      );
-      if (rasterized.rasterSelected && !rasterized.rasterFailed) {
-        data = rasterized.data;
-        warnings.push(...rasterized.warnings);
-      } else {
-        data = nativeResult.data;
-        warnings.push(...nativeResult.warnings, ...rasterized.warnings);
-      }
-    } else {
-      const nativeResult = renderWith(capabilities);
-      data = nativeResult.data;
-      warnings.push(...nativeResult.warnings);
-    }
-
-    const dispatch = await dispatchPrint(printer, data, signal);
-    return warnings.length > 0 ? { ...dispatch, warnings } : dispatch;
+      }),
+    );
   } catch (error: unknown) {
     console.error('[Printer] Payment request slip print error:', error);
+    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+interface QrSlipLayout {
+  columns: number;
+  useUnicode: false;
+  arabicShaping: boolean;
+  cutMode: PrinterCutMode;
+  capabilities: ThermalPrinterCapabilities;
+  widthDots: number;
+  maxBandHeight: number;
+}
+
+/** Renders a slip carrying a QR for the printer, as raster when the printer takes it, and sends it. */
+async function dispatchQrSlip(
+  printer: Parameters<typeof resolvePrinterContext>[0],
+  language: string,
+  requestPrefix: string,
+  signal: AbortSignal | undefined,
+  render: (layout: QrSlipLayout) => { lines: string[]; data: Buffer; warnings: PrintWarning[] },
+): Promise<DispatchResult> {
+  const { profile, columns, capabilities } = resolvePrinterContext(printer);
+  const widthDots = capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576);
+  const maxBandHeight = capabilities.raster?.maxBandHeight ?? 200;
+  const renderWith = (caps: ThermalPrinterCapabilities) =>
+    render({
+      columns,
+      useUnicode: false,
+      arabicShaping: caps.shaping.arabic,
+      cutMode: profile.cutMode,
+      capabilities: caps,
+      widthDots,
+      maxBandHeight,
+    });
+
+  let data: Buffer;
+  const warnings: PrintWarning[] = [];
+  if (rasterCapabilityEnabled(capabilities)) {
+    const documentResult = renderWith(capabilities);
+    const nativeResult = renderWith(nativeFallbackCapabilities(capabilities));
+    const rasterized = await rasterizeDocumentLines(documentResult.lines, documentResult.warnings, {
+      useUnicode: false,
+      cutMode: profile.cutMode,
+      arabicShaping: capabilities.shaping.arabic,
+      columns,
+      language,
+      capabilities,
+      requestPrefix,
+    });
+    if (rasterized.rasterSelected && !rasterized.rasterFailed) {
+      data = rasterized.data;
+      warnings.push(...rasterized.warnings);
+    } else {
+      data = nativeResult.data;
+      warnings.push(...nativeResult.warnings, ...rasterized.warnings);
+    }
+  } else {
+    const nativeResult = renderWith(capabilities);
+    data = nativeResult.data;
+    warnings.push(...nativeResult.warnings);
+  }
+
+  const dispatch = await dispatchPrint(printer, data, signal);
+  return warnings.length > 0 ? { ...dispatch, warnings } : dispatch;
+}
+
+/** The slip staff hand a seated party: the shop, the table, its ordering QR and when it stops working. */
+export async function printTableQrSlip(
+  slip: Omit<TableQrSlipData, 'businessName'>,
+  targetPrinter: Parameters<typeof resolvePrinterContext>[0],
+  signal?: AbortSignal,
+  language?: string,
+): Promise<DispatchResult> {
+  try {
+    if (signal?.aborted) return { ok: false, detail: 'Print cancelled during shutdown' };
+    const slipLanguage = normalizePrintLanguage(
+      language ?? getSettingValue('language') ?? undefined,
+    );
+    const data: TableQrSlipData = {
+      ...slip,
+      businessName:
+        getSettingValue('bill_show_name') === 'false'
+          ? ''
+          : (getSettingValue('business_name') ?? ''),
+    };
+    return await dispatchQrSlip(targetPrinter, slipLanguage, 'table-qr', signal, (layout) =>
+      renderTableQrSlip(data, { ...layout, language: slipLanguage }),
+    );
+  } catch (error: unknown) {
+    console.error('[Printer] Table QR slip print error:', error);
     return { ok: false, detail: error instanceof Error ? error.message : String(error) };
   }
 }

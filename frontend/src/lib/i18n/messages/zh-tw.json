@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "設定區域負責人",
     "floorRangeHint": "將建立 {count} 張桌台。容納人數留空則使用預設值。",
     "capacityBlankHint": "容納人數留空時使用預設的 4 個座位。",
-    "tableQrTitle": "點餐 QR 碼",
-    "tableQrHint": "用員工手機掃描，即可在此桌台開啟服務生應用程式。",
     "tableQrTable": "桌台 {name}",
     "tableQrServerAppOff": "服務生應用程式已關閉，需在設定中啟用後這些 QR 碼才能開啟。",
     "tableQrFailed": "無法產生 QR 碼",

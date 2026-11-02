@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Imposta il responsabile dell’area",
     "floorRangeHint": "Verranno creati {count} tavoli. Lascia vuota la capienza per usare il valore predefinito.",
     "capacityBlankHint": "Una capienza vuota usa il valore predefinito di 4 posti.",
-    "tableQrTitle": "QR code degli ordini",
-    "tableQrHint": "Inquadra con il telefono del personale per aprire l’app di sala a questo tavolo.",
     "tableQrTable": "Tavolo {name}",
     "tableQrServerAppOff": "L’app di sala è disattivata: i QR non si apriranno finché non la attivi in Impostazioni.",
     "tableQrFailed": "Impossibile creare i QR code",

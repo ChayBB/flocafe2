@@ -3,7 +3,6 @@
 // Floorplan canvas editor: drag tables and persist X/Y coordinates per floor as percentages.
 
 import TableOwnerModal, { type OwnerScope } from './TableOwnerModal';
-import TableQrSheet from './TableQrSheet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -272,8 +271,9 @@ export default function FloorplanEditor({
   const [floorForm, setFloorForm] = useState({ name: '', tableName: '', capacity: '4' });
   const [floorFormSaving, setFloorFormSaving] = useState(false);
   const [floorCapacities, setFloorCapacities] = useState<Record<string, string>>({});
-  const [floorOwner, setFloorOwner] = useState<{ id: string; name: string; move: boolean } | null>(null);
-  const [qrSheet, setQrSheet] = useState<{ tableIds: string[]; zone: string } | null>(null);
+  const [floorOwner, setFloorOwner] = useState<{ id: string; name: string; move: boolean } | null>(
+    null,
+  );
   const rangeNames = tableNamesForZone(floorForm.name);
   const [actionTable, setActionTable] = useState<Table | null>(null);
   const [ownerScope, setOwnerScope] = useState<OwnerScope | null>(null);
@@ -401,7 +401,8 @@ export default function FloorplanEditor({
       names: [...owners.values()].sort(),
     }));
   }, [tables, overview, floor]);
-  const hasZoneTables = !overview && tables.some((tb) => tb.is_active && (tb.floor || '') === floor);
+  const hasZoneTables =
+    !overview && tables.some((tb) => tb.is_active && (tb.floor || '') === floor);
   const openZoneOwner = (zone: string, ids: string[]) =>
     setOwnerScope({ kind: 'zone', floor: zone, name: zone, ownerIds: ids });
 
@@ -735,7 +736,7 @@ export default function FloorplanEditor({
           position_y: pos.y,
         };
       });
-      const { data } = await api.post('/tables/batch', {
+      await api.post('/tables/batch', {
         floor: name,
         tables: tablesPayload,
         ...(floorOwner ? { owner_user_id: floorOwner.id, move: floorOwner.move } : {}),
@@ -746,10 +747,6 @@ export default function FloorplanEditor({
       setFloorForm({ name: '', tableName: '', capacity: '4' });
       setFloorCapacities({});
       setFloorOwner(null);
-      setQrSheet({
-        tableIds: (data.tables || []).map((table: { id: string }) => table.id),
-        zone: name,
-      });
       onSaved?.();
     } catch {
       toast.error(t('tableCreateFailed'), { position: 'top-center' });
@@ -1296,11 +1293,7 @@ export default function FloorplanEditor({
                   {tCommon('cancel')}
                 </Button>
               )}
-              <Button
-                onClick={save}
-                disabled={saving || pendingCount === 0}
-                className="shadow"
-              >
+              <Button onClick={save} disabled={saving || pendingCount === 0} className="shadow">
                 {saving ? tCommon('saving') : tCommon('save')}
               </Button>
             </>
@@ -1573,14 +1566,6 @@ export default function FloorplanEditor({
         </div>
       )}
 
-      {qrSheet && (
-        <TableQrSheet
-          tableIds={qrSheet.tableIds}
-          zoneName={qrSheet.zone}
-          onClose={() => setQrSheet(null)}
-        />
-      )}
-
       {ownerScope && (
         <TableOwnerModal
           scope={ownerScope}
@@ -1789,43 +1774,42 @@ export default function FloorplanEditor({
                 </div>
               ) : (
                 <>
-                <p className="text-xs text-muted-foreground">{t('floorplanEmptyCanvas')}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label
-                      htmlFor="floorplan-floor-table"
-                      className="block text-sm font-medium text-foreground mb-1"
-                    >
-                      {t('tableName')}
-                    </label>
-                    <input
-                      id="floorplan-floor-table"
-                      type="text"
-                      value={floorForm.tableName}
-                      onChange={(e) => setFloorForm({ ...floorForm, tableName: e.target.value })}
-                      className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                      required
-                    />
+                  <p className="text-xs text-muted-foreground">{t('floorplanEmptyCanvas')}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label
+                        htmlFor="floorplan-floor-table"
+                        className="block text-sm font-medium text-foreground mb-1"
+                      >
+                        {t('tableName')}
+                      </label>
+                      <input
+                        id="floorplan-floor-table"
+                        type="text"
+                        value={floorForm.tableName}
+                        onChange={(e) => setFloorForm({ ...floorForm, tableName: e.target.value })}
+                        className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="floorplan-floor-capacity"
+                        className="block text-sm font-medium text-foreground mb-1"
+                      >
+                        {t('capacity')}
+                      </label>
+                      <input
+                        id="floorplan-floor-capacity"
+                        type="number"
+                        min="1"
+                        value={floorForm.capacity}
+                        onChange={(e) => setFloorForm({ ...floorForm, capacity: e.target.value })}
+                        className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                        required
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label
-                      htmlFor="floorplan-floor-capacity"
-                      className="block text-sm font-medium text-foreground mb-1"
-                    >
-                      {t('capacity')}
-                    </label>
-                    <input
-                      id="floorplan-floor-capacity"
-                      type="number"
-                      min="1"
-                      value={floorForm.capacity}
-                      onChange={(e) => setFloorForm({ ...floorForm, capacity: e.target.value })}
-                      className="w-full px-3 py-2 border border-border bg-card rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                      required
-                    />
-                  </div>
-                </div>
-
                 </>
               )}
               <div className="flex gap-2 pt-1">

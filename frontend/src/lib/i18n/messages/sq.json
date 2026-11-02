@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Cakto përgjegjësin e zonës",
     "floorRangeHint": "Do të krijohen {count} tavolina. Lëre kapacitetin bosh për vlerën standarde.",
     "capacityBlankHint": "Kapaciteti bosh përdor vlerën standarde prej 4 vendesh.",
-    "tableQrTitle": "Kodet QR të porosive",
-    "tableQrHint": "Skanoje me telefonin e stafit për të hapur aplikacionin e kamerierit në këtë tavolinë.",
     "tableQrTable": "Tavolina {name}",
     "tableQrServerAppOff": "Aplikacioni i kamerierit është i fikur, ndaj kodet QR nuk hapen derisa të aktivizohet te Cilësimet.",
     "tableQrFailed": "Kodet QR nuk u krijuan",

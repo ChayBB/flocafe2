@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Bereichsverantwortlichen festlegen",
     "floorRangeHint": "Dadurch entstehen {count} Tische. Leere Kapazität nutzt den Standardwert.",
     "capacityBlankHint": "Leere Kapazität nutzt den Standard von 4 Plätzen.",
-    "tableQrTitle": "Bestell-QR-Codes",
-    "tableQrHint": "Mit dem Handy des Personals scannen, um die Server-App an diesem Tisch zu öffnen.",
     "tableQrTable": "Tisch {name}",
     "tableQrServerAppOff": "Die Server-App ist ausgeschaltet; die QR-Codes funktionieren erst, wenn sie in den Einstellungen aktiviert wird.",
     "tableQrFailed": "QR-Codes konnten nicht erstellt werden",

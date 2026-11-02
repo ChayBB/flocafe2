@@ -2945,8 +2945,6 @@
     "tableOwnerAssign": "Definir responsável pela área",
     "floorRangeHint": "Serão criadas {count} mesas. Deixe a capacidade em branco para usar o padrão.",
     "capacityBlankHint": "Capacidade em branco usa o padrão de 4 lugares.",
-    "tableQrTitle": "QR codes de pedidos",
-    "tableQrHint": "Escaneie com o celular da equipe para abrir o app de garçom nesta mesa.",
     "tableQrTable": "Mesa {name}",
     "tableQrServerAppOff": "O app de garçom está desativado; os QR só abrirão depois de ativá-lo em Configurações.",
     "tableQrFailed": "Não foi possível criar os QR codes",

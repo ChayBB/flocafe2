@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
-import { getSettingValue } from '../db';
+import { getDatabase, getSettingValue } from '../db';
+import { currentGuestTableSession } from './guest-table-session';
 import { readProtectedSetting, writeProtectedSetting } from '../security/protected-setting';
 
 export const GUEST_QR_PUBLIC_URL_KEY = 'guest_qr_public_base_url';
@@ -76,22 +77,25 @@ function guestQrSecret(): string {
   return secret;
 }
 
-/** The token a table's QR carries; without it a table id alone cannot place an order. */
-export function guestTableToken(tableId: string): string {
+/** The token a table session's QR carries; without it a table id alone cannot place an order. */
+export function guestSessionToken(sessionId: string): string {
   return createHmac('sha256', guestQrSecret())
-    .update(`table:${tableId}`)
+    .update(`session:${sessionId}`)
     .digest('base64url')
     .slice(0, 22);
 }
 
+/** True while `token` belongs to the table's open session. */
 export function verifyGuestTableToken(tableId: string, token: unknown): boolean {
   if (typeof token !== 'string' || token.length !== 22) return false;
-  const expected = Buffer.from(guestTableToken(tableId));
+  const session = currentGuestTableSession(getDatabase(), tableId);
+  if (!session) return false;
+  const expected = Buffer.from(guestSessionToken(session.id));
   const given = Buffer.from(token);
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-/** Issues a new secret, so every table QR printed before stops working. */
+/** Issues a new secret, so every table QR given out before stops working. */
 export function rotateGuestQrSecret(): void {
   writeProtectedSetting(GUEST_QR_SECRET_KEY, randomBytes(32).toString('hex'));
 }

@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { E2E_PASSWORD, getE2eToken } from './helpers/test-auth';
@@ -27,12 +26,11 @@ async function createTable(page: import('@playwright/test').Page) {
   });
   expect(created.ok()).toBeTruthy();
   const { table } = await created.json();
-  const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/order-qr`, {
+  const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
     headers: manager(),
-    data: { table_ids: [table.id] },
   });
   expect(qr.ok()).toBeTruthy();
-  const url = new URL((await qr.json()).qrs[0].url as string);
+  const url = new URL((await qr.json()).url as string);
   const token = url.searchParams.get('t') as string;
   return {
     name,
@@ -260,14 +258,14 @@ test.describe('Server App guest from a table QR', () => {
     ).toBe(404);
     // A table id alone, or with another token, is not enough to order.
     const item = [{ product_id: 'e2e-product', quantity: 1 }];
-    expect((await post({ table_id: table.id, items: item })).status()).toBe(404);
+    expect((await post({ table_id: table.id, items: item })).status()).toBe(410);
     expect(
       (await post({ table_id: table.id, table_token: 'x'.repeat(22), items: item })).status(),
-    ).toBe(404);
+    ).toBe(410);
     const tableOnly = await request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/table`, {
       params: { table_id: table.id },
     });
-    expect(tableOnly.status()).toBe(404);
+    expect(tableOnly.status()).toBe(410);
     expect((await post({ table_id: table.id, table_token: table.token, items: [] })).status()).toBe(
       400,
     );
@@ -382,7 +380,7 @@ test('the QR ordering checkbox in OrderFlow settings closes and reopens ordering
   }
 });
 
-test('table QR links use the public address, and cancelling QR codes in OrderFlow settings retires printed ones', async ({
+test('table QR links use the public address, and cancelling QR codes in OrderFlow settings retires the ones handed out', async ({
   page,
 }) => {
   const table = await createTable(page);
@@ -410,50 +408,23 @@ test('table QR links use the public address, and cancelling QR codes in OrderFlo
     expect((await saved.json()).public_base_url).toBe('https://order.example.com');
 
     // New QR codes point at the public address.
-    const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/order-qr`, {
+    const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
       headers: owner,
-      data: { table_ids: [table.id] },
     });
     const body = await qr.json();
     expect(body.public).toBe(true);
-    expect(body.qrs[0].url).toBe(`https://order.example.com/server-standalone/?${table.query}`);
+    expect(body.url).toBe(`https://order.example.com/server-standalone/?${table.query}`);
 
-    // The settings button shows a QR for every active table on the public address.
-    await network.getByRole('button', { name: 'Create QR and register tables' }).click();
-    const sheet = page.getByTestId('table-qr-sheet');
-    const card = sheet
-      .locator('div', { has: page.getByRole('img', { name: 'QR' }) })
-      .filter({ hasText: table.name })
-      .last();
-    await expect(card.getByText(table.name, { exact: true })).toHaveCSS('font-size', '23.4px');
-    await expect(card.getByText('Menu', { exact: true })).toHaveCSS('font-size', '20.8px');
-    await expect(card.getByRole('img', { name: 'QR' })).toHaveCSS('width', '166px');
-    await expect(card.getByText(`Table ${table.name}`)).toHaveCount(0);
-    await expect(sheet.getByText('https://order.example.com/server-standalone/')).toBeVisible();
-
-    // Download saves every card as one PNG image.
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      sheet.getByRole('button', { name: 'Download' }).click(),
-    ]);
-    expect(download.suggestedFilename()).toMatch(/^QR-.+\.png$/);
-    const png = await readFile(await download.path());
-    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-    expect(png.length).toBeGreaterThan(5000);
-
-    await sheet.getByRole('button', { name: 'Close' }).first().click();
-    await expect(sheet).toHaveCount(0);
-
-    // Cancelling every QR code makes the printed one stop working.
+    // Cancelling every QR code makes the one handed out stop working.
     await network.getByRole('button', { name: 'Cancel all table QR codes' }).click();
     await page.getByRole('button', { name: 'Cancel all table QR codes' }).last().click();
     await expect(
-      page.getByText('Old QR codes cancelled. Reprint the table QR codes.'),
+      page.getByText('Old QR codes cancelled. Open a new QR from each table.'),
     ).toBeVisible();
     const old = await page.request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/table`, {
       params: { table_id: table.id, t: table.token },
     });
-    expect(old.status()).toBe(404);
+    expect(old.status()).toBe(410);
   } finally {
     await reset();
   }
@@ -484,7 +455,9 @@ test('pairing with a QR ordering server by code opens a tunnel that serves guest
       storeId: 'e2e-store',
       publicBaseUrl: 'https://e2e.order.example.com',
     });
-    await expect(page.getByText('POS paired. Reprint the table QR codes.')).toBeVisible({
+    await expect(
+      page.getByText('POS paired. New table QR codes use the QR ordering server.'),
+    ).toBeVisible({
       timeout: 10000,
     });
     await relay.waitForTunnel();
@@ -498,11 +471,10 @@ test('pairing with a QR ordering server by code opens a tunnel that serves guest
       pairing.getByText('Customers order at https://e2e.order.example.com'),
     ).toBeVisible();
 
-    const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/order-qr`, {
+    const qr = await page.request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
       headers: owner,
-      data: { table_ids: [table.id] },
     });
-    expect((await qr.json()).qrs[0].url).toBe(
+    expect((await qr.json()).url).toBe(
       `https://e2e.order.example.com/server-standalone/?${table.query}`,
     );
 
@@ -577,4 +549,85 @@ test('guests share one cached menu, and a menu edit shows on the next read', asy
     });
   }
   expect((await menuNames())[productId]).toBe(before[productId]);
+});
+
+test('staff hand out a table QR from the POS and the Server App, and it stops working once renewed, ended or the table is freed', async ({
+  page,
+  request,
+}) => {
+  const table = await createTable(page);
+  const guestTable = (token: string) =>
+    request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/table`, {
+      params: { table_id: table.id, t: token },
+    });
+  const openSession = async () => {
+    const res = await request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
+      headers: manager(),
+    });
+    expect(res.ok()).toBeTruthy();
+    return new URL((await res.json()).url as string).searchParams.get('t') as string;
+  };
+  const businessRes = await request.get(`${E2E_BASE_URL}/api/settings/business`, {
+    headers: manager(),
+  });
+  const original = await businessRes.json();
+  try {
+    await request.put(`${E2E_BASE_URL}/api/settings/business`, {
+      headers: manager(),
+      data: { ...original, tables_required: true },
+    });
+    await page.goto(`${E2E_BASE_URL}/auth/login`);
+    await page.locator('#email').fill('manager@flo.local');
+    await page.locator('#password').fill(E2E_PASSWORD);
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/pos/**', { timeout: 20000 });
+    await page.getByRole('button', { name: 'Select Table' }).click();
+    await page.getByRole('button').filter({ hasText: table.name }).click();
+    await page.getByTestId('cart-table-qr-button').click();
+
+    // Opening the QR again shows the party's code, not a new one.
+    const dialog = page.getByTestId('guest-table-qr');
+    await expect(dialog.getByRole('img', { name: 'QR' })).toBeVisible();
+    await expect(dialog.getByTestId('guest-table-qr-valid-until')).toContainText('Valid until');
+    expect((await guestTable(table.token)).status()).toBe(200);
+
+    await dialog.getByRole('button', { name: 'New code' }).click();
+    await expect(page.getByText('New QR code ready. The old one no longer works.')).toBeVisible();
+    expect((await guestTable(table.token)).status()).toBe(410);
+    const renewed = await openSession();
+    expect((await guestTable(renewed)).status()).toBe(200);
+
+    await dialog.getByRole('button', { name: 'End QR' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect((await guestTable(renewed)).status()).toBe(410);
+
+    // Paying, cancelling or moving the table's order frees the table, which ends its QR.
+    const seated = await openSession();
+    expect((await guestTable(seated)).status()).toBe(200);
+    for (const status of ['occupied', 'available']) {
+      await request.patch(`${E2E_BASE_URL}/api/tables/${table.id}/status`, {
+        headers: manager(),
+        data: { status },
+      });
+    }
+    expect((await guestTable(seated)).status()).toBe(410);
+    await setEnglish(page);
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}&t=${seated}`);
+    await expect(page.getByTestId('server-app-guest-expired')).toBeVisible();
+    await expect(page.getByText('This QR code has expired')).toBeVisible();
+
+    // The Server App hands out the same QR for the table a server is on.
+    await page.evaluate(
+      ([key, token]) => localStorage.setItem(key, token),
+      ['flocafe:server-app-token', getE2eToken('e2e-server', 'server@flo.local', 'server')],
+    );
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}`);
+    await page.getByTestId('server-app-table-qr-button').click();
+    await expect(page.getByTestId('guest-table-qr').getByRole('img', { name: 'QR' })).toBeVisible();
+  } finally {
+    await request.put(`${E2E_BASE_URL}/api/settings/business`, {
+      headers: manager(),
+      data: original,
+    });
+  }
 });
