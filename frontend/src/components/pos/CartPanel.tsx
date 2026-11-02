@@ -492,7 +492,7 @@ export default function CartPanel({
                   .map((item: OrderItem) => (
                     <div key={item.id} className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">
-                        {item.quantity}× {item.product_name}
+                        {item.quantity}× {kdsItemLine(item).name}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {fmt(Number(item.total))}

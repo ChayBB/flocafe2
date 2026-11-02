@@ -9,6 +9,7 @@ import { useTranslations } from 'use-intl';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import type { Bill, Order, OrderItem } from '@/lib/types';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
+import { kdsItemLine } from '@/lib/item-options-note';
 
 type SplitMode = 'table' | 'guest';
 
@@ -327,7 +328,7 @@ export function SplitCheckModal({
                 {items.map((item: OrderItem) => (
                   <tr key={item.id} className="border-t">
                     <td className="p-2 sticky start-0 bg-card">
-                      <div className="font-medium">{item.product_name}</div>
+                      <div className="font-medium">{kdsItemLine(item).name}</div>
                       <div className="text-xs text-muted-foreground">
                         {item.quantity} × {fmt(Number(item.total) / item.quantity)}
                       </div>
@@ -386,7 +387,7 @@ export function SplitCheckModal({
                   {items.map((item: OrderItem) => (
                     <tr key={item.id} className="border-t">
                       <td className="p-2 sticky start-0 bg-card">
-                        <div className="font-medium">{item.product_name}</div>
+                        <div className="font-medium">{kdsItemLine(item).name}</div>
                         <div className="text-xs text-muted-foreground">
                           {item.quantity} × {fmt(Number(item.total) / item.quantity)}
                         </div>

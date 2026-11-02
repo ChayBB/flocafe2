@@ -211,6 +211,15 @@ test('a one-kind option folds once picked, and the size and option go into the s
     await expect(item).toContainText(`${productName} Shrimp ${run} (Large plate)`);
     await expect(item).not.toContainText(`+ Shrimp ${run}`);
     await expect(item).not.toContainText('"');
+
+    // The POS lists what the table already ordered the same way.
+    await page.goto(`${E2E_BASE_URL}/pos`);
+    await page.getByRole('button', { name: 'Select Table' }).click();
+    await page
+      .getByRole('button')
+      .filter({ hasText: `Opt ${run}` })
+      .click();
+    await expect(page.getByText(`1× ${productName} Shrimp ${run} (Large plate)`)).toBeVisible();
   } finally {
     await cleanup();
   }

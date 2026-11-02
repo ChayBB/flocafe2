@@ -15,7 +15,12 @@ import { tenantCan } from '@/lib/permissions';
 import MoveTableModal from '@/components/tables/MoveTableModal';
 import EditOrderItemModal from '@/components/orders/EditOrderItemModal';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
-import { itemAwaitingWeight, orderAwaitingWeight, pendingPriceLabelKey } from '@/components/orders/OrderCard';
+import {
+  itemAwaitingWeight,
+  orderAwaitingWeight,
+  pendingPriceLabelKey,
+} from '@/components/orders/OrderCard';
+import { kdsItemLine } from '@/lib/item-options-note';
 
 interface Props {
   table: Table;
@@ -313,36 +318,41 @@ export default function TableCheckoutModal({
                 {t('previousItems')}
               </p>
               <div className="space-y-1">
-                {activeItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-start py-1.5 px-2 bg-muted rounded-lg"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground font-medium">
-                        {item.quantity}x {item.product_name}
-                      </p>
-                      {item.special_instructions && (
-                        <p className="text-xs text-muted-foreground italic">
-                          {item.special_instructions}
+                {activeItems.map((item) => {
+                  const line = kdsItemLine(item);
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex justify-between items-start py-1.5 px-2 bg-muted rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground font-medium">
+                          {item.quantity}x {line.name}
                         </p>
+                        {line.instructions && (
+                          <p className="text-xs text-muted-foreground italic">
+                            {line.instructions}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground ms-2 font-medium">
+                        {itemAwaitingWeight(item)
+                          ? t(pendingPriceLabelKey(item))
+                          : formatItemTotal(item.total, item.subtotal)}
+                      </span>
+                      {canEditItems && order.bill?.payment_status !== 'paid' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingItem(item)}
+                          className="ms-1 size-6 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-md hover:bg-background"
+                          title={tOrders('editItem')}
+                        >
+                          <Pencil size={12} />
+                        </button>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground ms-2 font-medium">
-                      {itemAwaitingWeight(item) ? t(pendingPriceLabelKey(item)) : formatItemTotal(item.total, item.subtotal)}
-                    </span>
-                    {canEditItems && order.bill?.payment_status !== 'paid' && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingItem(item)}
-                        className="ms-1 size-6 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-md hover:bg-background"
-                        title={tOrders('editItem')}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -359,14 +369,18 @@ export default function TableCheckoutModal({
             />
             <div className="flex justify-between text-lg font-bold">
               <span>{t('total')}</span>
-              <span className="text-brand">{awaitingWeight ? 'XXXX' : fmt(Number(order.total))}</span>
+              <span className="text-brand">
+                {awaitingWeight ? 'XXXX' : fmt(Number(order.total))}
+              </span>
             </div>
             {order.bill &&
               order.bill.payment_status !== 'paid' &&
               Number(order.bill.balance) > 0 && (
                 <div className="flex justify-between text-sm font-medium">
                   <span className="text-orange-600">{t('balanceDue')}</span>
-                  <span className="text-orange-600">{awaitingWeight ? 'XXXX' : fmt(Number(order.bill.balance))}</span>
+                  <span className="text-orange-600">
+                    {awaitingWeight ? 'XXXX' : fmt(Number(order.bill.balance))}
+                  </span>
                 </div>
               )}
 
@@ -478,7 +492,10 @@ export default function TableCheckoutModal({
                     {tReceipt('printBill')}
                   </Button>
                 )}
-                <Button onClick={handleCheckout} disabled={generating || printingBill || awaitingWeight}>
+                <Button
+                  onClick={handleCheckout}
+                  disabled={generating || printingBill || awaitingWeight}
+                >
                   {generating ? t('generating') : t('checkout')}
                 </Button>
               </div>
