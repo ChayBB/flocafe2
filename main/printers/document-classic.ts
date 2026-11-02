@@ -32,7 +32,6 @@ import {
   buildEscPos,
   financialRows,
   formatCurrency,
-  formatVariantItemHeading,
   itemAmountWidth,
   itemRows,
   itemNameWidth,
@@ -67,6 +66,7 @@ import {
 } from '../../shared/print';
 import { receiptChargeLines } from '../../shared/charges';
 import { isExcludedFromBillReceipt } from '../../shared/order-item-status';
+import { itemLine } from '../../shared/item-line';
 
 // Direction facts (registry-derived, no language unions).
 
@@ -133,30 +133,52 @@ export function buildBillPrintData(
       onlinePlatform: String(order?.online_platform ?? ''),
       externalOrderId: String(order?.external_order_id ?? ''),
       deliveryAddress: String(order?.delivery_address ?? ''),
-      items: items.map((item: any) => ({
-        productName: formatVariantItemHeading(
+      items: items.map((item: any) => {
+        const addons = (Array.isArray(item?.addons) ? item.addons : []).filter(
+          (addon: any) => addon && typeof addon === 'object',
+        );
+        // Free options join the dish as on the KDS; priced ones keep their row, for the amount.
+        const line = itemLine(
           String(item?.product_name ?? ''),
           parseVariantSelection(item?.variant_selection),
-        ),
-        quantity: Number(item?.quantity) || 0,
-        unitPrice: Number(item?.unit_price ?? item?.price ?? 0) || 0,
-        total: Number(item?.total) || 0,
-        addons: (Array.isArray(item?.addons) ? item.addons : []).map((addon: any) => {
-          const addonQuantity =
-            (addon !== null &&
-              typeof addon === 'object' &&
-              'quantity' in addon &&
-              typeof addon.quantity === 'number' &&
-              addon.quantity) ||
-            1;
-          return {
-            name: String(addon?.name ?? ''),
-            price: (Number(addon?.price) || 0) * addonQuantity * (Number(item?.quantity) || 0),
-            quantity: addonQuantity,
-          };
-        }),
-        specialInstructions: String(item?.special_instructions ?? ''),
-      })),
+          addons.map((addon: any) => ({
+            name: String(addon.name ?? ''),
+            quantity: typeof addon.quantity === 'number' ? addon.quantity : undefined,
+          })),
+          String(item?.special_instructions ?? ''),
+          {
+            joined: addons
+              .filter((addon: any) => !(Number(addon.price) > 0))
+              .map((addon: any) => ({
+                name: String(addon.name ?? ''),
+                quantity: typeof addon.quantity === 'number' ? addon.quantity : undefined,
+              })),
+          },
+        );
+        return {
+          productName: line.name,
+          quantity: Number(item?.quantity) || 0,
+          unitPrice: Number(item?.unit_price ?? item?.price ?? 0) || 0,
+          total: Number(item?.total) || 0,
+          addons: addons
+            .filter((addon: any) => Number(addon.price) > 0)
+            .map((addon: any) => {
+              const addonQuantity =
+                (addon !== null &&
+                  typeof addon === 'object' &&
+                  'quantity' in addon &&
+                  typeof addon.quantity === 'number' &&
+                  addon.quantity) ||
+                1;
+              return {
+                name: String(addon?.name ?? ''),
+                price: (Number(addon?.price) || 0) * addonQuantity * (Number(item?.quantity) || 0),
+                quantity: addonQuantity,
+              };
+            }),
+          specialInstructions: line.instructions,
+        };
+      }),
     },
     bill: {
       billNumber: String(bill?.bill_number ?? ''),

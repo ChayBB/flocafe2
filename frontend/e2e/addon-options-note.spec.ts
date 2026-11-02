@@ -7,8 +7,23 @@ import {
   spokenItemName,
   withoutOptionsNote,
 } from '../src/lib/item-options-note';
+import { itemLine } from '../../shared/item-line';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
+
+test('a bill names the dish with its free options, keeps priced ones as rows, and spaces other scripts', () => {
+  const addons = [{ name: 'หมู' }, { name: 'ไข่ดาว', quantity: 2 }];
+  expect(
+    itemLine('ข้าวผัด หมู/กุ้ง/ไก่/ปลาหมึก', { name: 'จานเล็ก' }, addons, 'จานเล็ก หมู ไข่ดาว ×2', {
+      joined: [addons[0]],
+    }),
+  ).toEqual({ name: 'ข้าวผัดหมู (จานเล็ก)', instructions: '' });
+  expect(
+    itemLine('Rice soup pork/shrimp', null, [{ name: 'Pork' }], '', {
+      joined: [{ name: 'Pork', quantity: 2 }],
+    }).name,
+  ).toBe('Rice soup Pork x2');
+});
 
 test('the KDS reads the chosen option and size instead of the listed choices and brackets', () => {
   const addons = [{ name: 'หมู' }];
@@ -169,7 +184,7 @@ test('a one-kind option folds once picked, and the size and option go into the s
     }
     await page.getByRole('button', { name: 'Kanban' }).click();
     const kdsRow = page.getByTestId('kds-item-row').filter({ hasText: productName });
-    await expect(kdsRow).toHaveText(`1×${productName}Shrimp ${run} (Large plate)`);
+    await expect(kdsRow).toHaveText(`1×${productName} Shrimp ${run} (Large plate)`);
 
     // The order screen names the item the same way, without the choice repeated below it.
     await page.goto(`${E2E_BASE_URL}/auth/login`);
@@ -181,7 +196,7 @@ test('a one-kind option folds once picked, and the size and option go into the s
     await page.goto(`${E2E_BASE_URL}/orders`);
     await page.getByText(orders.orders[0].order_number).first().click();
     const item = page.getByTestId('order-detail-item').filter({ hasText: productName });
-    await expect(item).toContainText(`${productName}Shrimp ${run} (Large plate)`);
+    await expect(item).toContainText(`${productName} Shrimp ${run} (Large plate)`);
     await expect(item).not.toContainText(`+ Shrimp ${run}`);
     await expect(item).not.toContainText('"');
   } finally {

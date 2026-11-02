@@ -3,7 +3,8 @@
 import type { Order } from '@/lib/types';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { escapeHtml } from './web-print';
-import { formatItemHeading } from './item-heading';
+import { parseVariantSelection } from './item-heading';
+import { itemLine } from '../../../../shared/item-line';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 
 export interface OrderSlipWebPrintOptions {
@@ -46,14 +47,22 @@ export function generateOrderSlipHtml(
 
   const items = (order.items ?? []).filter((item) => !isTerminalItemStatus(item.status));
   const itemRows = items
-    .map(
-      (item) => `
+    .map((item) => {
+      const addons = (item.addons ?? []).filter((addon) => addon?.name);
+      const line = itemLine(
+        item.product_name,
+        parseVariantSelection(item.variant_selection),
+        addons,
+        item.special_instructions,
+        { joined: addons.filter((addon) => !addon.price) },
+      );
+      return `
     <div style="margin:${padding} 0;display:flex;justify-content:space-between;gap:8px;">
-      <span>${escapeHtml(item.quantity)}x ${escapeHtml(formatItemHeading(item.product_name, item.variant_selection))}</span>
+      <span>${escapeHtml(item.quantity)}x ${escapeHtml(line.name)}</span>
       <span>${escapeHtml(money(item.subtotal ?? item.unit_price * item.quantity))}</span>
     </div>
-    ${(item.addons ?? [])
-      .filter((addon) => addon?.name)
+    ${addons
+      .filter((addon) => addon.price)
       .map(
         (addon) => `
       <div style="padding-inline-start:1em;display:flex;justify-content:space-between;gap:8px;color:#444;">
@@ -63,9 +72,9 @@ export function generateOrderSlipHtml(
     `,
       )
       .join('')}
-    ${item.special_instructions ? `<div style="padding-inline-start:1em;font-style:italic;">&gt;&gt; ${escapeHtml(item.special_instructions)}</div>` : ''}
-  `,
-    )
+    ${line.instructions ? `<div style="padding-inline-start:1em;font-style:italic;">&gt;&gt; ${escapeHtml(line.instructions)}</div>` : ''}
+  `;
+    })
     .join('');
 
   return `

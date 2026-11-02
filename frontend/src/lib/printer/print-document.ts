@@ -26,7 +26,8 @@ import { getCountryByCode, getCurrencySymbol, resolveTenantCurrency } from '@cou
 import { resolveTaxComponents } from './tax-components';
 import { shouldShowCustomerNumber } from '@print/document';
 import type { Bill, Order, OrderItem } from '@/lib/types';
-import { formatItemHeading } from './item-heading';
+import { formatItemHeading, parseVariantSelection } from './item-heading';
+import { itemLine } from '../../../../shared/item-line';
 import { isExcludedFromBillReceipt } from '../../../../shared/order-item-status';
 
 /** Business contact facts and visibility flags for one bill print run. */
@@ -170,27 +171,52 @@ export function buildBillPrintData(bill: Bill, opts: BillBusinessOptions = {}): 
       onlinePlatform: String(order?.online_platform ?? ''),
       externalOrderId: String(order?.external_order_id ?? ''),
       deliveryAddress: String(order?.delivery_address ?? ''),
-      items: items.map((item) => ({
-        productName: formatItemHeading(String(item?.product_name ?? ''), item?.variant_selection),
-        quantity: Number(item?.quantity) || 0,
-        unitPrice: Number(item?.unit_price) || 0,
-        total: Number(item?.total) || 0,
-        addons: (Array.isArray(item?.addons) ? item.addons : []).map((addon) => {
-          const addonQty =
-            (addon !== null &&
-              typeof addon === 'object' &&
-              'quantity' in addon &&
-              typeof addon.quantity === 'number' &&
-              addon.quantity) ||
-            1;
-          return {
-            name: String(addon?.name ?? ''),
-            price: (Number(addon?.price) || 0) * addonQty * (Number(item?.quantity) || 0),
-            quantity: addonQty,
-          };
-        }),
-        specialInstructions: String(item?.special_instructions ?? ''),
-      })),
+      items: items.map((item) => {
+        const addons = (Array.isArray(item?.addons) ? item.addons : []).filter(
+          (addon) => addon && typeof addon === 'object',
+        );
+        // Free options join the dish as on the KDS; priced ones keep their row, for the amount.
+        const line = itemLine(
+          String(item?.product_name ?? ''),
+          parseVariantSelection(item?.variant_selection),
+          addons.map((addon) => ({
+            name: String(addon.name ?? ''),
+            quantity: typeof addon.quantity === 'number' ? addon.quantity : undefined,
+          })),
+          String(item?.special_instructions ?? ''),
+          {
+            joined: addons
+              .filter((addon) => !(Number(addon.price) > 0))
+              .map((addon) => ({
+                name: String(addon.name ?? ''),
+                quantity: typeof addon.quantity === 'number' ? addon.quantity : undefined,
+              })),
+          },
+        );
+        return {
+          productName: line.name,
+          quantity: Number(item?.quantity) || 0,
+          unitPrice: Number(item?.unit_price) || 0,
+          total: Number(item?.total) || 0,
+          addons: addons
+            .filter((addon) => Number(addon.price) > 0)
+            .map((addon) => {
+              const addonQty =
+                (addon !== null &&
+                  typeof addon === 'object' &&
+                  'quantity' in addon &&
+                  typeof addon.quantity === 'number' &&
+                  addon.quantity) ||
+                1;
+              return {
+                name: String(addon?.name ?? ''),
+                price: (Number(addon?.price) || 0) * addonQty * (Number(item?.quantity) || 0),
+                quantity: addonQty,
+              };
+            }),
+          specialInstructions: line.instructions,
+        };
+      }),
     },
     bill: {
       billNumber: String(bill?.bill_number ?? ''),

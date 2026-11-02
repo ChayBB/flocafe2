@@ -12,7 +12,8 @@
  * The receipt oracle preserves the legacy layout, but its add-on amount is
  * materialized from the authoritative financial semantics
  * (`price × addonQty × itemQty`) so parity tests do not preserve the
- * confirmed undercharged output. Do not make unrelated changes here.
+ * confirmed undercharged output; free options join the item name as on the KDS. Do not make
+ * unrelated changes here.
  */
 
 import { parseDbTimestamp } from '../../main/db';
@@ -37,9 +38,36 @@ import {
   truncateShapedLine,
 } from '../../main/printers/thermal';
 import { printLabel } from '../../main/print/print-labels.generated';
+import { itemLine } from '../../shared/item-line';
 
 function parseAddons(addons: any): any[] {
   return Array.isArray(addons) ? addons : [];
+}
+
+/** Free options join the item name and the options note leaves the instructions, as on the KDS. */
+function withJoinedOptions(order: any): any {
+  if (!Array.isArray(order?.items)) return order;
+  return {
+    ...order,
+    items: order.items.map((item: any) => {
+      const addons = parseAddons(item.addons);
+      const line = itemLine(
+        String(item.product_name ?? ''),
+        null,
+        addons,
+        item.special_instructions,
+        {
+          joined: addons.filter((addon: any) => !(Number(addon?.price) > 0)),
+        },
+      );
+      return {
+        ...item,
+        product_name: line.name,
+        special_instructions: line.instructions,
+        addons: addons.filter((addon: any) => Number(addon?.price) > 0),
+      };
+    }),
+  };
 }
 
 function withExtendedAddonAmounts(order: any): any {
@@ -97,6 +125,7 @@ export function formatClassicReceiptLegacy(
   arabicShaping: boolean = false,
   lang: string = 'en',
 ): Buffer {
+  order = withJoinedOptions(order);
   const lines: string[] = [];
   const date = parseDbTimestamp(order.created_at);
 
@@ -370,6 +399,7 @@ export function formatCompactReceiptLegacy(
   arabicShaping: boolean = false,
   lang: string = 'en',
 ): Buffer {
+  order = withJoinedOptions(order);
   const lines: string[] = [];
   const date = parseDbTimestamp(order.created_at);
 

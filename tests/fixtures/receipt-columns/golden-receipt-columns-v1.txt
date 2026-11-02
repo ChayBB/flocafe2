@@ -27,19 +27,20 @@ rule=32 maxFontA=32 max=32
 016 10A |With Extra|
 017 17A |Whipped Cream And|
 018 15A |Caramel Drizzle|
-019 32A |+ No-price extra shot|
-020 32A |--------------------------------|
-021 32A |Subtotal              Rs1,220.00|
-022 32A |Discount              - Rs120.00|
-023 32A |Delivery                  Rs8.00|
-024 32A |Packaging                 Rs9.00|
-025 32A |TOTAL                 Rs1,117.00|
-026 32A |Cash                    Rs600.00|
-027 32A |Card                    Rs517.00|
-028 32A |--------------------------------|
-029 19A |12 Marina Boulevard|
-030 14A |Ph: 9876543210|
-031 18A |GSTIN: GSTIN123456|
+019 14A |No-price extra|
+020 04A |shot|
+021 32A |--------------------------------|
+022 32A |Subtotal              Rs1,220.00|
+023 32A |Discount              - Rs120.00|
+024 32A |Delivery                  Rs8.00|
+025 32A |Packaging                 Rs9.00|
+026 32A |TOTAL                 Rs1,117.00|
+027 32A |Cash                    Rs600.00|
+028 32A |Card                    Rs517.00|
+029 32A |--------------------------------|
+030 19A |12 Marina Boulevard|
+031 14A |Ph: 9876543210|
+032 18A |GSTIN: GSTIN123456|
 === backend classic 42 columns ===
 rule=42 maxFontA=42 max=42
 001 30  |Flo Parity Cafe|
@@ -57,20 +58,19 @@ rule=42 maxFontA=42 max=42
 013 18A |Vanilla Bean Creme|
 014 22A |Frappuccino With Extra|
 015 25A |Whipped Cream And Caramel|
-016 07A |Drizzle|
-017 42A |+ No-price extra shot|
-018 42A |------------------------------------------|
-019 42A |Subtotal                        Rs1,220.00|
-020 42A |Discount                        - Rs120.00|
-021 42A |Delivery                            Rs8.00|
-022 42A |Packaging                           Rs9.00|
-023 42A |TOTAL                           Rs1,117.00|
-024 42A |Cash                              Rs600.00|
-025 42A |Card                              Rs517.00|
-026 42A |------------------------------------------|
-027 19A |12 Marina Boulevard|
-028 14A |Ph: 9876543210|
-029 18A |GSTIN: GSTIN123456|
+016 27A |Drizzle No-price extra shot|
+017 42A |------------------------------------------|
+018 42A |Subtotal                        Rs1,220.00|
+019 42A |Discount                        - Rs120.00|
+020 42A |Delivery                            Rs8.00|
+021 42A |Packaging                           Rs9.00|
+022 42A |TOTAL                           Rs1,117.00|
+023 42A |Cash                              Rs600.00|
+024 42A |Card                              Rs517.00|
+025 42A |------------------------------------------|
+026 19A |12 Marina Boulevard|
+027 14A |Ph: 9876543210|
+028 18A |GSTIN: GSTIN123456|
 === backend classic 48 columns ===
 rule=48 maxFontA=48 max=48
 001 30  |Flo Parity Cafe|
@@ -87,7 +87,7 @@ rule=48 maxFontA=48 max=48
 012 48A |Extra Long Caramelized Vanilla    1     Rs420.00|
 013 33A |Bean Creme Frappuccino With Extra|
 014 33A |Whipped Cream And Caramel Drizzle|
-015 48A |+ No-price extra shot|
+015 19A |No-price extra shot|
 016 48A |------------------------------------------------|
 017 48A |Subtotal                              Rs1,220.00|
 018 48A |Discount                              - Rs120.00|
@@ -120,21 +120,22 @@ rule=32 maxFontA=32 max=32
 016 10A |With Extra|
 017 17A |Whipped Cream And|
 018 15A |Caramel Drizzle|
-019 32A |+ No-price extra shot|
-020 32A |--------------------------------|
-021 32A |Subtotal              Rs1,220.00|
-022 32A |Discount              - Rs120.00|
-023 32A |Delivery                  Rs8.00|
-024 32A |Packaging                 Rs9.00|
-025 32A |TOTAL                 Rs1,117.00|
-026 32A |--------------------------------|
-027 32A |Cash                    Rs600.00|
-028 32A |Card                    Rs517.00|
-029 32A |================================|
-030 19A |12 Marina Boulevard|
-031 14A |Ph: 9876543210|
-032 18A |GSTIN: GSTIN123456|
-033 10A |Thank you!|
+019 14A |No-price extra|
+020 04A |shot|
+021 32A |--------------------------------|
+022 32A |Subtotal              Rs1,220.00|
+023 32A |Discount              - Rs120.00|
+024 32A |Delivery                  Rs8.00|
+025 32A |Packaging                 Rs9.00|
+026 32A |TOTAL                 Rs1,117.00|
+027 32A |--------------------------------|
+028 32A |Cash                    Rs600.00|
+029 32A |Card                    Rs517.00|
+030 32A |================================|
+031 19A |12 Marina Boulevard|
+032 14A |Ph: 9876543210|
+033 18A |GSTIN: GSTIN123456|
+034 10A |Thank you!|
 === backend compact 42 columns ===
 rule=42 maxFontA=42 max=42
 001 15A |Flo Parity Cafe|
@@ -152,22 +153,21 @@ rule=42 maxFontA=42 max=42
 013 18A |Vanilla Bean Creme|
 014 22A |Frappuccino With Extra|
 015 25A |Whipped Cream And Caramel|
-016 07A |Drizzle|
-017 42A |+ No-price extra shot|
-018 42A |------------------------------------------|
-019 42A |Subtotal                        Rs1,220.00|
-020 42A |Discount                        - Rs120.00|
-021 42A |Delivery                            Rs8.00|
-022 42A |Packaging                           Rs9.00|
-023 42A |TOTAL                           Rs1,117.00|
-024 42A |------------------------------------------|
-025 42A |Cash                              Rs600.00|
-026 42A |Card                              Rs517.00|
-027 42A |==========================================|
-028 19A |12 Marina Boulevard|
-029 14A |Ph: 9876543210|
-030 18A |GSTIN: GSTIN123456|
-031 10A |Thank you!|
+016 27A |Drizzle No-price extra shot|
+017 42A |------------------------------------------|
+018 42A |Subtotal                        Rs1,220.00|
+019 42A |Discount                        - Rs120.00|
+020 42A |Delivery                            Rs8.00|
+021 42A |Packaging                           Rs9.00|
+022 42A |TOTAL                           Rs1,117.00|
+023 42A |------------------------------------------|
+024 42A |Cash                              Rs600.00|
+025 42A |Card                              Rs517.00|
+026 42A |==========================================|
+027 19A |12 Marina Boulevard|
+028 14A |Ph: 9876543210|
+029 18A |GSTIN: GSTIN123456|
+030 10A |Thank you!|
 === backend compact 48 columns ===
 rule=48 maxFontA=48 max=48
 001 15A |Flo Parity Cafe|
@@ -184,7 +184,7 @@ rule=48 maxFontA=48 max=48
 012 48A |Extra Long Caramelized Vanilla    1     Rs420.00|
 013 33A |Bean Creme Frappuccino With Extra|
 014 33A |Whipped Cream And Caramel Drizzle|
-015 48A |+ No-price extra shot|
+015 19A |No-price extra shot|
 016 48A |------------------------------------------------|
 017 48A |Subtotal                              Rs1,220.00|
 018 48A |Discount                              - Rs120.00|
@@ -218,24 +218,23 @@ rule=32 maxFontA=32 max=33
 015 32A |Extra Long Caramelized Vanill. 1|
 016 14A |Rate: Rs420.00|
 017 16A |Amount: Rs420.00|
-018 23A |  + No-price extra shot|
-019 32A |────────────────────────────────|
-020 32A |Subtotal              Rs1,220.00|
-021 32A |Discount               -Rs120.00|
-022 32A |Delivery                  Rs8.00|
-023 32A |Packaging                 Rs9.00|
-024 32A |════════════════════════════════|
-025 32A |TOTAL                 Rs1,117.00|
-026 32A |────────────────────────────────|
-027 32A |Cash                    Rs600.00|
-028 32A |Card                    Rs517.00|
+018 32A |────────────────────────────────|
+019 32A |Subtotal              Rs1,220.00|
+020 32A |Discount               -Rs120.00|
+021 32A |Delivery                  Rs8.00|
+022 32A |Packaging                 Rs9.00|
+023 32A |════════════════════════════════|
+024 32A |TOTAL                 Rs1,117.00|
+025 32A |────────────────────────────────|
+026 32A |Cash                    Rs600.00|
+027 32A |Card                    Rs517.00|
+028 00A ||
 029 00A ||
-030 00A ||
-031 28A |   Thank you for your visit!|
+030 28A |   Thank you for your visit!|
+031 00A ||
 032 00A ||
 033 00A ||
 034 00A ||
-035 00A ||
 === frontend classic 80mm ===
 rule=42 maxFontA=42 max=42
 001 36  |      Flo Parity Cafe|
@@ -253,24 +252,23 @@ rule=42 maxFontA=42 max=42
 013 42A |Extra Long Caramelized Vanilla Bean Cre. 1|
 014 14A |Rate: Rs420.00|
 015 16A |Amount: Rs420.00|
-016 23A |  + No-price extra shot|
-017 42A |──────────────────────────────────────────|
-018 42A |Subtotal                        Rs1,220.00|
-019 42A |Discount                         -Rs120.00|
-020 42A |Delivery                            Rs8.00|
-021 42A |Packaging                           Rs9.00|
-022 42A |══════════════════════════════════════════|
-023 42A |TOTAL                           Rs1,117.00|
-024 42A |──────────────────────────────────────────|
-025 42A |Cash                              Rs600.00|
-026 42A |Card                              Rs517.00|
+016 42A |──────────────────────────────────────────|
+017 42A |Subtotal                        Rs1,220.00|
+018 42A |Discount                         -Rs120.00|
+019 42A |Delivery                            Rs8.00|
+020 42A |Packaging                           Rs9.00|
+021 42A |══════════════════════════════════════════|
+022 42A |TOTAL                           Rs1,117.00|
+023 42A |──────────────────────────────────────────|
+024 42A |Cash                              Rs600.00|
+025 42A |Card                              Rs517.00|
+026 00A ||
 027 00A ||
-028 00A ||
-029 33A |        Thank you for your visit!|
+028 33A |        Thank you for your visit!|
+029 00A ||
 030 00A ||
 031 00A ||
 032 00A ||
-033 00A ||
 === frontend compact 58mm ===
 rule=32 maxFontA=32 max=42
 001 23A |        Flo Parity Cafe|
@@ -286,21 +284,20 @@ rule=32 maxFontA=32 max=42
 011 32A |  + Oat milk x2         Rs160.00|
 012 16A |Note: Less sugar|
 013 32A |Extra Long Caramelized. Rs420.00|
-014 23A |  + No-price extra shot|
-015 32A |────────────────────────────────|
-016 32A |Discount               -Rs120.00|
-017 32A |Delivery                  Rs8.00|
-018 32A |Packaging                 Rs9.00|
-019 32A |════════════════════════════════|
-020 32A |TOTAL                 Rs1,117.00|
-021 32A |Cash                    Rs600.00|
-022 32A |Card                    Rs517.00|
-023 00A ||
-024 21A |           Thank you!|
+014 32A |────────────────────────────────|
+015 32A |Discount               -Rs120.00|
+016 32A |Delivery                  Rs8.00|
+017 32A |Packaging                 Rs9.00|
+018 32A |════════════════════════════════|
+019 32A |TOTAL                 Rs1,117.00|
+020 32A |Cash                    Rs600.00|
+021 32A |Card                    Rs517.00|
+022 00A ||
+023 21A |           Thank you!|
+024 00A ||
 025 00A ||
 026 00A ||
 027 00A ||
-028 00A ||
 === frontend compact 80mm ===
 rule=42 maxFontA=42 max=56
 001 28A |             Flo Parity Cafe|
@@ -316,18 +313,17 @@ rule=42 maxFontA=42 max=56
 011 42A |  + Oat milk x2                   Rs160.00|
 012 16A |Note: Less sugar|
 013 42A |Extra Long Caramelized Vanilla B. Rs420.00|
-014 23A |  + No-price extra shot|
-015 42A |──────────────────────────────────────────|
-016 42A |Discount                         -Rs120.00|
-017 42A |Delivery                            Rs8.00|
-018 42A |Packaging                           Rs9.00|
-019 42A |══════════════════════════════════════════|
-020 42A |TOTAL                           Rs1,117.00|
-021 42A |Cash                              Rs600.00|
-022 42A |Card                              Rs517.00|
-023 00A ||
-024 26A |                Thank you!|
+014 42A |──────────────────────────────────────────|
+015 42A |Discount                         -Rs120.00|
+016 42A |Delivery                            Rs8.00|
+017 42A |Packaging                           Rs9.00|
+018 42A |══════════════════════════════════════════|
+019 42A |TOTAL                           Rs1,117.00|
+020 42A |Cash                              Rs600.00|
+021 42A |Card                              Rs517.00|
+022 00A ||
+023 26A |                Thank you!|
+024 00A ||
 025 00A ||
 026 00A ||
 027 00A ||
-028 00A ||

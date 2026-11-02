@@ -82,6 +82,15 @@ The contact block also records
 `addressSource`, so a printed slip records whether the address came from the order or from the
 customer's standing record.
 
+### Item names on bills and order slips
+
+Receipts (both render paths) and the browser order slip name an item the way the KDS does, through
+`itemLine()` in `shared/item-line.ts`. Free options join the dish, and a listed choice such as
+`หมู/กุ้ง` gives way to the chosen one. Thai joins without a space (`ข้าวต้มหมู`), other scripts
+keep one, and the size follows in brackets. Priced options keep their own `+` row so the bill shows
+their amount. The options note the order screen wrote into the special instructions is dropped,
+because the name already says it.
+
 ### Labels are semantic
 
 A label is a `SemanticLabel`: an optional `conceptId`, a `primary` string, and an optional
