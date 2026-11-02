@@ -202,6 +202,35 @@ test.describe('orders master/detail is the default layout', () => {
     await expect(page.getByText('This order is no longer in the current list.')).toBeHidden();
   });
 
+  test('says a selected order is complete when paying it removes it from the current view', async ({
+    page,
+  }) => {
+    const order = await createTakeaway(page, 'Live completed selection check');
+    await login(page);
+    await page.goto(`${BASE}/orders`);
+    await page.getByRole('button', { name: 'Unpaid' }).click();
+    const masterRow = page.getByRole('button').filter({ hasText: `#${order.order_number}` });
+    await masterRow.click();
+    await expect(page.getByText('E2E Coffee')).toBeVisible();
+
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    const headers = { Authorization: `Bearer ${token}` };
+    const bill = await page.request.post(`${BASE}/api/bills/generate`, {
+      headers,
+      data: { order_id: order.id },
+    });
+    expect(bill.ok()).toBeTruthy();
+    const billBody = (await bill.json()).bill as { id: number; total: number };
+    const paid = await page.request.post(`${BASE}/api/bills/${billBody.id}/payments`, {
+      headers,
+      data: { payments: [{ method: 'cash', amount: billBody.total }] },
+    });
+    expect(paid.ok(), await paid.text()).toBeTruthy();
+
+    await expect(page.getByText('This order is complete.')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('This order is no longer in the current list.')).toHaveCount(0);
+  });
+
   test('ignores an older order search response after a newer filter request completes', async ({
     page,
   }) => {

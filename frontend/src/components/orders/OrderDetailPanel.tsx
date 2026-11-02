@@ -996,7 +996,9 @@ export function OrderDetailPanel({ onBack, ...props }: OrderDetailPanelProps) {
       )}
       {props.order && props.orderNotInCurrentList && (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/40 dark:text-amber-100">
-          {tOrders('orderNotInCurrentList')}
+          {props.order.status === 'completed'
+            ? tOrders('orderCompletedNotice')
+            : tOrders('orderNotInCurrentList')}
         </div>
       )}
       {props.order ? (
