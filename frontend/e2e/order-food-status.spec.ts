@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 import { E2E_BASE_URL } from './helpers/urls';
 import { E2E_PASSWORD, getE2eToken, setLanguage } from './helpers/test-auth';
 
-test('the order header shows how far its food has got, stage by stage', async ({ page }) => {
+test('the order header shows how far its food has got, stage by stage, and each stage filters the items', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = {
     Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
@@ -57,4 +59,18 @@ test('the order header shows how far its food has got, stage by stage', async ({
   await expect(page.getByTestId('order-food-status-preparing')).toHaveText('Preparing1');
   await expect(page.getByTestId('order-food-status-ready')).toHaveText('Ready2');
   await expect(page.getByTestId('order-food-status-served')).toHaveText('Served0');
+
+  // Each stage is a link that narrows the item list; tapping it again shows everything.
+  const items = page.getByTestId('order-detail-item');
+  await expect(items).toHaveCount(4);
+  const ready = page.getByTestId('order-food-status-ready');
+  await ready.click();
+  await expect(ready).toHaveAttribute('aria-pressed', 'true');
+  await expect(items).toHaveCount(2);
+  await page.getByTestId('order-food-status-pending').click();
+  await expect(items).toHaveCount(1);
+  await expect(items).toContainText(`${run} 1`);
+  await page.getByTestId('order-food-status-pending').click();
+  await expect(items).toHaveCount(4);
+  await expect(page.getByTestId('order-food-status-served')).toBeDisabled();
 });

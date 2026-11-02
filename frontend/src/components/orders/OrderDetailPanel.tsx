@@ -1,7 +1,7 @@
 'use client';
 
 import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
-import { OrderFoodStatusBar } from '@/components/orders/OrderFoodStatusBar';
+import { OrderFoodStatusBar, type FoodStage } from '@/components/orders/OrderFoodStatusBar';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -172,9 +172,15 @@ function OrderDetailContent({
   const [showVoidedItems, setShowVoidedItems] = useState(false);
   const [showPrintActivity, setShowPrintActivity] = useState(false);
   const [pendingResolveIds, setPendingResolveIds] = useState<number[]>([]);
+  const [foodFilter, setFoodFilter] = useState<{ orderId: number; stage: FoodStage } | null>(null);
   const itemEditBlocked = (itemId: number) => pendingResolveIds.includes(itemId);
 
   const activeItems = (order.items || []).filter((i) => !isTerminalItemStatus(i.status));
+  // The filter belongs to the order it was picked on, so opening another order shows everything.
+  const stageFilter = foodFilter?.orderId === order.id ? foodFilter.stage : null;
+  const shownItems = stageFilter
+    ? activeItems.filter((item) => item.status === stageFilter)
+    : activeItems;
   const awaitingWeight = orderAwaitingWeight(order);
   const money = (amount: number) => (awaitingWeight ? 'XXXX' : fmt(amount));
   const inactiveItems = (order.items || []).filter(
@@ -426,7 +432,13 @@ function OrderDetailContent({
             </span>
           )}
         </div>
-        {order.status !== 'cancelled' && <OrderFoodStatusBar items={order.items || []} />}
+        {order.status !== 'cancelled' && (
+          <OrderFoodStatusBar
+            items={order.items || []}
+            selected={stageFilter}
+            onSelect={(stage) => setFoodFilter(stage ? { orderId: order.id, stage } : null)}
+          />
+        )}
       </div>
 
       {/* ── SCROLLING BODY ─────────────────────────────────────────────────── */}
@@ -595,11 +607,11 @@ function OrderDetailContent({
             onPendingItemsChanged={setPendingResolveIds}
             onItemEditResolved={onItemEditResolved}
           />
-          {activeItems.map((item: OrderItem) => {
+          {shownItems.map((item: OrderItem) => {
             const dotConfig = itemStatusDot[item.status] || itemStatusDot.pending;
             const heading = formatItemHeading(item.product_name, item.variant_selection);
             return (
-              <div key={item.id} className="text-sm">
+              <div key={item.id} data-testid="order-detail-item" className="text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span
