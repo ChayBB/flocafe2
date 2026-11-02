@@ -53,6 +53,7 @@ import { asyncHandler } from '../middleware/async-handler';
 import expressRateLimit from 'express-rate-limit';
 import { attendanceRoutes } from './attendance';
 import { billRequestRoutes } from './bill-requests';
+import { invalidateGuestMenuOnCatalogWrite } from '../lib/guest-menu-cache';
 
 // Distinguish unregistered store error from cloud connectivity failure.
 function isUnregisteredCloudError(error: any): boolean {
@@ -106,6 +107,7 @@ export function registerRoutes(app: Express): void {
     });
     next();
   });
+  app.use(invalidateGuestMenuOnCatalogWrite);
 
   // Auth routes
   app.use('/api/auth', authRoutes);

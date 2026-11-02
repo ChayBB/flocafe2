@@ -54,6 +54,7 @@ import {
   sanitizeGuestOrderNote,
   sanitizeGuestProduct,
 } from './lib/guest-order';
+import { guestMenu } from './lib/guest-menu-cache';
 import {
   effectivePermissionRevision,
   hasPermission,
@@ -566,21 +567,23 @@ export function startServerApp(): Promise<void> {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
       if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
       try {
-        ensureGuestUser();
-        const [categories, products] = await trackHttpRequestWork(
-          req,
-          Promise.all([
-            callMainApiAsGuest(req, 'GET', '/categories', { query: { active: 'true' } }),
-            callMainApiAsGuest(req, 'GET', '/products', { query: { active: 'true' } }),
-          ]),
-        );
-        if (categories.status >= 400 || products.status >= 400) {
-          return res.status(502).json({ error: 'Could not load the menu' });
-        }
-        res.json({
-          categories: categories.data?.categories ?? [],
-          products: (products.data?.products ?? []).map(sanitizeGuestProduct),
+        const menu = await guestMenu(async () => {
+          ensureGuestUser();
+          const [categories, products] = await trackHttpRequestWork(
+            req,
+            Promise.all([
+              callMainApiAsGuest(req, 'GET', '/categories', { query: { active: 'true' } }),
+              callMainApiAsGuest(req, 'GET', '/products', { query: { active: 'true' } }),
+            ]),
+          );
+          if (categories.status >= 400 || products.status >= 400) return null;
+          return {
+            categories: categories.data?.categories ?? [],
+            products: (products.data?.products ?? []).map(sanitizeGuestProduct),
+          };
         });
+        if (!menu) return res.status(502).json({ error: 'Could not load the menu' });
+        res.json(menu);
       } catch (error: any) {
         if (getHttpRequestSignal(req)?.aborted) return res.status(503).end();
         console.error('[Server App] Guest menu failed:', error);

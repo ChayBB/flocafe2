@@ -546,3 +546,35 @@ test('the guest site sends no referrer, hides dotfiles and keeps guest bodies sm
   expect(big.status()).toBe(413);
   expect((await big.json()).code).toBe('body_too_large');
 });
+
+test('guests share one cached menu, and a menu edit shows on the next read', async ({
+  request,
+}) => {
+  const menuNames = async (): Promise<Record<string, string>> => {
+    const menu = await (await request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/menu`)).json();
+    return Object.fromEntries(
+      (menu.products as { id: string; name: string }[]).map((product) => [
+        product.id,
+        product.name,
+      ]),
+    );
+  };
+  const before = await menuNames();
+  const productId = Object.keys(before)[0];
+  expect(productId).toBeTruthy();
+  const renamed = `${before[productId]} ${Math.random().toString(36).slice(2, 6)}`;
+  try {
+    const put = await request.put(`${E2E_BASE_URL}/api/products/${productId}`, {
+      headers: manager(),
+      data: { name: renamed },
+    });
+    expect(put.ok()).toBeTruthy();
+    expect((await menuNames())[productId]).toBe(renamed);
+  } finally {
+    await request.put(`${E2E_BASE_URL}/api/products/${productId}`, {
+      headers: manager(),
+      data: { name: before[productId] },
+    });
+  }
+  expect((await menuNames())[productId]).toBe(before[productId]);
+});
