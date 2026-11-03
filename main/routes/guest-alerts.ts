@@ -91,7 +91,7 @@ router.post(
           .prepare('SELECT 1 FROM tables WHERE id = ? AND is_active = 1')
           .get(alert.table_id);
         if (!table) return res.status(404).json({ error: 'Table not found' });
-        openGuestTableSession(db, alert.table_id, userId(req) ?? null);
+        openGuestTableSession(db, alert.table_id, userId(req) ?? null, { unlock: true });
         return res.json({ success: true });
       }
       const session = currentGuestTableSession(db, alert.table_id);

@@ -279,6 +279,15 @@ answers `{ closed }`. A session ends at the next 07:00 in the store time zone, w
 `available` or `cleaning` (its bill paid, its order cancelled or moved), when staff end or renew it,
 or when `guest_qr_secret` is replaced. The Server App forwards all three routes.
 
+`GET /:id/guest-qr-audit` (`tables.manage`) returns the table's QR history, newest first, as
+`{ events: [{ action, session_id, created_at, actor_user_id, actor_name }], store_timezone }`. The
+`guest_qr_audit` table records `opened`, `unlocked` (from a sticker-scan alert), `renewed`, `ended`
+and `sticker_replaced` with the staff member who did it, `table_freed` from the table trigger in the
+same statement that ends the session, and `all_codes_cancelled` (no table, shown on every table)
+when `guest_qr_secret` is replaced. A session that ran to its reset shows as `expired` at its
+`expires_at`. The Server App forwards it, and the table QR dialog lists the last ten for staff
+allowed to read it.
+
 `POST /api/tables/guest-stickers` (`tables.manage`) returns the permanent sticker QR of every active
 table as `{ stickers: [{ id, name, floor, url, data_url }], public, server_app_enabled, guest_ordering_enabled }`.
 A sticker link carries `s`, an HMAC under `guest_qr_secret` of the table id and its

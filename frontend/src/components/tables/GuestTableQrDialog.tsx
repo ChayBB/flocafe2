@@ -20,6 +20,12 @@ interface GuestSession {
   guest_ordering_enabled: boolean;
 }
 
+interface AuditEvent {
+  action: string;
+  created_at: string;
+  actor_name: string | null;
+}
+
 interface Props {
   tableId: string;
   /** The POS client calls `/tables/...` on its `/api` base; the Server App calls `/api/tables/...`. */
@@ -36,6 +42,7 @@ export default function GuestTableQrDialog({ tableId, api, apiPrefix, onClose }:
   const [data, setData] = useState<GuestSession | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<AuditEvent[] | null>(null);
   const path = `${apiPrefix}/tables/${encodeURIComponent(tableId)}/guest-session`;
 
   useEffect(() => {
@@ -52,6 +59,30 @@ export default function GuestTableQrDialog({ tableId, api, apiPrefix, onClose }:
       cancelled = true;
     };
   }, [api, path]);
+
+  // Managers see who changed the table's QR; staff without table management get no history.
+  useEffect(() => {
+    if (!data) return;
+    let cancelled = false;
+    api
+      .get(`${apiPrefix}/tables/${encodeURIComponent(tableId)}/guest-qr-audit`)
+      .then((res) => {
+        if (!cancelled) setHistory((res.data.events || []).slice(0, 10));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [api, apiPrefix, tableId, data]);
+
+  const formatTime = (value: string) =>
+    new Intl.DateTimeFormat(locale, {
+      ...(data?.store_timezone ? { timeZone: data.store_timezone } : {}),
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(parseDbTimestamp(value));
 
   const renew = async () => {
     setBusy(true);
@@ -158,6 +189,26 @@ export default function GuestTableQrDialog({ tableId, api, apiPrefix, onClose }:
             </p>
             <p className="text-center text-xs text-muted-foreground">{t('guestQrHint')}</p>
           </>
+        )}
+        {history && history.length > 0 && (
+          <details className="w-full text-xs" data-testid="guest-table-qr-history">
+            <summary className="cursor-pointer font-medium text-muted-foreground">
+              {t('guestQrHistory')}
+            </summary>
+            <ul className="mt-1 space-y-0.5">
+              {history.map((event, index) => (
+                <li key={index} className="flex justify-between gap-2">
+                  <span>
+                    {t('guestQrAuditAction', { action: event.action })}
+                    {event.actor_name ? ` · ${event.actor_name}` : ''}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {formatTime(event.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         <div className="grid w-full grid-cols-3 gap-2">
           <Button type="button" size="sm" disabled={!data || busy} onClick={() => void print()}>

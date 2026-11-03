@@ -8059,6 +8059,39 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 134,
+    name: 'add_guest_qr_audit',
+    up: () => {
+      // Who opened, renewed or ended a table's QR, and when the POS ended it on its own. A row
+      // without a table is "cancel all table QR codes", which retires every table at once.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS guest_qr_audit (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_id TEXT REFERENCES tables(id) ON DELETE CASCADE,
+          session_id TEXT,
+          actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          action TEXT NOT NULL CHECK (action IN (
+            'opened', 'unlocked', 'renewed', 'ended', 'table_freed', 'sticker_replaced',
+            'all_codes_cancelled'
+          )),
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_guest_qr_audit_table ON guest_qr_audit(table_id, created_at);
+        DROP TRIGGER IF EXISTS close_guest_table_session_on_table_freed;
+        CREATE TRIGGER close_guest_table_session_on_table_freed
+        AFTER UPDATE OF status ON tables
+        WHEN NEW.status IN ('available', 'cleaning') AND OLD.status NOT IN ('available', 'cleaning')
+        BEGIN
+          INSERT INTO guest_qr_audit (table_id, session_id, action, created_at)
+          SELECT table_id, id, 'table_freed', CURRENT_TIMESTAMP FROM guest_table_sessions
+          WHERE table_id = NEW.id AND closed_at IS NULL AND expires_at > CURRENT_TIMESTAMP;
+          UPDATE guest_table_sessions SET closed_at = CURRENT_TIMESTAMP, closed_reason = 'table_freed'
+          WHERE table_id = NEW.id AND closed_at IS NULL;
+        END;
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

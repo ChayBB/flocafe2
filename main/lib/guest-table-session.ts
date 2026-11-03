@@ -35,6 +35,30 @@ function sqlTimestamp(epochMs: number): string {
   return new Date(epochMs).toISOString().replace('T', ' ').replace(/\..*$/, '');
 }
 
+export type GuestQrAuditAction =
+  | 'opened'
+  | 'unlocked'
+  | 'renewed'
+  | 'ended'
+  | 'sticker_replaced'
+  | 'all_codes_cancelled';
+
+/** Records who changed a table's QR; `tableId` null stands for every table at once. */
+export function recordGuestQrAudit(
+  db: Database.Database,
+  entry: {
+    tableId: string | null;
+    action: GuestQrAuditAction;
+    actor: string | null;
+    sessionId?: string | null;
+  },
+): void {
+  db.prepare(
+    `INSERT INTO guest_qr_audit (table_id, session_id, actor_user_id, action, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(entry.tableId, entry.sessionId ?? null, entry.actor, entry.action, now());
+}
+
 function closeOpen(db: Database.Database, tableId: string, reason: string): number {
   return db
     .prepare(
@@ -58,12 +82,15 @@ export function currentGuestTableSession(
   );
 }
 
-/** The table's open session, or a new one; `renew` replaces an open session so its QR stops working. */
+/**
+ * The table's open session, or a new one; `renew` replaces an open session so its QR stops working.
+ * `unlock` marks a session opened from a guest's sticker scan.
+ */
 export function openGuestTableSession(
   db: Database.Database,
   tableId: string,
   openedBy: string | null,
-  options: { renew?: boolean } = {},
+  options: { renew?: boolean; unlock?: boolean } = {},
 ): GuestTableSession {
   return db.transaction(() => {
     // An open table answers every phone waiting at its sticker.
@@ -89,13 +116,30 @@ export function openGuestTableSession(
       `INSERT INTO guest_table_sessions (id, table_id, opened_by, created_at, expires_at)
        VALUES (?, ?, ?, ?, ?)`,
     ).run(session.id, tableId, openedBy, session.created_at, session.expires_at);
+    recordGuestQrAudit(db, {
+      tableId,
+      sessionId: session.id,
+      actor: openedBy,
+      action: current ? 'renewed' : options.unlock ? 'unlocked' : 'opened',
+    });
     return session;
   })();
 }
 
 /** Ends the table's session, so its QR stops taking orders; false when none was open. */
-export function closeGuestTableSession(db: Database.Database, tableId: string): boolean {
-  return closeOpen(db, tableId, 'staff') > 0;
+export function closeGuestTableSession(
+  db: Database.Database,
+  tableId: string,
+  closedBy: string | null,
+): boolean {
+  return db.transaction(() => {
+    const current = currentGuestTableSession(db, tableId);
+    if (closeOpen(db, tableId, 'staff') === 0) return false;
+    if (current) {
+      recordGuestQrAudit(db, { tableId, sessionId: current.id, actor: closedBy, action: 'ended' });
+    }
+    return true;
+  })();
 }
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');

@@ -268,7 +268,8 @@ for each seated party from the QR button beside the table in the POS cart or the
 which shows the QR and prints it as a slip; it ends when the table is freed (bill paid, order
 cancelled or moved), at the next 07:00 store time, or when staff end or renew it, and a code from an
 ended session answers `410` `qr_expired`. "Cancel all table QR codes" on the same tab replaces the
-secret so every code and sticker handed out stops working. A packaged install keeps that secret in
+secret so every code and sticker handed out stops working. Every QR change is recorded in
+`guest_qr_audit` against the staff member who made it, or the POS when the table was freed. A packaged install keeps that secret in
 Electron `safeStorage` (`guest_qr_secret.enc`) and only the `safe-storage:v1` marker in SQLite, the
 way it keeps the JWT secret; database exports redact it and a restore keeps this device's copy. For ordering over mobile data the tab
 also sets a public https address for the QR links and the one proxy address whose

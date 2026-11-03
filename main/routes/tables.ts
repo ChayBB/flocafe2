@@ -14,6 +14,7 @@ import { guestSessionToken, guestStickerCode, readGuestQrNetwork } from '../lib/
 import {
   closeGuestTableSession,
   openGuestTableSession,
+  recordGuestQrAudit,
   type GuestTableSession,
 } from '../lib/guest-table-session';
 import { randomUUID } from 'crypto';
@@ -385,7 +386,14 @@ router.post(
         const bump = db.prepare(
           'UPDATE tables SET guest_sticker_version = guest_sticker_version + 1 WHERE id = ?',
         );
-        db.transaction(() => renew.forEach((id) => bump.run(id)))();
+        const actor = (req as any).user?.userId ?? null;
+        db.transaction(() => {
+          for (const id of renew) {
+            if (bump.run(id).changes) {
+              recordGuestQrAudit(db, { tableId: id, actor, action: 'sticker_replaced' });
+            }
+          }
+        })();
       }
       const rows = db
         .prepare(
@@ -534,7 +542,46 @@ router.delete(
     try {
       const table = activeTable(req.params.id);
       if (!table) return res.status(404).json({ error: 'Table not found' });
-      res.json({ closed: closeGuestTableSession(getDatabase(), table.id) });
+      res.json({
+        closed: closeGuestTableSession(getDatabase(), table.id, (req as any).user?.userId ?? null),
+      });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+// Who opened, unlocked, renewed or ended the table's QR, newest first. A session that ran to the
+// daily reset shows as `expired` at its reset time, and "cancel all table QR codes" shows on every table.
+router.get(
+  '/:id/guest-qr-audit',
+  requirePermission('tables.manage'),
+  (req: Request, res: Response) => {
+    try {
+      const db = getDatabase();
+      const table = db.prepare('SELECT id FROM tables WHERE id = ?').get(req.params.id) as
+        | { id: string }
+        | undefined;
+      if (!table) return res.status(404).json({ error: 'Table not found' });
+      const events = db
+        .prepare(
+          `SELECT * FROM (
+             SELECT a.id AS seq, a.action, a.session_id, a.created_at, a.actor_user_id, u.name AS actor_name
+             FROM guest_qr_audit a LEFT JOIN users u ON u.id = a.actor_user_id
+             WHERE a.table_id = ? OR a.table_id IS NULL
+             UNION ALL
+             SELECT 0, 'expired', s.id, s.expires_at, NULL, NULL
+             FROM guest_table_sessions s
+             WHERE s.table_id = ? AND s.expires_at <= ?
+               AND (s.closed_at IS NULL OR s.closed_reason = 'expired')
+           ) ORDER BY created_at DESC, seq DESC LIMIT 100`,
+        )
+        .all(table.id, table.id, now()) as { seq: number }[];
+      res.json({
+        events: events.map(({ seq: _seq, ...event }) => event),
+        store_timezone: storeTimezone(db),
+      });
     } catch (error: any) {
       console.error('[API] Internal error:', error);
       res.status(500).json({ error: 'Internal server error' });

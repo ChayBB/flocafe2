@@ -707,6 +707,17 @@ export function startServerApp(): Promise<void> {
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
     );
+    app.get(
+      '/api/tables/:id/guest-qr-audit',
+      serverAppApiRateLimit,
+      requireServerAppAuth,
+      (req, res) =>
+        forwardToMainApi(
+          req,
+          res,
+          `/tables/${encodeURIComponent(String(req.params.id))}/guest-qr-audit`,
+        ),
+    );
     app.get('/api/guest-alerts', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, '/guest-alerts'),
     );

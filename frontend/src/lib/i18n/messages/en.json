@@ -3225,7 +3225,9 @@
     "guestAlertUnlock": "Unlock",
     "guestAlertUnlockBody": "The table is not open. Unlock it so the guests can order.",
     "guestAlertUnlockTitle": "Table {table}: guest scanned the QR",
-    "guestAlertUnlocked": "Table unlocked for QR orders"
+    "guestAlertUnlocked": "Table unlocked for QR orders",
+    "guestQrHistory": "QR history",
+    "guestQrAuditAction": "{action, select, opened {Opened} unlocked {Unlocked after a scan} renewed {New code} ended {Ended by staff} table_freed {Ended: table freed} expired {Ended at the daily reset} sticker_replaced {Sticker replaced} all_codes_cancelled {All table QR codes cancelled} other {Changed}}"
   },
   "tax": {
     "actionActivate": "Pack activated",

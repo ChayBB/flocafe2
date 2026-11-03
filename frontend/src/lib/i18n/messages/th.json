@@ -3225,7 +3225,9 @@
     "guestAlertUnlock": "ปลดล็อก",
     "guestAlertUnlockBody": "โต๊ะยังไม่เปิด กดปลดล็อกให้ลูกค้าสั่งได้",
     "guestAlertUnlockTitle": "โต๊ะ {table}: ลูกค้าสแกน QR",
-    "guestAlertUnlocked": "ปลดล็อกโต๊ะให้สั่งผ่าน QR แล้ว"
+    "guestAlertUnlocked": "ปลดล็อกโต๊ะให้สั่งผ่าน QR แล้ว",
+    "guestQrHistory": "ประวัติ QR",
+    "guestQrAuditAction": "{action, select, opened {เปิด QR} unlocked {ปลดล็อกหลังลูกค้าสแกน} renewed {รหัสใหม่} ended {พนักงานปิด QR} table_freed {ปิดเอง: โต๊ะว่าง} expired {ปิดเอง: ครบเวลารีเซ็ตรายวัน} sticker_replaced {เปลี่ยนสติกเกอร์} all_codes_cancelled {ยกเลิก QR ทุกโต๊ะ} other {เปลี่ยนแปลง}}"
   },
   "tax": {
     "actionActivate": "เปิดใช้แพ็กแล้ว",

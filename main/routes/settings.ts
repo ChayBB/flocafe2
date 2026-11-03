@@ -12,6 +12,7 @@ import {
   rotateGuestQrSecret,
 } from '../lib/guest-qr';
 import { QR_RELAY_PRIVATE_KEY } from '../services/qr-relay';
+import { recordGuestQrAudit } from '../lib/guest-table-session';
 import {
   CloudRequestError,
   cloudSync,
@@ -744,12 +745,10 @@ router.put('/guest-qr', requirePermission('settings.manage'), (req: Request, res
   try {
     const publicBaseUrl = normalizePublicBaseUrl(req.body?.public_base_url ?? '');
     if (publicBaseUrl === null) {
-      return res
-        .status(400)
-        .json({
-          code: 'public_base_url_invalid',
-          error: 'public_base_url must be an https address',
-        });
+      return res.status(400).json({
+        code: 'public_base_url_invalid',
+        error: 'public_base_url must be an https address',
+      });
     }
     const trustedProxy = normalizeTrustedProxy(req.body?.trusted_proxy ?? '');
     if (trustedProxy === null) {
@@ -772,9 +771,14 @@ router.put('/guest-qr', requirePermission('settings.manage'), (req: Request, res
 router.post(
   '/guest-qr/rotate',
   requirePermission('settings.manage'),
-  (_req: Request, res: Response) => {
+  (req: Request, res: Response) => {
     try {
       rotateGuestQrSecret();
+      recordGuestQrAudit(getDatabase(), {
+        tableId: null,
+        actor: (req as Request & { user?: { userId?: string } }).user?.userId ?? null,
+        action: 'all_codes_cancelled',
+      });
       res.json({ success: true });
     } catch (error: any) {
       console.error('[API] Internal error:', error);

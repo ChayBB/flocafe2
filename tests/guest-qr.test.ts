@@ -125,12 +125,12 @@ function main() {
   assertOrThrow(!verifyGuestTableToken('tbl-1', token), 'a new code retires the old one');
   assertOrThrow(verifyGuestTableToken('tbl-1', guestSessionToken(renewed.id)), 'and works itself');
 
-  assertOrThrow(closeGuestTableSession(db, 'tbl-1'), 'staff can end the session');
+  assertOrThrow(closeGuestTableSession(db, 'tbl-1', null), 'staff can end the session');
   assertOrThrow(
     !verifyGuestTableToken('tbl-1', guestSessionToken(renewed.id)),
     'an ended code takes no orders',
   );
-  assertOrThrow(!closeGuestTableSession(db, 'tbl-1'), 'ending it twice reports nothing open');
+  assertOrThrow(!closeGuestTableSession(db, 'tbl-1', null), 'ending it twice reports nothing open');
 
   const seated = openGuestTableSession(db, 'tbl-1', null);
   db.prepare("UPDATE tables SET status = 'occupied' WHERE id = 'tbl-1'").run();
@@ -139,6 +139,15 @@ function main() {
   assertOrThrow(
     !verifyGuestTableToken('tbl-1', guestSessionToken(seated.id)),
     'freeing the table ends the code',
+  );
+  assertEqualOrThrow(
+    db
+      .prepare(`SELECT action FROM guest_qr_audit WHERE table_id = 'tbl-1' ORDER BY id`)
+      .all()
+      .map((row: { action: string }) => row.action)
+      .join(','),
+    'opened,renewed,ended,opened,table_freed',
+    'every change to the table QR is recorded, the POS ending it too',
   );
 
   const today = openGuestTableSession(db, 'tbl-1', null);

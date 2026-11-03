@@ -605,6 +605,7 @@ test('staff hand out a table QR from the POS and the Server App, and it stops wo
     const dialog = page.getByTestId('guest-table-qr');
     await expect(dialog.getByRole('img', { name: 'QR' })).toBeVisible();
     await expect(dialog.getByTestId('guest-table-qr-valid-until')).toContainText('Valid until');
+    await expect(dialog.getByTestId('guest-table-qr-history')).toContainText('QR history');
     expect((await guestTable(table.token)).status()).toBe(200);
 
     await dialog.getByRole('button', { name: 'New code' }).click();
@@ -627,6 +628,21 @@ test('staff hand out a table QR from the POS and the Server App, and it stops wo
       });
     }
     expect((await guestTable(seated)).status()).toBe(410);
+
+    // Managers can see who changed the table's QR; a server cannot.
+    const audit = await request.get(`${E2E_BASE_URL}/api/tables/${table.id}/guest-qr-audit`, {
+      headers: manager(),
+    });
+    const actions = ((await audit.json()).events as { action: string; actor_name: string }[])
+      .map((event) => event.action)
+      .reverse();
+    expect(actions.slice(-5)).toEqual(['opened', 'renewed', 'ended', 'opened', 'table_freed']);
+    const asServer = await request.get(`${E2E_BASE_URL}/api/tables/${table.id}/guest-qr-audit`, {
+      headers: {
+        Authorization: `Bearer ${getE2eToken('e2e-server', 'server@flo.local', 'server')}`,
+      },
+    });
+    expect(asServer.status()).toBe(403);
     await setEnglish(page);
     await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}&t=${seated}`);
     await expect(page.getByTestId('server-app-guest-expired')).toBeVisible();
@@ -698,6 +714,10 @@ test('a table sticker joins after a tap, waits for staff to unlock a closed tabl
   await expect(unlock).toContainText('guest scanned the QR');
   await unlock.getByTestId('guest-alert-approve').click();
   await expect(unlock).toHaveCount(0);
+  const unlocked = await request.get(`${E2E_BASE_URL}/api/tables/${table.id}/guest-qr-audit`, {
+    headers: manager(),
+  });
+  expect((await unlocked.json()).events[0]).toMatchObject({ action: 'unlocked' });
   // The waiting phone joins by itself, and keeps its place after a reload.
   await expect(page.locator('header').getByTestId('server-app-guest-name')).toHaveText('Guest', {
     timeout: 10000,
