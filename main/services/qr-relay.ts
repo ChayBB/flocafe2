@@ -2,6 +2,7 @@ import {
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
+  randomBytes,
   sign,
   type KeyObject,
 } from 'node:crypto';
@@ -173,6 +174,20 @@ function signText(text: string): string {
   return sign(null, Buffer.from(text), key).toString('base64url');
 }
 
+/** A signed relay call: the time and a one-time nonce are signed too, so the relay refuses a replay. */
+function signedCall(
+  action: string,
+  subject: string,
+): {
+  ts: number;
+  nonce: string;
+  signature: string;
+} {
+  const ts = Date.now();
+  const nonce = randomBytes(16).toString('base64url');
+  return { ts, nonce, signature: signText(`${action}:${subject}:${ts}:${nonce}`) };
+}
+
 async function relayPost(
   serverUrl: string,
   path: string,
@@ -241,7 +256,7 @@ export async function checkQrRelayPairing(): Promise<void> {
   if (!current) throw new QrRelayError('not_pairing');
   const data = await relayPost(current.serverUrl, '/api/pos/pair/status', {
     pairing_id: current.id,
-    signature: signText(`pair:${current.id}`),
+    ...signedCall('pair', current.id),
   });
   if (pairing !== current) return;
   if (data.status === 'approved') {
@@ -274,7 +289,7 @@ export async function unpairQrRelay(): Promise<void> {
   if (serverUrl && storeId && privateKey()) {
     await relayPost(serverUrl, '/api/pos/unpair', {
       store_id: storeId,
-      signature: signText(`unpair:${storeId}`),
+      ...signedCall('unpair', storeId),
     }).catch(() => undefined);
   }
   writeProtectedSetting(QR_RELAY_PRIVATE_KEY, '');

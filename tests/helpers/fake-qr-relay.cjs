@@ -9,7 +9,11 @@ const { WebSocketServer } = require('ws');
 
 function verify(publicKey, text, signature) {
   try {
-    const key = crypto.createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' });
+    const key = crypto.createPublicKey({
+      key: Buffer.from(publicKey, 'base64'),
+      format: 'der',
+      type: 'spki',
+    });
     return crypto.verify(null, Buffer.from(text), key, Buffer.from(String(signature), 'base64url'));
   } catch {
     return false;
@@ -47,20 +51,40 @@ async function createFakeQrRelay() {
     if (req.method === 'POST' && req.url === '/api/pos/pair/start') {
       const id = crypto.randomUUID();
       const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-      pairings.set(id, { id, code, publicKey: body.public_key, deviceName: body.device_name, status: 'pending' });
-      return json(200, { pairing_id: id, code, expires_at: new Date(Date.now() + 600_000).toISOString() });
+      pairings.set(id, {
+        id,
+        code,
+        publicKey: body.public_key,
+        deviceName: body.device_name,
+        status: 'pending',
+      });
+      return json(200, {
+        pairing_id: id,
+        code,
+        expires_at: new Date(Date.now() + 600_000).toISOString(),
+      });
     }
     if (req.method === 'POST' && req.url === '/api/pos/pair/status') {
       const pairing = pairings.get(body.pairing_id);
-      if (!pairing || !verify(pairing.publicKey, `pair:${pairing.id}`, body.signature)) {
+      if (
+        !pairing ||
+        !verify(pairing.publicKey, `pair:${pairing.id}:${body.ts}:${body.nonce}`, body.signature)
+      ) {
         return json(403, { error: 'bad signature' });
       }
       if (pairing.status !== 'approved') return json(200, { status: pairing.status });
-      return json(200, { status: 'approved', store_id: pairing.storeId, public_base_url: pairing.publicBaseUrl });
+      return json(200, {
+        status: 'approved',
+        store_id: pairing.storeId,
+        public_base_url: pairing.publicBaseUrl,
+      });
     }
     if (req.method === 'POST' && req.url === '/api/pos/unpair') {
       const store = stores.get(body.store_id);
-      if (store && verify(store.publicKey, `unpair:${body.store_id}`, body.signature)) {
+      if (
+        store &&
+        verify(store.publicKey, `unpair:${body.store_id}:${body.ts}:${body.nonce}`, body.signature)
+      ) {
         stores.delete(body.store_id);
         unpaired.push(body.store_id);
       }
@@ -78,7 +102,11 @@ async function createFakeQrRelay() {
       const message = JSON.parse(String(data));
       if (message.type === 'auth') {
         const store = stores.get(storeId);
-        if (!store || message.store_id !== storeId || !verify(store.publicKey, `tunnel:${nonce}`, message.signature)) {
+        if (
+          !store ||
+          message.store_id !== storeId ||
+          !verify(store.publicKey, `tunnel:${nonce}`, message.signature)
+        ) {
           ws.send(JSON.stringify({ type: 'error', code: 'unknown_store' }));
           ws.close();
           return;
@@ -90,7 +118,11 @@ async function createFakeQrRelay() {
       } else if (message.type === 'response') {
         const waiter = pending.get(message.id);
         pending.delete(message.id);
-        waiter?.({ status: message.status, headers: message.headers, body: Buffer.from(message.body || '', 'base64') });
+        waiter?.({
+          status: message.status,
+          headers: message.headers,
+          body: Buffer.from(message.body || '', 'base64'),
+        });
       }
     });
     ws.on('close', () => {
@@ -106,7 +138,10 @@ async function createFakeQrRelay() {
     pairings,
     unpaired,
     /** The relay admin approving a code, as the Admin Panel would. */
-    approve(code, { storeId = `store-${code}`, publicBaseUrl = 'https://shop.order.example.com' } = {}) {
+    approve(
+      code,
+      { storeId = `store-${code}`, publicBaseUrl = 'https://shop.order.example.com' } = {},
+    ) {
       const pairing = [...pairings.values()].find((entry) => entry.code === code);
       if (!pairing) throw new Error(`no pairing for code ${code}`);
       Object.assign(pairing, { status: 'approved', storeId, publicBaseUrl });
@@ -147,7 +182,12 @@ async function createFakeQrRelay() {
             path,
             headers,
             client_ip: clientIp,
-            body: body === undefined ? '' : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)).toString('base64'),
+            body:
+              body === undefined
+                ? ''
+                : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)).toString(
+                    'base64',
+                  ),
           }),
         );
       });

@@ -375,7 +375,8 @@ pairing. A key the OS store can no longer decrypt reads as unpaired. Pairing sen
 public key (SPKI DER, base64) and the device name to `{server}/api/pos/pair/start`. The relay
 answers with `pairing_id`, a 6-digit `code` and `expires_at`. Settings shows the code and a QR of
 `{server}/admin/pair?code=`, and checks `{server}/api/pos/pair/status` about every 3 seconds with
-the signature of `pair:{pairing_id}`. When the relay admin approves the code, the status carries
+a signed call: `ts` (milliseconds), a random `nonce`, and the signature of
+`pair:{pairing_id}:{ts}:{nonce}`, which the relay accepts within 5 minutes of `ts` and only once. When the relay admin approves the code, the status carries
 `store_id` and `public_base_url`. The POS stores both (`qr_relay_store_id` and
 `guest_qr_public_base_url`), so new table QR links use the relay address. An `expired` or
 `rejected` status ends the pairing.
@@ -397,6 +398,9 @@ header. The tunnel works like this:
   customer.
 
 The tunnel forwards only the guest routes, `GET /api/server-app/info` and the static guest page.
+The relay keeps the content-hashed `/_next/static/` files it has fetched for each store (up to 64 MB,
+4 MB a file, dropped on unpair) and answers them with an immutable `Cache-Control`, so a guest's page
+load sends little more than the page and the API calls through the tunnel.
 Anything else, including paths with `..` or `//`, answers `404` without reaching the Server App.
 The Server App itself answers `404` for any path with a hidden segment (one starting with `.`),
 sends `Referrer-Policy: no-referrer` so the table token in the page URL never leaves as a Referer,
@@ -407,8 +411,8 @@ The POS caps each request body at 64 KB, each response at 10 MB, and the request
 It pings every 25 seconds and reconnects with backoff from 1 to 60 seconds. An `unknown_store`
 error stops the tunnel until the POS is paired again.
 
-`DELETE /api/qr-relay` stops the tunnel and tells `{server}/api/pos/unpair` with the signature of
-`unpair:{store_id}` (best effort). It then clears the key, the store id and the public QR address.
+`DELETE /api/qr-relay` stops the tunnel and tells `{server}/api/pos/unpair` with a signed call over
+`unpair:{store_id}:{ts}:{nonce}` (best effort). It then clears the key, the store id and the public QR address.
 The relay is never awaited at startup; without it, ordering on the shop network is unchanged.
 
 ## Support ticket outbox
