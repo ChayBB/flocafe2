@@ -29,11 +29,23 @@ const {
   guestSessionToken,
   verifyGuestTableToken,
   rotateGuestQrSecret,
+  guestStickerCode,
+  verifyGuestStickerCode,
+  guestSessionPin,
+  verifyGuestSessionPin,
 } = require('../main/lib/guest-qr');
 const {
   openGuestTableSession,
   closeGuestTableSession,
   currentGuestTableSession,
+  addGuestDevice,
+  findGuestDevice,
+  recordGuestPinFailure,
+  gateGuestOrder,
+  releaseGuestOrderQuota,
+  GUEST_DEVICES_PER_SESSION,
+  GUEST_SESSION_MAX_ORDERS,
+  GUEST_SESSION_MAX_ITEMS,
 } = require('../main/lib/guest-table-session');
 const { nextDailyResetEpochSeconds } = require('../main/lib/daily-session-reset');
 const { storeTimezone } = require('../main/services/attendance');
@@ -182,8 +194,142 @@ function main() {
   );
 }
 
+function stickers() {
+  console.log('\nSticker QR, session PIN, phones and order limits');
+  const { getDatabase } = require('../main/db');
+  const db = getDatabase();
+  seedTable(db, 'tbl-s', 9);
+
+  const code = guestStickerCode('tbl-s', 1);
+  assertOrThrow(verifyGuestStickerCode('tbl-s', 1, code), 'the printed sticker code is accepted');
+  assertOrThrow(!verifyGuestStickerCode('tbl-s', 2, code), 'a renewed sticker retires the old one');
+  assertOrThrow(!verifyGuestStickerCode('tbl-1', 1, code), 'a sticker belongs to one table');
+
+  const session = openGuestTableSession(db, 'tbl-s', null);
+  const pin = guestSessionPin(session.id, 0);
+  assertOrThrow(/^\d{4}$/.test(pin), 'the PIN is four digits');
+  assertOrThrow(verifyGuestSessionPin(session.id, 0, pin), 'the session PIN is accepted');
+  assertOrThrow(!verifyGuestSessionPin(session.id, 1, pin), 'a new PIN round retires the old PIN');
+
+  for (let i = 1; i < 5; i++) {
+    assertEqualOrThrow(
+      recordGuestPinFailure(db, currentGuestTableSession(db, 'tbl-s')),
+      false,
+      `wrong PIN ${i} keeps the PIN`,
+    );
+  }
+  assertEqualOrThrow(
+    recordGuestPinFailure(db, currentGuestTableSession(db, 'tbl-s')),
+    true,
+    'the fifth wrong PIN changes it',
+  );
+  const rotated = currentGuestTableSession(db, 'tbl-s');
+  assertEqualOrThrow(rotated.pin_round, 1, 'the session moves to the next PIN');
+  assertEqualOrThrow(rotated.pin_failures, 0, 'and its count of wrong tries starts over');
+  assertEqualOrThrow(
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM guest_alerts WHERE kind = 'pin_reset' AND table_id = 'tbl-s'`,
+      )
+      .get().n,
+    1,
+    'staff are told the PIN changed',
+  );
+
+  const token = addGuestDevice(db, session.id, 'pin');
+  const found = findGuestDevice(db, 'tbl-s', token);
+  assertOrThrow(found && found.session.id === session.id, 'a joined phone is found by its token');
+  assertEqualOrThrow(findGuestDevice(db, 'tbl-1', token), null, 'a phone token works at one table');
+  assertEqualOrThrow(
+    findGuestDevice(db, 'tbl-s', 'x'.repeat(32)),
+    null,
+    'an unknown token is refused',
+  );
+  for (let i = 1; i < GUEST_DEVICES_PER_SESSION; i++) addGuestDevice(db, session.id, 'pin');
+  assertEqualOrThrow(
+    addGuestDevice(db, session.id, 'pin'),
+    null,
+    'a session holds a limited number of phones',
+  );
+
+  const order = (key: string, quantity = 1) => ({
+    key,
+    quantity,
+    payload: { items: [], note: null },
+  });
+  const fresh = () => findGuestDevice(db, 'tbl-s', token);
+  // Both sends hold the phone as it was before either went through, as two queued requests do.
+  const stale = fresh();
+  assertEqualOrThrow(
+    gateGuestOrder(db, stale, order('key-0001')).kind,
+    'place',
+    'a first order goes through',
+  );
+  const cooled = gateGuestOrder(db, stale, order('key-0002'));
+  assertEqualOrThrow(
+    cooled.kind,
+    'cooldown',
+    'a second order right away waits, even one sent alongside the first',
+  );
+  assertOrThrow(cooled.retryAfter > 0 && cooled.retryAfter <= 5, 'and says how long to wait');
+
+  const pastCooldown = () =>
+    db.prepare(`UPDATE guest_session_devices SET last_order_at = '2000-01-01 00:00:00'`).run();
+  pastCooldown();
+  db.prepare('UPDATE guest_table_sessions SET order_count = ? WHERE id = ?').run(
+    GUEST_SESSION_MAX_ORDERS,
+    session.id,
+  );
+  const held = gateGuestOrder(db, fresh(), order('key-0003'));
+  assertEqualOrThrow(held.kind, 'held', 'an order past the session quota waits for staff');
+  pastCooldown();
+  const again = gateGuestOrder(db, fresh(), order('key-0003'));
+  assertEqualOrThrow(
+    again.alertId,
+    held.alertId,
+    'resending a held order points at the same alert',
+  );
+  db.prepare(`UPDATE guest_alerts SET status = 'rejected' WHERE id = ?`).run(held.alertId);
+  assertEqualOrThrow(
+    gateGuestOrder(db, fresh(), order('key-0003')).rejected,
+    true,
+    'a turned-down order says so',
+  );
+
+  db.prepare('UPDATE guest_table_sessions SET order_count = 0, item_count = ? WHERE id = ?').run(
+    GUEST_SESSION_MAX_ITEMS - 2,
+    session.id,
+  );
+  pastCooldown();
+  assertEqualOrThrow(
+    gateGuestOrder(db, fresh(), order('key-0004', 3)).kind,
+    'held',
+    'the item quota counts quantities',
+  );
+  pastCooldown();
+  assertEqualOrThrow(
+    gateGuestOrder(db, fresh(), order('key-0005', 2)).kind,
+    'place',
+    'an order inside the quota goes through',
+  );
+  releaseGuestOrderQuota(db, session.id, 2);
+  assertEqualOrThrow(
+    currentGuestTableSession(db, 'tbl-s').item_count,
+    GUEST_SESSION_MAX_ITEMS - 2,
+    'a failed order gives its quota back',
+  );
+
+  openGuestTableSession(db, 'tbl-s', null, { renew: true });
+  assertEqualOrThrow(
+    findGuestDevice(db, 'tbl-s', token),
+    null,
+    'a new session drops the old phones',
+  );
+}
+
 try {
   main();
+  stickers();
   console.log('\nGuest QR tests passed');
 } catch (error) {
   console.error(error);

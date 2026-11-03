@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { now } from '../db';
 import { clockNow } from './clock';
@@ -8,11 +8,31 @@ import { storeTimezone } from '../services/attendance';
 /** Table QR codes stop working at this store-time hour, so no code outlives the day it was given out. */
 export const GUEST_SESSION_RESET_HOUR = 7;
 
+/** A wrong PIN this many times gives the session a new PIN and tells staff someone is guessing. */
+export const GUEST_PIN_ATTEMPTS = 5;
+/** Phones that may join one session, so a shared PIN cannot fill a bill from everywhere. */
+export const GUEST_DEVICES_PER_SESSION = 20;
+/** One phone waits this long between orders; a repeated send is a replay, not a new order. */
+export const GUEST_ORDER_COOLDOWN_SECONDS = 5;
+/** Past these, a session's orders wait for staff before they reach the bill and the kitchen. */
+export const GUEST_SESSION_MAX_ORDERS = 20;
+export const GUEST_SESSION_MAX_ITEMS = 150;
+
 export interface GuestTableSession {
   id: string;
   table_id: string;
   created_at: string;
   expires_at: string;
+  pin_round: number;
+  pin_failures: number;
+  order_count: number;
+  item_count: number;
+}
+
+export interface GuestDevice {
+  id: string;
+  session_id: string;
+  last_order_at: string | null;
 }
 
 function sqlTimestamp(epochMs: number): string {
@@ -35,8 +55,8 @@ export function currentGuestTableSession(
   return (
     (db
       .prepare(
-        `SELECT id, table_id, created_at, expires_at FROM guest_table_sessions
-         WHERE table_id = ? AND closed_at IS NULL AND expires_at > ?`,
+        `SELECT id, table_id, created_at, expires_at, pin_round, pin_failures, order_count, item_count
+         FROM guest_table_sessions WHERE table_id = ? AND closed_at IS NULL AND expires_at > ?`,
       )
       .get(tableId, now()) as GuestTableSession | undefined) ?? null
   );
@@ -61,6 +81,10 @@ export function openGuestTableSession(
       expires_at: sqlTimestamp(
         nextDailyResetEpochSeconds(createdAt, storeTimezone(db), GUEST_SESSION_RESET_HOUR) * 1000,
       ),
+      pin_round: 0,
+      pin_failures: 0,
+      order_count: 0,
+      item_count: 0,
     };
     db.prepare(
       `INSERT INTO guest_table_sessions (id, table_id, opened_by, created_at, expires_at)
@@ -73,4 +97,143 @@ export function openGuestTableSession(
 /** Ends the table's session, so its QR stops taking orders; false when none was open. */
 export function closeGuestTableSession(db: Database.Database, tableId: string): boolean {
   return closeOpen(db, tableId, 'staff') > 0;
+}
+
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+
+/** A new phone in the session; null once the session holds its quota of phones. */
+export function addGuestDevice(
+  db: Database.Database,
+  sessionId: string,
+  joinedBy: 'slip' | 'pin',
+): string | null {
+  const count = (
+    db
+      .prepare('SELECT COUNT(*) AS n FROM guest_session_devices WHERE session_id = ?')
+      .get(sessionId) as {
+      n: number;
+    }
+  ).n;
+  if (count >= GUEST_DEVICES_PER_SESSION) return null;
+  const token = randomBytes(24).toString('base64url');
+  db.prepare(
+    `INSERT INTO guest_session_devices (id, session_id, token_hash, joined_by, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(randomUUID(), sessionId, hashToken(token), joinedBy, now());
+  return token;
+}
+
+/** The phone holding `token` and its session, while that session is the table's open one. */
+export function findGuestDevice(
+  db: Database.Database,
+  tableId: string,
+  token: unknown,
+): { device: GuestDevice; session: GuestTableSession } | null {
+  if (typeof token !== 'string' || token.length < 20 || token.length > 64) return null;
+  const session = currentGuestTableSession(db, tableId);
+  if (!session) return null;
+  const device = db
+    .prepare(
+      'SELECT id, session_id, last_order_at FROM guest_session_devices WHERE token_hash = ? AND session_id = ?',
+    )
+    .get(hashToken(token), session.id) as GuestDevice | undefined;
+  return device ? { device, session } : null;
+}
+
+/**
+ * Counts a wrong PIN; the last allowed attempt moves the session to a new PIN and raises a staff
+ * alert instead of locking the party out.
+ */
+export function recordGuestPinFailure(db: Database.Database, session: GuestTableSession): boolean {
+  return db.transaction(() => {
+    const failures = session.pin_failures + 1;
+    if (failures < GUEST_PIN_ATTEMPTS) {
+      db.prepare('UPDATE guest_table_sessions SET pin_failures = ? WHERE id = ?').run(
+        failures,
+        session.id,
+      );
+      return false;
+    }
+    db.prepare(
+      'UPDATE guest_table_sessions SET pin_failures = 0, pin_round = pin_round + 1 WHERE id = ?',
+    ).run(session.id);
+    db.prepare(
+      `INSERT INTO guest_alerts (table_id, session_id, kind, created_at) VALUES (?, ?, 'pin_reset', ?)`,
+    ).run(session.table_id, session.id, now());
+    return true;
+  })();
+}
+
+export type GuestOrderGate =
+  | { kind: 'place' }
+  | { kind: 'cooldown'; retryAfter: number }
+  | { kind: 'held'; alertId: number; rejected: boolean };
+
+/**
+ * Decides whether a phone's order goes through now, waits out the cooldown, or waits for staff
+ * because the session passed its quota; an order that goes through is counted at once.
+ */
+export function gateGuestOrder(
+  db: Database.Database,
+  found: { device: GuestDevice; session: GuestTableSession },
+  order: { quantity: number; key: string; payload: unknown },
+): GuestOrderGate {
+  return db.transaction((): GuestOrderGate => {
+    const held = db
+      .prepare('SELECT id, status FROM guest_alerts WHERE table_id = ? AND idempotency_key = ?')
+      .get(found.session.table_id, order.key) as { id: number; status: string } | undefined;
+    if (held) return { kind: 'held', alertId: held.id, rejected: held.status === 'rejected' };
+    // Read again here: two sends from one phone queue behind each other, so the copy found before
+    // the queue would let both through.
+    const last = (
+      db
+        .prepare('SELECT last_order_at FROM guest_session_devices WHERE id = ?')
+        .get(found.device.id) as { last_order_at: string | null } | undefined
+    )?.last_order_at;
+    const nowMs = Date.parse(`${now().replace(' ', 'T')}Z`);
+    const lastMs = last ? Date.parse(`${last.replace(' ', 'T')}Z`) : 0;
+    const wait = Math.ceil((lastMs + GUEST_ORDER_COOLDOWN_SECONDS * 1000 - nowMs) / 1000);
+    if (wait > 0) return { kind: 'cooldown', retryAfter: wait };
+    db.prepare('UPDATE guest_session_devices SET last_order_at = ? WHERE id = ?').run(
+      now(),
+      found.device.id,
+    );
+    const session = db
+      .prepare('SELECT order_count, item_count FROM guest_table_sessions WHERE id = ?')
+      .get(found.session.id) as { order_count: number; item_count: number };
+    if (
+      session.order_count + 1 > GUEST_SESSION_MAX_ORDERS ||
+      session.item_count + order.quantity > GUEST_SESSION_MAX_ITEMS
+    ) {
+      const alert = db
+        .prepare(
+          `INSERT INTO guest_alerts (table_id, session_id, kind, idempotency_key, payload_json, created_at)
+           VALUES (?, ?, 'order_held', ?, ?, ?)`,
+        )
+        .run(
+          found.session.table_id,
+          found.session.id,
+          order.key,
+          JSON.stringify(order.payload),
+          now(),
+        );
+      return { kind: 'held', alertId: Number(alert.lastInsertRowid), rejected: false };
+    }
+    db.prepare(
+      'UPDATE guest_table_sessions SET order_count = order_count + 1, item_count = item_count + ? WHERE id = ?',
+    ).run(order.quantity, found.session.id);
+    return { kind: 'place' };
+  })();
+}
+
+/** Gives back the quota an order took when the order then failed to go through. */
+export function releaseGuestOrderQuota(
+  db: Database.Database,
+  sessionId: string,
+  quantity: number,
+): void {
+  db.prepare(
+    `UPDATE guest_table_sessions SET order_count = MAX(order_count - 1, 0),
+       item_count = MAX(item_count - ?, 0) WHERE id = ?`,
+  ).run(quantity, sessionId);
 }

@@ -49,7 +49,6 @@ import { resolveContainedPath } from './lib/path-containment';
 import { RegionalNotConfiguredError, resolveRegionalSnapshot } from './countries';
 import { nextDailyResetEpochSeconds } from './lib/daily-session-reset';
 import {
-  GUEST_USER_ID,
   sanitizeGuestOrderItems,
   sanitizeGuestOrderNote,
   sanitizeGuestProduct,
@@ -62,7 +61,21 @@ import {
 } from './services/authorization';
 import { clockNow } from './lib/clock';
 import { recordClockIn, recordClockOut } from './services/attendance';
-import { isTrustedGuestProxy, verifyGuestTableToken } from './lib/guest-qr';
+import {
+  isTrustedGuestProxy,
+  verifyGuestSessionPin,
+  verifyGuestStickerCode,
+  verifyGuestTableToken,
+} from './lib/guest-qr';
+import { callMainApiAsGuest, ensureGuestUser, placeGuestOrder } from './lib/guest-order-placement';
+import {
+  addGuestDevice,
+  currentGuestTableSession,
+  findGuestDevice,
+  gateGuestOrder,
+  recordGuestPinFailure,
+  releaseGuestOrderQuota,
+} from './lib/guest-table-session';
 import { startQrRelay, stopQrRelay } from './services/qr-relay';
 
 let serverApp: http.Server | null = null;
@@ -236,81 +249,6 @@ function guestOrderingClosed(res: Response) {
 /** The table exists but this QR's session has ended, so the guest needs a new code from staff. */
 function guestQrExpired(res: Response) {
   return res.status(410).json({ code: 'qr_expired', error: 'This table QR code has expired' });
-}
-
-/** Calls the main API on behalf of the Guest account that table-QR visitors order as. */
-async function callMainApiAsGuest(
-  req: Request,
-  method: 'GET' | 'POST',
-  apiPath: string,
-  options: {
-    body?: unknown;
-    query?: Record<string, string>;
-    headers?: Record<string, string>;
-  } = {},
-): Promise<{ status: number; data: any }> {
-  const target = new URL(`/api${apiPath}`, `http://127.0.0.1:${getServerPort()}`);
-  for (const [key, value] of Object.entries(options.query ?? {}))
-    target.searchParams.set(key, value);
-  const reservation = (req as any).databaseAdmissionReservation as
-    | DatabaseAdmissionReservation
-    | undefined;
-  const handoffToken = reservation ? createDatabaseMaintenanceHandoff(reservation) : undefined;
-  const guestToken = jwt.sign(
-    { userId: GUEST_USER_ID, email: null, role: 'server', jti: randomUUID() },
-    getJWTSecret(),
-    { expiresIn: '2m' },
-  );
-  try {
-    const upstream = await fetch(target, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${guestToken}`,
-        ...(options.headers ?? {}),
-        ...(handoffToken ? { 'x-flo-maintenance-handoff': handoffToken } : {}),
-      },
-      body: method === 'GET' ? undefined : JSON.stringify(options.body ?? {}),
-      signal: getHttpRequestSignal(req),
-    });
-    const text = await upstream.text();
-    let data: any = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = null;
-    }
-    return { status: upstream.status, data };
-  } finally {
-    if (handoffToken) revokeDatabaseMaintenanceHandoff(handoffToken);
-  }
-}
-
-const guestOrderQueues = new Map<string, Promise<unknown>>();
-
-/** Guest orders for one table run one at a time, so two phones ordering at once never open two bills. */
-function oneGuestOrderAtATime<T>(tableId: string, work: () => Promise<T>): Promise<T> {
-  const previous = guestOrderQueues.get(tableId) ?? Promise.resolve();
-  const run = previous.then(work, work);
-  const settled = run.catch(() => undefined);
-  guestOrderQueues.set(tableId, settled);
-  void settled.then(() => {
-    if (guestOrderQueues.get(tableId) === settled) guestOrderQueues.delete(tableId);
-  });
-  return run;
-}
-
-/** The Guest account exists only for audit attribution: it has no usable password and no staff code. */
-function ensureGuestUser(): void {
-  const db = getDatabase();
-  if (db.prepare('SELECT 1 FROM users WHERE id = ?').get(GUEST_USER_ID)) return;
-  const bcrypt = require('bcryptjs');
-  const unusablePassword = bcrypt.hashSync(randomUUID() + randomUUID(), 10);
-  const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-  db.prepare(
-    `INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
-     VALUES (?, 'Guest', NULL, ?, 'server', 1, ?, ?)`,
-  ).run(GUEST_USER_ID, unusablePassword, stamp, stamp);
 }
 
 export function startServerApp(): Promise<void> {
@@ -547,24 +485,106 @@ export function startServerApp(): Promise<void> {
     );
 
     // Guest access for a table QR: read the menu and the one table, and place orders for that table.
+    // A coarse flood guard per address: phones on the shop Wi-Fi can share one public address, so
+    // the per-phone cooldown and the per-session quota do the fine-grained limiting.
     const guestOrderRateLimit = expressRateLimit({
       windowMs: 10 * 60 * 1000,
-      limit: 12,
+      limit: 60,
       standardHeaders: true,
       legacyHeaders: false,
       message: { error: 'Too many orders from this device. Please ask a staff member.' },
     });
 
+    // Only refused joins count, so a party reopening the page is never locked out by its own visits.
+    const guestJoinRateLimit = expressRateLimit({
+      windowMs: 10 * 60 * 1000,
+      limit: 30,
+      skipSuccessfulRequests: true,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many tries from this device. Please ask a staff member.' },
+    });
+
+    const guestTableRow = (tableId: unknown) =>
+      typeof tableId === 'string'
+        ? (getDatabase()
+            .prepare(
+              'SELECT id, number, guest_sticker_version FROM tables WHERE id = ? AND is_active = 1',
+            )
+            .get(tableId) as
+            | { id: string; number: string; guest_sticker_version: number }
+            | undefined)
+        : undefined;
+
+    // A phone joins the table's open session once (slip QR, or sticker QR plus the session PIN) and
+    // orders with the device token it gets back.
+    app.post(
+      '/api/guest/join',
+      serverAppApiRateLimit,
+      guestJoinRateLimit,
+      (req: Request, res: Response) => {
+        if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+        if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
+        const db = getDatabase();
+        const row = guestTableRow(req.body?.table_id);
+        if (!row) return res.status(404).json({ error: 'Table not found' });
+        const table = { id: row.id, name: row.number };
+        if (findGuestDevice(db, row.id, req.body?.device_token)) {
+          return res.json({ table, device_token: req.body.device_token });
+        }
+        const session = currentGuestTableSession(db, row.id);
+        let joinedBy: 'slip' | 'pin';
+        if (req.body?.table_token !== undefined) {
+          if (!session || !verifyGuestTableToken(row.id, req.body.table_token)) {
+            return guestQrExpired(res);
+          }
+          joinedBy = 'slip';
+        } else if (req.body?.sticker !== undefined) {
+          if (!verifyGuestStickerCode(row.id, row.guest_sticker_version, req.body.sticker)) {
+            return guestQrExpired(res);
+          }
+          if (!session) {
+            return res
+              .status(409)
+              .json({ code: 'table_not_open', error: 'Ask staff to open this table', table });
+          }
+          if (req.body?.pin === undefined || req.body.pin === '') {
+            return res
+              .status(401)
+              .json({ code: 'pin_required', error: 'Enter the table PIN', table });
+          }
+          if (!verifyGuestSessionPin(session.id, session.pin_round, req.body.pin)) {
+            const rotated = recordGuestPinFailure(db, session);
+            return res
+              .status(401)
+              .json({ code: 'pin_wrong', error: 'That PIN is not right', table, rotated });
+          }
+          joinedBy = 'pin';
+        } else {
+          return res.status(400).json({ error: 'A table code is required' });
+        }
+        const deviceToken = addGuestDevice(db, session.id, joinedBy);
+        if (!deviceToken) {
+          return res
+            .status(429)
+            .json({ code: 'devices_full', error: 'This table has too many phones. Ask staff.' });
+        }
+        res.json({ table, device_token: deviceToken });
+      },
+    );
+
     app.get('/api/guest/table', serverAppApiRateLimit, (req: Request, res: Response) => {
       if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
       if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
-      const tableId = typeof req.query.table_id === 'string' ? req.query.table_id : '';
-      const table = getDatabase()
-        .prepare('SELECT id, number FROM tables WHERE id = ? AND is_active = 1')
-        .get(tableId) as { id: string; number: string } | undefined;
-      if (!table) return res.status(404).json({ error: 'Table not found' });
-      if (!verifyGuestTableToken(tableId, req.query.t)) return guestQrExpired(res);
-      res.json({ table: { id: table.id, name: table.number } });
+      const row = guestTableRow(req.query.table_id);
+      if (!row) return res.status(404).json({ error: 'Table not found' });
+      if (
+        !findGuestDevice(getDatabase(), row.id, req.query.d) &&
+        !verifyGuestTableToken(row.id, req.query.t)
+      ) {
+        return guestQrExpired(res);
+      }
+      res.json({ table: { id: row.id, name: row.number } });
     });
 
     app.get('/api/guest/menu', serverAppApiRateLimit, async (req: Request, res: Response) => {
@@ -604,12 +624,10 @@ export function startServerApp(): Promise<void> {
         if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
         try {
           const db = getDatabase();
-          const tableId = typeof req.body?.table_id === 'string' ? req.body.table_id : '';
-          const table = db
-            .prepare('SELECT id FROM tables WHERE id = ? AND is_active = 1')
-            .get(tableId);
-          if (!table) return res.status(404).json({ error: 'Table not found' });
-          if (!verifyGuestTableToken(tableId, req.body?.table_token)) return guestQrExpired(res);
+          const row = guestTableRow(req.body?.table_id);
+          if (!row) return res.status(404).json({ error: 'Table not found' });
+          const found = findGuestDevice(db, row.id, req.body?.device_token);
+          if (!found) return guestQrExpired(res);
 
           const sanitized = sanitizeGuestOrderItems(db, req.body?.items);
           if (!sanitized.ok) return res.status(400).json({ error: sanitized.error });
@@ -623,84 +641,42 @@ export function startServerApp(): Promise<void> {
               .status(400)
               .json({ error: 'An order key is required', code: 'idempotency_key_required' });
           }
-          const headers = { 'Idempotency-Key': `guest-${tableId}-${key}` };
-
-          ensureGuestUser();
-          const { result, existingItemIds, replayed } = await oneGuestOrderAtATime(
-            tableId,
-            async () => {
-              // A retry whose first try went through answers from the stored result: the bill it opened
-              // would now send the retry down the add-items route, where the same key reads as a new request.
-              const stored = db
-                .prepare(
-                  'SELECT response_json FROM order_idempotency WHERE user_id = ? AND idempotency_key = ?',
-                )
-                .get(GUEST_USER_ID, headers['Idempotency-Key']) as
-                | { response_json: string }
-                | undefined;
-              if (stored) {
-                return {
-                  result: { status: 201, data: JSON.parse(stored.response_json) },
-                  existingItemIds: new Set<number>(),
-                  replayed: true,
-                };
-              }
-              const open = db
-                .prepare(
-                  `SELECT id FROM orders WHERE table_id = ? AND type = 'dine_in'
-                 AND status IN ('pending', 'preparing', 'ready') ORDER BY id DESC LIMIT 1`,
-                )
-                .get(tableId) as { id: number } | undefined;
-              const existingItemIds = new Set(
-                open
-                  ? (
-                      db.prepare('SELECT id FROM order_items WHERE order_id = ?').all(open.id) as {
-                        id: number;
-                      }[]
-                    ).map((row) => row.id)
-                  : [],
-              );
-              const result = await trackHttpRequestWork(
-                req,
-                open
-                  ? callMainApiAsGuest(req, 'POST', `/orders/${open.id}/items`, {
-                      body: { items: sanitized.items, special_instructions: note ?? undefined },
-                      headers,
-                    })
-                  : callMainApiAsGuest(req, 'POST', '/orders', {
-                      body: {
-                        table_id: tableId,
-                        type: 'dine_in',
-                        special_instructions: note ?? undefined,
-                        items: sanitized.items,
-                      },
-                      headers,
-                    }),
-              );
-              return { result, existingItemIds, replayed: false };
-            },
-          );
-          if (result.status >= 400 || !result.data?.order) {
-            return res
-              .status(result.status >= 400 ? result.status : 502)
-              .json({ error: result.data?.error || 'Could not send the order' });
+          const items = sanitized.items;
+          const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
+          let counted = false;
+          const outcome = await placeGuestOrder(req, { tableId: row.id, items, note, key }, () => {
+            const gate = gateGuestOrder(db, found, {
+              quantity,
+              key,
+              payload: { items, note, device_id: found.device.id },
+            });
+            if (gate.kind === 'cooldown') {
+              return {
+                status: 429,
+                body: {
+                  code: 'order_cooldown',
+                  error: 'Please wait a moment before ordering again',
+                  retry_after: gate.retryAfter,
+                },
+              };
+            }
+            if (gate.kind === 'held') {
+              return gate.rejected
+                ? {
+                    status: 409,
+                    body: { code: 'order_rejected', error: 'Staff did not accept this order' },
+                  }
+                : { status: 202, body: { code: 'order_held', held: true } };
+            }
+            counted = true;
+            return null;
+          });
+          if (outcome.kind === 'held') return res.status(outcome.status).json(outcome.body);
+          if (outcome.kind === 'failed') {
+            if (counted) releaseGuestOrderQuota(db, found.session.id, quantity);
+            return res.status(outcome.status).json({ error: outcome.error });
           }
-
-          const order = result.data.order;
-          if (replayed) {
-            return res
-              .status(201)
-              .json({ success: true, order_number: order.order_number ?? null });
-          }
-          const newItems = (order.items || []).filter(
-            (item: { id: number }) => !existingItemIds.has(item.id),
-          );
-          // The kitchen ticket is printed here because a guest has no print permission of their own.
-          void callMainApiAsGuest(req, 'POST', '/printers/print-kot', {
-            body: { orderId: order.id, items: newItems },
-          }).catch(() => undefined);
-
-          res.status(201).json({ success: true, order_number: order.order_number ?? null });
+          res.status(201).json({ success: true, order_number: outcome.orderNumber });
         } catch (error: any) {
           if (getHttpRequestSignal(req)?.aborted) return res.status(503).end();
           console.error('[Server App] Guest order failed:', error);
@@ -738,6 +714,22 @@ export function startServerApp(): Promise<void> {
     app.post('/api/orders/:id/items', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
       forwardToMainApi(req, res, `/orders/${encodeURIComponent(String(req.params.id))}/items`),
     );
+    app.get('/api/guest-alerts', serverAppApiRateLimit, requireServerAppAuth, (req, res) =>
+      forwardToMainApi(req, res, '/guest-alerts'),
+    );
+    for (const action of ['approve', 'dismiss']) {
+      app.post(
+        `/api/guest-alerts/:id/${action}`,
+        serverAppApiRateLimit,
+        requireServerAppAuth,
+        (req, res) =>
+          forwardToMainApi(
+            req,
+            res,
+            `/guest-alerts/${encodeURIComponent(String(req.params.id))}/${action}`,
+          ),
+      );
+    }
     for (const suffix of ['guest-session', 'guest-session/print']) {
       app.post(
         `/api/tables/:id/${suffix}`,

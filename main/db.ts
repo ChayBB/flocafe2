@@ -7954,6 +7954,53 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 132,
+    name: 'add_table_stickers_and_guest_devices',
+    up: () => {
+      // A permanent table sticker joins the party's open session with its PIN; each phone that joins
+      // gets its own device token, and orders past the session's quota wait for staff.
+      if (!getColumns(db, 'tables').includes('guest_sticker_version')) {
+        db.exec('ALTER TABLE tables ADD COLUMN guest_sticker_version INTEGER NOT NULL DEFAULT 1');
+      }
+      const sessionColumns = getColumns(db, 'guest_table_sessions');
+      for (const column of ['pin_round', 'pin_failures', 'order_count', 'item_count']) {
+        if (!sessionColumns.includes(column)) {
+          db.exec(
+            `ALTER TABLE guest_table_sessions ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 0`,
+          );
+        }
+      }
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS guest_session_devices (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL REFERENCES guest_table_sessions(id) ON DELETE CASCADE,
+          token_hash TEXT NOT NULL UNIQUE,
+          joined_by TEXT NOT NULL CHECK (joined_by IN ('slip', 'pin')),
+          created_at TEXT NOT NULL,
+          last_order_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_guest_session_devices_session
+          ON guest_session_devices(session_id);
+        CREATE TABLE IF NOT EXISTS guest_alerts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_id TEXT NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
+          session_id TEXT REFERENCES guest_table_sessions(id) ON DELETE SET NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('pin_reset', 'order_held')),
+          idempotency_key TEXT,
+          payload_json TEXT,
+          status TEXT NOT NULL DEFAULT 'open'
+            CHECK (status IN ('open', 'approved', 'rejected', 'dismissed')),
+          created_at TEXT NOT NULL,
+          resolved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          resolved_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_guest_alerts_open ON guest_alerts(status, created_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_guest_alerts_key
+          ON guest_alerts(table_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

@@ -8,6 +8,10 @@ import StatusBar from '@/components/layout/StatusBar';
 import GlobalNotifications from '@/components/layout/GlobalNotifications';
 import BillRequestAlerts from '@/components/layout/BillRequestAlerts';
 import UnprintedKotAlerts from '@/components/layout/UnprintedKotAlerts';
+import GuestAlerts from '@/components/tables/GuestAlerts';
+import api from '@/lib/api';
+import { tenantCan } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 import TitleBar from '@/components/layout/TitleBar';
 import UpdateAvailableDialog from '@/components/updates/UpdateAvailableDialog';
 import ProductAnalyticsDialog from '@/components/analytics/ProductAnalyticsDialog';
@@ -23,6 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = normalizePathname(usePathname());
   const isPos = pathname === '/pos' || pathname === '/kds';
   const isSettings = pathname === '/settings';
+  const currentTenant = useAuthStore((s) => s.currentTenant);
   // Sync printer status early so hardware and WebUSB reconnect before first print.
   usePrinterStatusSync();
   // Hydrate receipt display settings from backend so browser print has current store details.
@@ -46,6 +51,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <BillRequestAlerts />
             <UnprintedKotAlerts />
+            <GuestAlerts
+              api={api}
+              apiPrefix=""
+              enabled={tenantCan(currentTenant, 'orders.create')}
+            />
             {!isPos && <GlobalNotifications />}
             <div
               className={

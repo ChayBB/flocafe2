@@ -1,16 +1,20 @@
 'use client';
 
+import { useState } from 'react';
+import { QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'use-intl';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/hooks/use-confirm';
 import { QrRelayPairing } from '@/components/settings/QrRelayPairing';
+import TableStickerSheet from '@/components/tables/TableStickerSheet';
 
-/** How customers reach table-QR ordering from outside the shop network, and retiring every table QR. */
+/** How customers reach table-QR ordering from outside the shop network, table stickers, and retiring every table QR. */
 export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
   const t = useTranslations('settings');
   const { confirm, ConfirmDialog } = useConfirm();
+  const [stickersOpen, setStickersOpen] = useState(false);
 
   const rotate = async () => {
     const ok = await confirm(t('qrRotateConfirm'), {
@@ -34,6 +38,16 @@ export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
         <Button
           type="button"
           size="sm"
+          disabled={disabled}
+          onClick={() => setStickersOpen(true)}
+          data-testid="settings-table-stickers"
+        >
+          <QrCode size={15} className="me-1.5" />
+          {t('qrTableStickers')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
           variant="outline"
           disabled={disabled}
           onClick={() => void rotate()}
@@ -41,6 +55,7 @@ export function GuestQrNetworkSettings({ disabled }: { disabled: boolean }) {
           {t('qrRotate')}
         </Button>
       </div>
+      {stickersOpen && <TableStickerSheet onClose={() => setStickersOpen(false)} />}
       {ConfirmDialog}
     </div>
   );

@@ -30,6 +30,7 @@ import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { StoreClock } from '@/components/layout/StoreClock';
 import GuestTableQrDialog from '@/components/tables/GuestTableQrDialog';
+import GuestAlerts from '@/components/tables/GuestAlerts';
 import {
   OrderedItemList,
   OrderedItemsScreen,
@@ -192,6 +193,28 @@ function pickLinkedTable<T extends { id: string }>(tables: T[]): T | undefined {
   return wanted ? tables.find((table) => table.id === wanted) : undefined;
 }
 
+const guestDeviceStorageKey = (tableId: string) => `flocafe:guest-device:${tableId}`;
+
+function readGuestDevice(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeGuestDevice(key: string, token: string): void {
+  try {
+    localStorage.setItem(key, token);
+  } catch {}
+}
+
+function removeGuestDevice(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
 export default function ServerStandalonePage() {
   // Syncs tenant language preference from /api/server-app/info.
   useSyncServerLanguage('/api/server-app/info');
@@ -238,7 +261,24 @@ export default function ServerStandalonePage() {
     () => new URLSearchParams(window.location.search).get('t'),
     () => null,
   );
+  // A permanent table sticker: joining its table also needs the PIN staff give the party.
+  const guestSticker = useSyncExternalStore(
+    subscribeToNothing,
+    () => new URLSearchParams(window.location.search).get('s'),
+    () => null,
+  );
   const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
+  const [guestDeviceToken, setGuestDeviceToken] = useState<string | null>(null);
+  const [guestPinPrompt, setGuestPinPrompt] = useState<{
+    table: { id: string; name: string };
+    wrong: boolean;
+    rotated: boolean;
+  } | null>(null);
+  const [guestNotOpen, setGuestNotOpen] = useState<{ id: string; name: string } | null>(null);
+  const [guestJoinRound, setGuestJoinRound] = useState(0);
+  const [guestPin, setGuestPin] = useState('');
+  const [guestPinBusy, setGuestPinBusy] = useState(false);
+  const guestPinAttemptRef = useRef<string | null>(null);
   const [guestChecked, setGuestChecked] = useState(false);
   const [guestClosed, setGuestClosed] = useState(false);
   const [guestExpired, setGuestExpired] = useState(false);
@@ -529,17 +569,33 @@ export default function ServerStandalonePage() {
     };
   }, [api, user]);
 
-  // A table QR opens the app as a guest bound to that one table until someone signs in.
+  // A table QR opens the app as a guest bound to that one table until someone signs in. The phone
+  // joins the table's open session once and keeps the device token it gets for its orders.
   useEffect(() => {
     if (!api || user || !guestTableId || loading) return;
     let cancelled = false;
-    Promise.all([
-      api.get('/api/guest/table', { params: { table_id: guestTableId, t: guestTableToken } }),
-      api.get('/api/guest/menu'),
-    ])
-      .then(([tableRes, menuRes]) => {
+    const storageKey = guestDeviceStorageKey(guestTableId);
+    const pin = guestPinAttemptRef.current;
+    guestPinAttemptRef.current = null;
+    api
+      .post('/api/guest/join', {
+        table_id: guestTableId,
+        device_token: readGuestDevice(storageKey) ?? undefined,
+        table_token: guestTableToken ?? undefined,
+        sticker: guestTableToken ? undefined : (guestSticker ?? undefined),
+        pin: pin ?? undefined,
+      })
+      .then(async (joinRes) => {
+        const deviceToken = joinRes.data.device_token as string;
+        writeGuestDevice(storageKey, deviceToken);
+        const menuRes = await api.get('/api/guest/menu');
         if (cancelled) return;
-        const table = tableRes.data.table as { id: string; name: string };
+        const table = joinRes.data.table as { id: string; name: string };
+        setGuestDeviceToken(deviceToken);
+        setGuestPinPrompt(null);
+        setGuestNotOpen(null);
+        setGuestExpired(false);
+        setGuestPin('');
         setGuestTable(table);
         setTables([{ id: table.id, name: table.name }]);
         setTablesLoaded(true);
@@ -552,17 +608,40 @@ export default function ServerStandalonePage() {
       })
       .catch((error) => {
         if (cancelled) return;
+        const data = error?.response?.data;
+        const code = data?.code;
         setGuestTable(null);
-        setGuestClosed(error?.response?.data?.code === 'guest_ordering_disabled');
-        setGuestExpired(error?.response?.data?.code === 'qr_expired');
+        if ((code === 'pin_required' || code === 'pin_wrong') && data?.table) {
+          setGuestPinPrompt({
+            table: data.table,
+            wrong: code === 'pin_wrong',
+            rotated: !!data.rotated,
+          });
+          setGuestPin('');
+          return;
+        }
+        setGuestPinPrompt(null);
+        setGuestNotOpen(code === 'table_not_open' && data?.table ? data.table : null);
+        setGuestClosed(code === 'guest_ordering_disabled');
+        setGuestExpired(code === 'qr_expired');
       })
       .finally(() => {
-        if (!cancelled) setGuestChecked(true);
+        if (cancelled) return;
+        setGuestChecked(true);
+        setGuestPinBusy(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [api, user, guestTableId, guestTableToken, loading]);
+  }, [api, user, guestTableId, guestTableToken, guestSticker, loading, guestJoinRound]);
+
+  const submitGuestPin = (event: FormEvent) => {
+    event.preventDefault();
+    if (!/^\d{4}$/.test(guestPin) || guestPinBusy) return;
+    guestPinAttemptRef.current = guestPin;
+    setGuestPinBusy(true);
+    setGuestJoinRound((round) => round + 1);
+  };
 
   useEffect(() => {
     if (!selectedTableId || !user || !api) return;
@@ -1054,9 +1133,9 @@ export default function ServerStandalonePage() {
     sendInFlightRef.current = true;
     setSending(true);
     try {
-      await api.post('/api/guest/order', {
+      const res = await api.post('/api/guest/order', {
         table_id: guestTable.id,
-        table_token: guestTableToken,
+        device_token: guestDeviceToken,
         items,
         special_instructions: notes || undefined,
         idempotency_key: key,
@@ -1073,12 +1152,23 @@ export default function ServerStandalonePage() {
       );
       setOrderNotes((currentNotes) => (currentNotes === orderNotes ? '' : currentNotes));
       setMobileCartOpen(false);
-      toast.success(t('orderSent'));
+      toast.success(t(res.status === 202 ? 'guestOrderHeld' : 'orderSent'));
     } catch (error: unknown) {
-      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const data = (error as { response?: { data?: { code?: string; retry_after?: number } } })
+        ?.response?.data;
+      const code = data?.code;
       if (code === 'bill_awaiting_payment') toast.error(t('tableAwaitingPaymentLocked'));
-      else if (code === 'qr_expired') setGuestExpired(true);
-      else toastApiError(error, t('couldNotSendOrder'), apiErrorT);
+      else if (code === 'order_cooldown') {
+        toast.error(t('guestOrderCooldown', { seconds: data?.retry_after ?? 5 }));
+      } else if (code === 'order_rejected') {
+        guestAttemptRef.current = null;
+        toast.error(t('guestOrderRejected'));
+      } else if (code === 'qr_expired') {
+        // The party's session ended; a sticker can join the next one with its new PIN.
+        removeGuestDevice(guestDeviceStorageKey(guestTable.id));
+        if (guestSticker) setGuestJoinRound((round) => round + 1);
+        else setGuestExpired(true);
+      } else toastApiError(error, t('couldNotSendOrder'), apiErrorT);
     } finally {
       sendInFlightRef.current = false;
       setSending(false);
@@ -1295,6 +1385,70 @@ export default function ServerStandalonePage() {
         <QrCode size={44} className="text-muted-foreground" />
         <h1 className="text-lg font-semibold">{t('guestExpiredTitle')}</h1>
         <p className="max-w-sm text-sm text-muted-foreground">{t('guestExpiredHint')}</p>
+      </div>
+    );
+  }
+
+  if (!user && guestPinPrompt && !showLogin) {
+    return (
+      <div
+        data-testid="server-app-guest-pin"
+        className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground"
+      >
+        <QrCode size={44} className="text-muted-foreground" />
+        <h1 className="text-lg font-semibold">
+          {t('guestPinTitle', { table: guestPinPrompt.table.name })}
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">{t('guestPinHint')}</p>
+        <form onSubmit={submitGuestPin} className="flex w-full max-w-xs flex-col gap-3">
+          <input
+            value={guestPin}
+            onChange={(event) => setGuestPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            aria-label={t('guestPinLabel')}
+            placeholder="••••"
+            data-testid="server-app-guest-pin-input"
+            className="h-14 w-full rounded-lg border border-border bg-background text-center text-2xl tracking-[0.5em] text-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+          {guestPinPrompt.wrong && (
+            <p
+              className="text-sm font-medium text-red-600"
+              data-testid="server-app-guest-pin-error"
+            >
+              {t(guestPinPrompt.rotated ? 'guestPinRotated' : 'guestPinWrong')}
+            </p>
+          )}
+          <button
+            disabled={guestPin.length !== 4 || guestPinBusy}
+            className="h-11 w-full rounded-lg bg-brand font-semibold text-white disabled:opacity-60"
+          >
+            {t('guestPinSubmit')}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (!user && guestNotOpen && !showLogin) {
+    return (
+      <div
+        data-testid="server-app-guest-not-open"
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground"
+      >
+        <QrCode size={44} className="text-muted-foreground" />
+        <h1 className="text-lg font-semibold">
+          {t('guestNotOpenTitle', { table: guestNotOpen.name })}
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">{t('guestNotOpenHint')}</p>
+        <button
+          type="button"
+          onClick={() => setGuestJoinRound((round) => round + 1)}
+          className="h-11 rounded-lg bg-brand px-6 font-semibold text-white"
+        >
+          {t('guestRetry')}
+        </button>
       </div>
     );
   }
@@ -1673,6 +1827,7 @@ export default function ServerStandalonePage() {
         <main
           className={`mx-auto grid max-w-6xl min-w-0 gap-3 px-4 py-2 md:p-3 ${showTablePicker ? 'md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_340px]' : 'lg:grid-cols-[1fr_340px]'}`}
         >
+          <GuestAlerts api={api} apiPrefix="/api" enabled={!!user} />
           {tableQrOpen && api && selectedTableId && (
             <GuestTableQrDialog
               tableId={selectedTableId}

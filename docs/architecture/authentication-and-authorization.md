@@ -246,24 +246,29 @@ configurable, and when the feature is disabled every route returns 404 rather th
 disabled surface is not discoverable. The 404 check appears in three places in
 `main/server-app.ts`, including the one that decides whether a path is proxied at all.
 
-A table QR opens the Server App as a guest bound to that table. Three `/api/guest/*` routes are
-reachable without signing in: the table's name, the menu, and order creation. They act as a
+A table QR opens the Server App as a guest bound to that table. Four `/api/guest/*` routes are
+reachable without signing in: joining the table, the table's name, the menu, and order creation. They act as a
 hidden `Guest` user (`guest-self-order`) that has no usable password, no staff code, and does not
 appear in staff or owner lists. Its account row says `server`, but `resolveEffectivePermissions()`
 gives it only `catalog.view`, `orders.create` and `printing.execute`, whatever its role or overrides
 say, and `requireAuth` answers `403` `guest_scope` to a Guest token on any main API route other than
 the menu reads, order creation, adding items and the kitchen ticket. The order lines are rebuilt from the catalog so a guest cannot
-choose a price, order creation is limited to 12 per 10 minutes per address, and a guest cannot
+choose a price, order creation is limited to 60 per 10 minutes per address, and a guest cannot
 read orders or customers. The `guest_qr_ordering_enabled` setting (the "Take orders by QR code"
 checkbox on the OrderFlow settings tab, on by default) closes all three routes with `403`
 `guest_ordering_disabled` when it is `false`, and the guest view then asks the customer to call staff.
-A table id alone cannot place an order: the table and order routes also need the token the QR link
-carries, an HMAC under `guest_qr_secret` of the table's open guest session. Staff open that session
+A table id alone cannot place an order: each phone first joins the table's open guest session and
+orders with the device token it gets back. The slip QR joins with its token, an HMAC under
+`guest_qr_secret` of the session; the permanent table sticker (printed from "Table QR stickers" on
+the same tab, an HMAC of the table and its sticker version) joins only with the session's four-digit
+PIN, which staff read from the table QR dialog and which changes with every session and after five
+wrong tries, raising a staff alert. Each phone waits 5 seconds between orders, and orders past 20 per
+session or 150 items wait for staff approval on the POS or Server App. Staff open that session
 for each seated party from the QR button beside the table in the POS cart or the Server App header,
 which shows the QR and prints it as a slip; it ends when the table is freed (bill paid, order
 cancelled or moved), at the next 07:00 store time, or when staff end or renew it, and a code from an
 ended session answers `410` `qr_expired`. "Cancel all table QR codes" on the same tab replaces the
-secret so every code handed out stops working. A packaged install keeps that secret in
+secret so every code and sticker handed out stops working. A packaged install keeps that secret in
 Electron `safeStorage` (`guest_qr_secret.enc`) and only the `safe-storage:v1` marker in SQLite, the
 way it keeps the JWT secret; database exports redact it and a restore keeps this device's copy. For ordering over mobile data the tab
 also sets a public https address for the QR links and the one proxy address whose

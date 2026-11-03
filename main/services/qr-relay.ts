@@ -43,7 +43,7 @@ const MAX_RESPONSE_BODY = 10 * 1024 * 1024;
 
 const GUEST_ROUTES: [string, RegExp][] = [
   ['GET', /^\/api\/guest\/(table|menu)$/],
-  ['POST', /^\/api\/guest\/order$/],
+  ['POST', /^\/api\/guest\/(order|join)$/],
   ['GET', /^\/api\/server-app\/info$/],
 ];
 const STATIC_PATH =

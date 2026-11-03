@@ -10,7 +10,12 @@ import {
 import * as QRCode from 'qrcode';
 import { getLocalIP } from '../server-state';
 import { getServerAppPort } from '../server-app-state';
-import { guestSessionToken, readGuestQrNetwork } from '../lib/guest-qr';
+import {
+  guestSessionPin,
+  guestSessionToken,
+  guestStickerCode,
+  readGuestQrNetwork,
+} from '../lib/guest-qr';
 import {
   closeGuestTableSession,
   openGuestTableSession,
@@ -366,6 +371,68 @@ export function guestSessionUrl(baseUrl: string, session: GuestTableSession): st
   return `${baseUrl}?table=${encodeURIComponent(session.table_id)}&t=${guestSessionToken(session.id)}`;
 }
 
+function stickerUrl(baseUrl: string, table: { id: string; guest_sticker_version: number }): string {
+  return `${baseUrl}?table=${encodeURIComponent(table.id)}&s=${guestStickerCode(table.id, table.guest_sticker_version)}`;
+}
+
+// The permanent sticker QR for each table: it opens the menu, and ordering needs the PIN staff give
+// the seated party. `renew` retires a table's printed sticker, for one that was copied or lost.
+router.post(
+  '/guest-stickers',
+  requirePermission('tables.manage'),
+  async (req: Request, res: Response) => {
+    try {
+      const db = getDatabase();
+      const renew: string[] = Array.isArray(req.body?.renew)
+        ? req.body.renew.filter((id: unknown) => typeof id === 'string')
+        : [];
+      if (renew.length) {
+        const bump = db.prepare(
+          'UPDATE tables SET guest_sticker_version = guest_sticker_version + 1 WHERE id = ?',
+        );
+        db.transaction(() => renew.forEach((id) => bump.run(id)))();
+      }
+      const rows = db
+        .prepare(
+          `SELECT id, number, guest_sticker_version, floor FROM tables
+           WHERE is_active = 1 ORDER BY floor, number`,
+        )
+        .all() as {
+        id: string;
+        number: string;
+        guest_sticker_version: number;
+        floor: string | null;
+      }[];
+      const base = guestQrBase();
+      const stickers = await Promise.all(
+        rows.map(async (row) => {
+          const url = stickerUrl(base.baseUrl, row);
+          return {
+            id: row.id,
+            name: row.number,
+            floor: row.floor,
+            url,
+            data_url: await QRCode.toDataURL(url, {
+              errorCorrectionLevel: 'M',
+              margin: 1,
+              width: 320,
+            }),
+          };
+        }),
+      );
+      res.json({
+        stickers,
+        public: base.public,
+        server_app_enabled: isServerAppEnabled(),
+        guest_ordering_enabled: isGuestQrOrderingEnabled(),
+      });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
 function activeTable(id: unknown): { id: string; number: string } | undefined {
   if (typeof id !== 'string' || !id) return undefined;
   return getDatabase()
@@ -392,6 +459,7 @@ router.post(
       res.json({
         table: { id: table.id, name: table.number },
         session: { created_at: session.created_at, expires_at: session.expires_at },
+        pin: guestSessionPin(session.id, session.pin_round),
         url,
         data_url: await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 320 }),
         store_timezone: storeTimezone(getDatabase()),

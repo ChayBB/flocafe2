@@ -36,8 +36,22 @@ async function createTable(page: import('@playwright/test').Page) {
     name,
     id: table.id as string,
     token,
+    device: await joinDevice(page.request, table.id, token),
     query: `table=${encodeURIComponent(table.id)}&t=${token}`,
   };
+}
+
+/** One phone joining the table's session with its slip QR; each phone orders with its own token. */
+async function joinDevice(
+  request: import('@playwright/test').APIRequestContext,
+  tableId: string,
+  token: string,
+): Promise<string> {
+  const joined = await request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/join`, {
+    data: { table_id: tableId, table_token: token },
+  });
+  expect(joined.ok()).toBeTruthy();
+  return (await joined.json()).device_token as string;
 }
 
 test.describe('Server App guest from a table QR', () => {
@@ -260,20 +274,20 @@ test.describe('Server App guest from a table QR', () => {
     const item = [{ product_id: 'e2e-product', quantity: 1 }];
     expect((await post({ table_id: table.id, items: item })).status()).toBe(410);
     expect(
-      (await post({ table_id: table.id, table_token: 'x'.repeat(22), items: item })).status(),
+      (await post({ table_id: table.id, device_token: 'x'.repeat(32), items: item })).status(),
     ).toBe(410);
     const tableOnly = await request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/table`, {
       params: { table_id: table.id },
     });
     expect(tableOnly.status()).toBe(410);
-    expect((await post({ table_id: table.id, table_token: table.token, items: [] })).status()).toBe(
-      400,
-    );
+    expect(
+      (await post({ table_id: table.id, device_token: table.device, items: [] })).status(),
+    ).toBe(400);
     expect(
       (
         await post({
           table_id: table.id,
-          table_token: table.token,
+          device_token: table.device,
           items: [{ product_id: 'not-a-product', quantity: 1 }],
         })
       ).status(),
@@ -301,7 +315,7 @@ test('guests at one table ordering at the same moment share one bill, and every 
     request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
       data: {
         table_id: table.id,
-        table_token: table.token,
+        device_token: table.device,
         items: [{ product_id: 'e2e-product', quantity: 1 }],
         ...data,
       },
@@ -312,9 +326,11 @@ test('guests at one table ordering at the same moment share one bill, and every 
   expect((await keyless.json()).code).toBe('idempotency_key_required');
 
   const run = Math.random().toString(36).slice(2, 10);
-  const sent = await Promise.all(
-    ['a', 'b'].map((phone) => post({ idempotency_key: `guest-${run}-${phone}` })),
-  );
+  const friend = await joinDevice(request, table.id, table.token);
+  const sent = await Promise.all([
+    post({ idempotency_key: `guest-${run}-a` }),
+    post({ idempotency_key: `guest-${run}-b`, device_token: friend }),
+  ]);
   for (const response of sent) expect(response.status()).toBe(201);
   // A retry with a key already used is a replay, not another dish.
   expect((await post({ idempotency_key: `guest-${run}-a` })).status()).toBe(201);
@@ -360,7 +376,7 @@ test('the QR ordering checkbox in OrderFlow settings closes and reopens ordering
     const refused = await page.request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
       data: {
         table_id: table.id,
-        table_token: table.token,
+        device_token: table.device,
         items: [{ product_id: 'e2e-product', quantity: 1 }],
       },
     });
@@ -630,4 +646,120 @@ test('staff hand out a table QR from the POS and the Server App, and it stops wo
       data: original,
     });
   }
+});
+
+test('a table sticker joins with the party PIN, friends share the bill, and staff approve orders past the limit', async ({
+  page,
+  request,
+}) => {
+  const table = await createTable(page);
+  const session = await (
+    await request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
+      headers: manager(),
+    })
+  ).json();
+  const pin = session.pin as string;
+  expect(pin).toMatch(/^\d{4}$/);
+  const stickers = await (
+    await request.post(`${E2E_BASE_URL}/api/tables/guest-stickers`, {
+      headers: manager(),
+      data: {},
+    })
+  ).json();
+  const stickerUrl = new URL(
+    (stickers.stickers as { id: string; url: string }[]).find((s) => s.id === table.id)!.url,
+  );
+  const sticker = stickerUrl.searchParams.get('s') as string;
+  const wrongPin = pin === '0000' ? '1111' : '0000';
+  const join = (data: Record<string, unknown>) =>
+    request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/join`, {
+      data: { table_id: table.id, sticker, ...data },
+    });
+
+  // The sticker alone opens the PIN screen; the right PIN starts ordering.
+  await setEnglish(page);
+  await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${table.id}&s=${sticker}`);
+  const pinScreen = page.getByTestId('server-app-guest-pin');
+  await expect(pinScreen).toContainText(table.name);
+  await page.getByTestId('server-app-guest-pin-input').fill(wrongPin);
+  await pinScreen.getByRole('button', { name: 'Start ordering' }).click();
+  await expect(page.getByTestId('server-app-guest-pin-error')).toContainText('not right');
+  await page.getByTestId('server-app-guest-pin-input').fill(pin);
+  await pinScreen.getByRole('button', { name: 'Start ordering' }).click();
+  await expect(page.locator('header').getByTestId('server-app-guest-name')).toHaveText('Guest');
+  await page.reload();
+  await expect(page.locator('header').getByTestId('server-app-guest-name')).toHaveText('Guest');
+
+  expect((await join({})).status()).toBe(401);
+  expect((await join({ sticker: 'x'.repeat(22), pin })).status()).toBe(410);
+  const friendJoin = await join({ pin });
+  expect(friendJoin.status()).toBe(200);
+  const friend = (await friendJoin.json()).device_token as string;
+
+  const run = Math.random().toString(36).slice(2, 10);
+  const order = (key: string, quantity: number) =>
+    request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+      data: {
+        table_id: table.id,
+        device_token: friend,
+        idempotency_key: `sticker-${run}-${key}`,
+        items: [
+          { product_id: 'e2e-product', quantity },
+          { product_id: 'e2e-product', quantity, special_instructions: 'b' },
+        ],
+      },
+    });
+  expect((await order('a', 50)).status()).toBe(201);
+  const cooled = await order('b', 1);
+  expect(cooled.status()).toBe(429);
+  expect((await cooled.json()).code).toBe('order_cooldown');
+  await page.waitForTimeout(5200);
+  // Past the item limit the order waits for staff, however often it is sent.
+  expect((await order('c', 30)).status()).toBe(202);
+  expect((await order('c', 30)).status()).toBe(202);
+
+  // Five wrong PINs, counting the one typed on the page, give the party a new PIN and tell staff.
+  for (let i = 0; i < 4; i++) {
+    const wrong = await join({ pin: wrongPin });
+    expect(wrong.status()).toBe(401);
+    expect((await wrong.json()).rotated).toBe(i === 3);
+  }
+  expect((await join({ pin })).status()).toBe(401);
+
+  await page.goto(`${E2E_BASE_URL}/auth/login`);
+  await page.locator('#email').fill('manager@flo.local');
+  await page.locator('#password').fill(E2E_PASSWORD);
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/(pos|orders)/, { timeout: 20000 });
+  const held = page.getByTestId('guest-alert-order_held').filter({ hasText: table.name });
+  await expect(held).toContainText('waiting for approval');
+  await held.getByTestId('guest-alert-approve').click();
+  await expect(page.getByText('Order sent to the kitchen')).toBeVisible();
+  await expect(held).toHaveCount(0);
+  expect((await order('c', 30)).status()).toBe(201);
+
+  const pinAlert = page.getByTestId('guest-alert-pin_reset').filter({ hasText: table.name });
+  const newPin = (
+    await (
+      await request.post(`${E2E_BASE_URL}/api/tables/${table.id}/guest-session`, {
+        headers: manager(),
+      })
+    ).json()
+  ).pin as string;
+  expect(newPin).not.toBe(pin);
+  await expect(pinAlert).toContainText(newPin);
+  await pinAlert.getByTestId('guest-alert-dismiss').click();
+  await expect(pinAlert).toHaveCount(0);
+  expect((await join({ pin: newPin })).status()).toBe(200);
+
+  const orders = (
+    await (
+      await request.get(`${E2E_BASE_URL}/api/orders`, {
+        headers: manager(),
+        params: { table_id: table.id, type: 'dine_in', per_page: 5 },
+      })
+    ).json()
+  ).orders as { items: { quantity: number }[] }[];
+  expect(orders).toHaveLength(1);
+  expect(orders[0].items.reduce((sum, item) => sum + item.quantity, 0)).toBe(160);
 });

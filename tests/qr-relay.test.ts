@@ -74,6 +74,7 @@ async function main() {
     ['GET', '/api/guest/menu', true],
     ['GET', '/api/guest/table', true],
     ['POST', '/api/guest/order', true],
+    ['POST', '/api/guest/join', true],
     ['GET', '/api/server-app/info', true],
     ['GET', '/server-standalone/', true],
     ['GET', '/_next/static/chunks/app.js', true],
