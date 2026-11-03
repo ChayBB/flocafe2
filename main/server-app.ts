@@ -61,19 +61,14 @@ import {
 } from './services/authorization';
 import { clockNow } from './lib/clock';
 import { recordClockIn, recordClockOut } from './services/attendance';
-import {
-  isTrustedGuestProxy,
-  verifyGuestSessionPin,
-  verifyGuestStickerCode,
-  verifyGuestTableToken,
-} from './lib/guest-qr';
+import { isTrustedGuestProxy, verifyGuestStickerCode, verifyGuestTableToken } from './lib/guest-qr';
 import { callMainApiAsGuest, ensureGuestUser, placeGuestOrder } from './lib/guest-order-placement';
 import {
   addGuestDevice,
   currentGuestTableSession,
   findGuestDevice,
   gateGuestOrder,
-  recordGuestPinFailure,
+  requestGuestUnlock,
   releaseGuestOrderQuota,
 } from './lib/guest-table-session';
 import { startQrRelay, stopQrRelay } from './services/qr-relay';
@@ -516,8 +511,8 @@ export function startServerApp(): Promise<void> {
             | undefined)
         : undefined;
 
-    // A phone joins the table's open session once (slip QR, or sticker QR plus the session PIN) and
-    // orders with the device token it gets back.
+    // A phone joins the table's open session once, by slip QR or sticker QR, and orders with the
+    // device token it gets back. A sticker at a table staff have not opened waits for them to unlock it.
     app.post(
       '/api/guest/join',
       serverAppApiRateLimit,
@@ -533,7 +528,7 @@ export function startServerApp(): Promise<void> {
           return res.json({ table, device_token: req.body.device_token });
         }
         const session = currentGuestTableSession(db, row.id);
-        let joinedBy: 'slip' | 'pin';
+        let joinedBy: 'slip' | 'sticker';
         if (req.body?.table_token !== undefined) {
           if (!session || !verifyGuestTableToken(row.id, req.body.table_token)) {
             return guestQrExpired(res);
@@ -544,22 +539,19 @@ export function startServerApp(): Promise<void> {
             return guestQrExpired(res);
           }
           if (!session) {
-            return res
-              .status(409)
-              .json({ code: 'table_not_open', error: 'Ask staff to open this table', table });
+            const key = req.body?.unlock_key;
+            if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(key)) {
+              return res
+                .status(409)
+                .json({ code: 'table_not_open', error: 'Ask staff to open this table', table });
+            }
+            return requestGuestUnlock(db, row.id, key) === 'declined'
+              ? res
+                  .status(409)
+                  .json({ code: 'unlock_declined', error: 'Staff did not open this table', table })
+              : res.status(202).json({ code: 'waiting_for_staff', table });
           }
-          if (req.body?.pin === undefined || req.body.pin === '') {
-            return res
-              .status(401)
-              .json({ code: 'pin_required', error: 'Enter the table PIN', table });
-          }
-          if (!verifyGuestSessionPin(session.id, session.pin_round, req.body.pin)) {
-            const rotated = recordGuestPinFailure(db, session);
-            return res
-              .status(401)
-              .json({ code: 'pin_wrong', error: 'That PIN is not right', table, rotated });
-          }
-          joinedBy = 'pin';
+          joinedBy = 'sticker';
         } else {
           return res.status(400).json({ error: 'A table code is required' });
         }
@@ -580,7 +572,8 @@ export function startServerApp(): Promise<void> {
       if (!row) return res.status(404).json({ error: 'Table not found' });
       if (
         !findGuestDevice(getDatabase(), row.id, req.query.d) &&
-        !verifyGuestTableToken(row.id, req.query.t)
+        !verifyGuestTableToken(row.id, req.query.t) &&
+        !verifyGuestStickerCode(row.id, row.guest_sticker_version, req.query.s)
       ) {
         return guestQrExpired(res);
       }

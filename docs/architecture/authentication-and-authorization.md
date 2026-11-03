@@ -260,9 +260,9 @@ checkbox on the OrderFlow settings tab, on by default) closes all three routes w
 A table id alone cannot place an order: each phone first joins the table's open guest session and
 orders with the device token it gets back. The slip QR joins with its token, an HMAC under
 `guest_qr_secret` of the session; the permanent table sticker (printed from "Table QR stickers" on
-the same tab, an HMAC of the table and its sticker version) joins only with the session's four-digit
-PIN, which staff read from the table QR dialog and which changes with every session and after five
-wrong tries, raising a staff alert. Each phone waits 5 seconds between orders, and orders past 20 per
+the same tab, an HMAC of the table and its sticker version) joins after the guest taps to start, but
+only while the table has an open session: a scan at a table staff have not opened raises an unlock
+alert on the POS and Server App, and the phone joins once staff unlock it. Each phone waits 5 seconds between orders, and orders past 20 per
 session or 150 items wait for staff approval on the POS or Server App. Staff open that session
 for each seated party from the QR button beside the table in the POS cart or the Server App header,
 which shows the QR and prints it as a slip; it ends when the table is freed (bill paid, order

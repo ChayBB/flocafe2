@@ -31,8 +31,6 @@ const {
   rotateGuestQrSecret,
   guestStickerCode,
   verifyGuestStickerCode,
-  guestSessionPin,
-  verifyGuestSessionPin,
 } = require('../main/lib/guest-qr');
 const {
   openGuestTableSession,
@@ -40,7 +38,7 @@ const {
   currentGuestTableSession,
   addGuestDevice,
   findGuestDevice,
-  recordGuestPinFailure,
+  requestGuestUnlock,
   gateGuestOrder,
   releaseGuestOrderQuota,
   GUEST_DEVICES_PER_SESSION,
@@ -195,7 +193,7 @@ function main() {
 }
 
 function stickers() {
-  console.log('\nSticker QR, session PIN, phones and order limits');
+  console.log('\nSticker QR, unlock requests, phones and order limits');
   const { getDatabase } = require('../main/db');
   const db = getDatabase();
   seedTable(db, 'tbl-s', 9);
@@ -205,38 +203,37 @@ function stickers() {
   assertOrThrow(!verifyGuestStickerCode('tbl-s', 2, code), 'a renewed sticker retires the old one');
   assertOrThrow(!verifyGuestStickerCode('tbl-1', 1, code), 'a sticker belongs to one table');
 
-  const session = openGuestTableSession(db, 'tbl-s', null);
-  const pin = guestSessionPin(session.id, 0);
-  assertOrThrow(/^\d{4}$/.test(pin), 'the PIN is four digits');
-  assertOrThrow(verifyGuestSessionPin(session.id, 0, pin), 'the session PIN is accepted');
-  assertOrThrow(!verifyGuestSessionPin(session.id, 1, pin), 'a new PIN round retires the old PIN');
-
-  for (let i = 1; i < 5; i++) {
-    assertEqualOrThrow(
-      recordGuestPinFailure(db, currentGuestTableSession(db, 'tbl-s')),
-      false,
-      `wrong PIN ${i} keeps the PIN`,
-    );
-  }
-  assertEqualOrThrow(
-    recordGuestPinFailure(db, currentGuestTableSession(db, 'tbl-s')),
-    true,
-    'the fifth wrong PIN changes it',
-  );
-  const rotated = currentGuestTableSession(db, 'tbl-s');
-  assertEqualOrThrow(rotated.pin_round, 1, 'the session moves to the next PIN');
-  assertEqualOrThrow(rotated.pin_failures, 0, 'and its count of wrong tries starts over');
-  assertEqualOrThrow(
+  const unlockAlerts = () =>
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM guest_alerts WHERE kind = 'pin_reset' AND table_id = 'tbl-s'`,
+        `SELECT idempotency_key, status FROM guest_alerts
+         WHERE kind = 'unlock_request' AND table_id = 'tbl-s' ORDER BY id`,
       )
-      .get().n,
-    1,
-    'staff are told the PIN changed',
+      .all();
+  assertEqualOrThrow(
+    requestGuestUnlock(db, 'tbl-s', 'phone-aaaa'),
+    'waiting',
+    'a scan at a closed table waits for staff',
+  );
+  assertEqualOrThrow(requestGuestUnlock(db, 'tbl-s', 'phone-aaaa'), 'waiting', 'and keeps waiting');
+  requestGuestUnlock(db, 'tbl-s', 'phone-bbbb');
+  assertEqualOrThrow(unlockAlerts().length, 1, 'a table shows staff one waiting request at a time');
+  db.prepare(`UPDATE guest_alerts SET status = 'dismissed' WHERE kind = 'unlock_request'`).run();
+  assertEqualOrThrow(
+    requestGuestUnlock(db, 'tbl-s', 'phone-aaaa'),
+    'declined',
+    'a phone staff turned down is told so',
+  );
+  requestGuestUnlock(db, 'tbl-s', 'phone-bbbb');
+  assertEqualOrThrow(unlockAlerts().length, 2, 'another phone can ask again');
+
+  const session = openGuestTableSession(db, 'tbl-s', null);
+  assertOrThrow(
+    unlockAlerts().every((row: { status: string }) => row.status !== 'open'),
+    'opening the table answers every waiting phone',
   );
 
-  const token = addGuestDevice(db, session.id, 'pin');
+  const token = addGuestDevice(db, session.id, 'sticker');
   const found = findGuestDevice(db, 'tbl-s', token);
   assertOrThrow(found && found.session.id === session.id, 'a joined phone is found by its token');
   assertEqualOrThrow(findGuestDevice(db, 'tbl-1', token), null, 'a phone token works at one table');
@@ -245,9 +242,9 @@ function stickers() {
     null,
     'an unknown token is refused',
   );
-  for (let i = 1; i < GUEST_DEVICES_PER_SESSION; i++) addGuestDevice(db, session.id, 'pin');
+  for (let i = 1; i < GUEST_DEVICES_PER_SESSION; i++) addGuestDevice(db, session.id, 'sticker');
   assertEqualOrThrow(
-    addGuestDevice(db, session.id, 'pin'),
+    addGuestDevice(db, session.id, 'sticker'),
     null,
     'a session holds a limited number of phones',
   );

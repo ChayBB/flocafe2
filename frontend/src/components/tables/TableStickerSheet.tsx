@@ -85,7 +85,7 @@ export default function TableStickerSheet({ onClose }: { onClose: () => void }) 
     const cards = stickers
       .map(
         (sticker) =>
-          `<div class="card"><div class="name">${escapeHtml(t('tableQrTable', { name: sticker.name }))}</div><img src="${sticker.data_url}" alt="QR"><div class="menu">${escapeHtml(t('guestQrScan'))}</div><div class="pin">${escapeHtml(t('stickerPinHint'))}</div></div>`,
+          `<div class="card"><div class="name">${escapeHtml(t('tableQrTable', { name: sticker.name }))}</div><img src="${sticker.data_url}" alt="QR"><div class="menu">${escapeHtml(t('guestQrScan'))}</div><div class="pin">${escapeHtml(t('stickerScanHint'))}</div></div>`,
       )
       .join('');
     printHtmlInFrame(
@@ -148,7 +148,7 @@ export default function TableStickerSheet({ onClose }: { onClose: () => void }) 
       y += menuSize * 1.2;
       ctx.fillStyle = '#333';
       ctx.font = `${pinSize}px sans-serif`;
-      ctx.fillText(t('stickerPinHint'), center, y, width);
+      ctx.fillText(t('stickerScanHint'), center, y, width);
     });
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (blob) downloadBlob(blob, 'QR-stickers.png');

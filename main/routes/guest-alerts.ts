@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 import { requirePermission } from '../services/authorization';
-import { guestSessionPin } from '../lib/guest-qr';
 import { placeGuestOrder } from '../lib/guest-order-placement';
-import { currentGuestTableSession } from '../lib/guest-table-session';
+import { currentGuestTableSession, openGuestTableSession } from '../lib/guest-table-session';
 import type { GuestOrderItem } from '../lib/guest-order';
 import { getHttpRequestSignal } from '../shutdown';
 
@@ -13,7 +12,7 @@ interface AlertRow {
   id: number;
   table_id: string;
   session_id: string | null;
-  kind: 'pin_reset' | 'order_held';
+  kind: 'unlock_request' | 'order_held';
   idempotency_key: string | null;
   payload_json: string | null;
   created_at: string;
@@ -27,8 +26,8 @@ interface HeldPayload {
 
 const userId = (req: Request) => (req as Request & { user?: { userId?: string } }).user?.userId;
 
-// GET /api/guest-alerts — table QR events staff must act on: a PIN that changed after wrong
-// guesses, and orders past the session quota that wait for approval.
+// GET /api/guest-alerts — table QR events staff must act on: a sticker scanned at a table they have
+// not opened, and orders past the session quota that wait for approval.
 router.get('/', requirePermission('orders.create'), (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -43,18 +42,15 @@ router.get('/', requirePermission('orders.create'), (_req: Request, res: Respons
     const productName = db.prepare('SELECT name FROM products WHERE id = ?');
     const alerts = rows.map((row) => {
       const session = currentGuestTableSession(db, row.table_id);
-      const current = !!session && session.id === row.session_id;
       const base = {
         id: row.id,
         kind: row.kind,
         table_id: row.table_id,
         table_name: row.table_name,
         created_at: row.created_at,
-        session_open: current,
+        session_open: !!session && session.id === row.session_id,
       };
-      if (row.kind === 'pin_reset') {
-        return { ...base, pin: current ? guestSessionPin(session.id, session.pin_round) : null };
-      }
+      if (row.kind === 'unlock_request') return base;
       const payload = JSON.parse(row.payload_json || '{}') as Partial<HeldPayload>;
       return {
         ...base,
@@ -74,7 +70,8 @@ router.get('/', requirePermission('orders.create'), (_req: Request, res: Respons
   }
 });
 
-// POST /api/guest-alerts/:id/approve — sends a held order to the bill and the kitchen.
+// POST /api/guest-alerts/:id/approve — opens the table for phones waiting at its sticker, or sends
+// a held order to the bill and the kitchen.
 router.post(
   '/:id/approve',
   requirePermission('orders.create'),
@@ -82,10 +79,21 @@ router.post(
     const db = getDatabase();
     const id = Number(req.params.id);
     try {
-      const alert = db
-        .prepare(`SELECT * FROM guest_alerts WHERE id = ? AND kind = 'order_held'`)
-        .get(id) as (AlertRow & { status: string }) | undefined;
+      const alert = db.prepare('SELECT * FROM guest_alerts WHERE id = ?').get(id) as
+        | (AlertRow & { status: string })
+        | undefined;
       if (!alert) return res.status(404).json({ error: 'Alert not found' });
+      if (alert.kind === 'unlock_request') {
+        if (alert.status !== 'open') {
+          return res.status(409).json({ code: 'resolved', error: 'Already handled' });
+        }
+        const table = db
+          .prepare('SELECT 1 FROM tables WHERE id = ? AND is_active = 1')
+          .get(alert.table_id);
+        if (!table) return res.status(404).json({ error: 'Table not found' });
+        openGuestTableSession(db, alert.table_id, userId(req) ?? null);
+        return res.json({ success: true });
+      }
       const session = currentGuestTableSession(db, alert.table_id);
       if (!session || session.id !== alert.session_id) {
         return res
@@ -128,7 +136,7 @@ router.post(
   },
 );
 
-// POST /api/guest-alerts/:id/dismiss — a held order is turned down; a PIN notice is acknowledged.
+// POST /api/guest-alerts/:id/dismiss — turns down a held order or a request to open the table.
 router.post('/:id/dismiss', requirePermission('orders.create'), (req: Request, res: Response) => {
   try {
     const changes = getDatabase()

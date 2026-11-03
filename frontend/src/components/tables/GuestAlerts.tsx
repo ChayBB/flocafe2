@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AxiosInstance } from 'axios';
 import toast from 'react-hot-toast';
-import { Check, KeyRound, ShoppingBag, X } from 'lucide-react';
+import { Check, QrCode, ShoppingBag, X } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Button } from '@/components/ui/button';
 import { playKdsAlert, unlockKdsAlertSound } from '@/lib/kds-alert-sound';
@@ -13,10 +13,9 @@ const POLL_MS = 5000;
 type GuestAlert =
   | {
       id: number;
-      kind: 'pin_reset';
+      kind: 'unlock_request';
       table_name: string | null;
       session_open: boolean;
-      pin: string | null;
     }
   | {
       id: number;
@@ -35,8 +34,8 @@ interface Props {
 }
 
 /**
- * Table QR events staff act on, on the POS and the Server App: a sticker PIN that changed after
- * wrong guesses, and guest orders past the table's limit that wait for approval.
+ * Table QR events staff act on, on the POS and the Server App: a sticker scanned at a table they
+ * have not opened, and guest orders past the table's limit that wait for approval.
  */
 export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
   const t = useTranslations('tables');
@@ -81,7 +80,7 @@ export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
       await api.post(`${apiPrefix}/guest-alerts/${alert.id}/${action}`);
       if (alert.kind === 'order_held') {
         toast.success(t(action === 'approve' ? 'guestAlertApproved' : 'guestAlertRejected'));
-      }
+      } else if (action === 'approve') toast.success(t('guestAlertUnlocked'));
       setAlerts((list) => list.filter((item) => item.id !== alert.id));
     } catch (error: unknown) {
       const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
@@ -105,26 +104,22 @@ export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
           className="rounded-xl border border-amber-300 bg-card p-3 text-foreground shadow-xl dark:border-amber-700"
         >
           <div className="flex items-start gap-2">
-            {alert.kind === 'pin_reset' ? (
-              <KeyRound size={18} className="mt-0.5 shrink-0 text-amber-600" />
+            {alert.kind === 'unlock_request' ? (
+              <QrCode size={18} className="mt-0.5 shrink-0 text-amber-600" />
             ) : (
               <ShoppingBag size={18} className="mt-0.5 shrink-0 text-amber-600" />
             )}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">
-                {t(alert.kind === 'pin_reset' ? 'guestAlertPinTitle' : 'guestAlertHeldTitle', {
-                  table: alert.table_name ?? '-',
-                })}
+                {t(
+                  alert.kind === 'unlock_request' ? 'guestAlertUnlockTitle' : 'guestAlertHeldTitle',
+                  {
+                    table: alert.table_name ?? '-',
+                  },
+                )}
               </p>
-              {alert.kind === 'pin_reset' ? (
-                <p className="text-xs text-muted-foreground">
-                  {alert.pin ? t('guestAlertPinBody') : t('guestAlertSessionEnded')}
-                  {alert.pin && (
-                    <span className="ms-1 font-mono text-base font-bold tracking-widest text-foreground">
-                      {alert.pin}
-                    </span>
-                  )}
-                </p>
+              {alert.kind === 'unlock_request' ? (
+                <p className="text-xs text-muted-foreground">{t('guestAlertUnlockBody')}</p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">{t('guestAlertHeldBody')}</p>
@@ -144,7 +139,7 @@ export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
             </div>
           </div>
           <div className="mt-2 flex justify-end gap-2">
-            {alert.kind === 'order_held' && alert.session_open && (
+            {(alert.kind === 'unlock_request' || alert.session_open) && (
               <Button
                 type="button"
                 size="sm"
@@ -153,7 +148,7 @@ export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
                 data-testid="guest-alert-approve"
               >
                 <Check size={15} className="me-1" />
-                {t('guestAlertApprove')}
+                {t(alert.kind === 'unlock_request' ? 'guestAlertUnlock' : 'guestAlertApprove')}
               </Button>
             )}
             <Button
@@ -165,7 +160,7 @@ export default function GuestAlerts({ api, apiPrefix, enabled }: Props) {
               data-testid="guest-alert-dismiss"
             >
               <X size={15} className="me-1" />
-              {t(alert.kind === 'order_held' ? 'guestAlertReject' : 'guestAlertDismiss')}
+              {t('guestAlertReject')}
             </Button>
           </div>
         </div>

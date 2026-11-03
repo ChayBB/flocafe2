@@ -8,9 +8,7 @@ import { storeTimezone } from '../services/attendance';
 /** Table QR codes stop working at this store-time hour, so no code outlives the day it was given out. */
 export const GUEST_SESSION_RESET_HOUR = 7;
 
-/** A wrong PIN this many times gives the session a new PIN and tells staff someone is guessing. */
-export const GUEST_PIN_ATTEMPTS = 5;
-/** Phones that may join one session, so a shared PIN cannot fill a bill from everywhere. */
+/** Phones that may join one session, so a sticker photo cannot fill a bill from everywhere. */
 export const GUEST_DEVICES_PER_SESSION = 20;
 /** One phone waits this long between orders; a repeated send is a replay, not a new order. */
 export const GUEST_ORDER_COOLDOWN_SECONDS = 5;
@@ -23,8 +21,6 @@ export interface GuestTableSession {
   table_id: string;
   created_at: string;
   expires_at: string;
-  pin_round: number;
-  pin_failures: number;
   order_count: number;
   item_count: number;
 }
@@ -55,7 +51,7 @@ export function currentGuestTableSession(
   return (
     (db
       .prepare(
-        `SELECT id, table_id, created_at, expires_at, pin_round, pin_failures, order_count, item_count
+        `SELECT id, table_id, created_at, expires_at, order_count, item_count
          FROM guest_table_sessions WHERE table_id = ? AND closed_at IS NULL AND expires_at > ?`,
       )
       .get(tableId, now()) as GuestTableSession | undefined) ?? null
@@ -70,6 +66,11 @@ export function openGuestTableSession(
   options: { renew?: boolean } = {},
 ): GuestTableSession {
   return db.transaction(() => {
+    // An open table answers every phone waiting at its sticker.
+    db.prepare(
+      `UPDATE guest_alerts SET status = 'approved', resolved_by = ?, resolved_at = ?
+       WHERE table_id = ? AND kind = 'unlock_request' AND status = 'open'`,
+    ).run(openedBy, now(), tableId);
     const current = currentGuestTableSession(db, tableId);
     if (current && !options.renew) return current;
     closeOpen(db, tableId, current ? 'renewed' : 'expired');
@@ -81,8 +82,6 @@ export function openGuestTableSession(
       expires_at: sqlTimestamp(
         nextDailyResetEpochSeconds(createdAt, storeTimezone(db), GUEST_SESSION_RESET_HOUR) * 1000,
       ),
-      pin_round: 0,
-      pin_failures: 0,
       order_count: 0,
       item_count: 0,
     };
@@ -105,7 +104,7 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 export function addGuestDevice(
   db: Database.Database,
   sessionId: string,
-  joinedBy: 'slip' | 'pin',
+  joinedBy: 'slip' | 'sticker',
 ): string | null {
   const count = (
     db
@@ -140,27 +139,49 @@ export function findGuestDevice(
   return device ? { device, session } : null;
 }
 
+const UNLOCK_KEY_PREFIX = 'unlock-';
+
 /**
- * Counts a wrong PIN; the last allowed attempt moves the session to a new PIN and raises a staff
- * alert instead of locking the party out.
+ * A sticker scan at a table staff have not opened. The phone's key keeps one request per phone, and
+ * a table shows staff one waiting request at a time; staff unlocking the table opens its session.
  */
-export function recordGuestPinFailure(db: Database.Database, session: GuestTableSession): boolean {
+export function requestGuestUnlock(
+  db: Database.Database,
+  tableId: string,
+  key: string,
+): 'waiting' | 'declined' {
   return db.transaction(() => {
-    const failures = session.pin_failures + 1;
-    if (failures < GUEST_PIN_ATTEMPTS) {
-      db.prepare('UPDATE guest_table_sessions SET pin_failures = ? WHERE id = ?').run(
-        failures,
-        session.id,
-      );
-      return false;
+    const alertKey = UNLOCK_KEY_PREFIX + key;
+    const own = db
+      .prepare(
+        `SELECT id, status FROM guest_alerts
+         WHERE table_id = ? AND idempotency_key = ? AND kind = 'unlock_request'`,
+      )
+      .get(tableId, alertKey) as { id: number; status: string } | undefined;
+    if (own?.status === 'open') return 'waiting';
+    if (own && own.status !== 'approved') return 'declined';
+    const waiting = db
+      .prepare(
+        `SELECT 1 FROM guest_alerts WHERE table_id = ? AND kind = 'unlock_request' AND status = 'open'`,
+      )
+      .get(tableId);
+    if (own) {
+      // Unlocked once, but that session has ended since: ask again.
+      if (!waiting) {
+        db.prepare(
+          `UPDATE guest_alerts SET status = 'open', created_at = ?, resolved_by = NULL,
+             resolved_at = NULL WHERE id = ?`,
+        ).run(now(), own.id);
+      }
+      return 'waiting';
     }
-    db.prepare(
-      'UPDATE guest_table_sessions SET pin_failures = 0, pin_round = pin_round + 1 WHERE id = ?',
-    ).run(session.id);
-    db.prepare(
-      `INSERT INTO guest_alerts (table_id, session_id, kind, created_at) VALUES (?, ?, 'pin_reset', ?)`,
-    ).run(session.table_id, session.id, now());
-    return true;
+    if (!waiting) {
+      db.prepare(
+        `INSERT INTO guest_alerts (table_id, kind, idempotency_key, created_at)
+         VALUES (?, 'unlock_request', ?, ?)`,
+      ).run(tableId, alertKey, now());
+    }
+    return 'waiting';
   })();
 }
 

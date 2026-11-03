@@ -270,9 +270,8 @@ Router: `main/routes/tables.ts`. Full path: `/api/tables`.
 
 Staff hand a seated party the table's ordering QR through `/:id/guest-session` (`orders.create`).
 `POST` returns the table's open session, or opens one when there is none, as
-`{ table, session: { created_at, expires_at }, pin, url, data_url, store_timezone, public, server_app_enabled, guest_ordering_enabled }`,
-where `pin` is the four-digit code a phone needs to join the session from the table sticker;
-body `renew: true` closes the open session first, so its QR stops working. `POST /:id/guest-session/print`
+`{ table, session: { created_at, expires_at }, url, data_url, store_timezone, public, server_app_enabled, guest_ordering_enabled }`,
+and marks every phone waiting at the table's sticker as answered; body `renew: true` closes the open session first, so its QR stops working. `POST /:id/guest-session/print`
 (`orders.create` and `printing.execute`) prints the QR slip on the default receipt printer and answers
 `400` `no_printer` without one, or `502` with `document_printer` for a document printer, where the
 page prints the slip through the browser instead. `DELETE /:id/guest-session` ends the session and
@@ -426,12 +425,12 @@ item is confirmed served. Paying the order's last unpaid bill sets
 food: `POST /:id/items` on that order, and `POST /` for a dine-in order on that table, answer `409`
 `bill_awaiting_payment` unless the actor has `payments.take`. `GET /api/guest-alerts`
 (`orders.create`, router `main/routes/guest-alerts.ts`) lists open table-QR alerts as
-`{ alerts: [{ id, kind, table_id, table_name, created_at, session_open, ... }] }`: a `pin_reset`
-carries the session's new `pin` while it is open, an `order_held` carries its `items` (`name`,
-`quantity`) and `note`. `POST /api/guest-alerts/:id/approve` places a held order as the Guest account
-under its original idempotency key and prints its kitchen ticket (`409` `session_closed` once the
-table's session ended, `409` `resolved` when already handled); `POST /api/guest-alerts/:id/dismiss`
-turns a held order down or acknowledges a PIN notice. The Server App forwards all three, and the POS
+`{ alerts: [{ id, kind, table_id, table_name, created_at, session_open, ... }] }`: an
+`unlock_request` is a sticker scan at a table with no open session, and an `order_held` carries its
+`items` (`name`, `quantity`) and `note`. `POST /api/guest-alerts/:id/approve` opens the table's guest
+session for an `unlock_request`, or places a held order as the Guest account under its original
+idempotency key and prints its kitchen ticket (`409` `session_closed` once the table's session
+ended, `409` `resolved` when already handled); `POST /api/guest-alerts/:id/dismiss` turns either down. The Server App forwards all three, and the POS
 and the Server App poll them every 5 seconds with a two-beep alert. `GET /api/bill-requests`
 (`payments.take`, router `main/routes/bill-requests.ts`) returns
 `{ requests: [{ id, order_number, total, table_name, bill_requested_at, bill_requested_by_name }] }`
@@ -1071,7 +1070,7 @@ The ten routes that are not forwards:
 | `POST` | `/api/auth/login`      | none, `loginAuthRateLimit` + shared failed-login limiter | Body `identifier` (staff name or email; `email` is still accepted) and `password` (the 4-digit staff code, the PIN, or the account password). `{ access_token, user: { id, name, email, role } }`; the token expires at the next 06:00 in the store time zone. `409 ambiguous_credentials` when several staff with that name match the code. `401` on bad credentials with `attempts_remaining`; `429` after 5 failed attempts across local login listeners; `403` for a role outside `ROLE_ACCESS.serverApp`. |
 | `GET`  | `/api/auth/me`         | `ROLE_ACCESS.serverApp`                                  | `{ user: { id, name, email, role } }`                                                                                                                                                                                                                                                                    |
 | `POST` | `/api/auth/logout`     | `ROLE_ACCESS.serverApp`                                  | `{ success: true }`, revoking the token                                                                                                                                                                                                                                                                  |
-| `POST` | `/api/guest/join`      | none, `serverAppApiRateLimit` + 30 refused joins per 10 minutes per IP | Body `table_id` plus one of `device_token` (a phone already in the open session), `table_token` (the slip QR's `t`) or `sticker` (the sticker QR's `s`) with `pin`. `{ table, device_token }`; `404` for an unknown table, `410` `qr_expired` for a code that is not current, `409` `table_not_open` when a sticker's table has no open session, `401` `pin_required` or `pin_wrong` (with `rotated`, and `table` for the PIN screen), `429` `devices_full` past 20 phones in the session. |
+| `POST` | `/api/guest/join`      | none, `serverAppApiRateLimit` + 30 refused joins per 10 minutes per IP | Body `table_id` plus one of `device_token` (a phone already in the open session), `table_token` (the slip QR's `t`) or `sticker` (the sticker QR's `s`), with `unlock_key` once the guest has tapped to start. `{ table, device_token }`; `404` for an unknown table, `410` `qr_expired` for a code that is not current, `429` `devices_full` past 20 phones in the session. A sticker at a table with no open session answers `409` `table_not_open` without `unlock_key`, `202` `waiting_for_staff` while staff have not answered that key, and `409` `unlock_declined` once they turn it down. |
 | `GET`  | `/api/guest/table`     | none, `serverAppApiRateLimit`                            | `{ table: { id, name } }` for an active table named by `?table_id=` whose open session holds the phone `?d=` or matches the slip token `?t=`; `404` for an unknown table, `410` `qr_expired` otherwise.                                                                                                      |
 | `GET`  | `/api/guest/menu`      | none, `serverAppApiRateLimit`                            | `{ categories, products }` fetched from the main API as the Guest account, with product cost and inventory-linking fields removed. One read serves every guest for 30 seconds; a successful catalog write drops it.                                                                                      |
 | `POST` | `/api/guest/order`     | none, `serverAppApiRateLimit` + 60 per 10 minutes per IP | Body `table_id`, `device_token`, `items`, `special_instructions`, `idempotency_key`. Rebuilds the lines from the catalog (add-on names and prices never come from the request); each line's quantity is a whole number from 1 to 50, at most 100 items in all, and a body over 100 KB answers `413` `body_too_large`. It then creates the table's order or appends to its open one as the Guest account and prints the kitchen ticket. Orders for one table run one at a time, so guests ordering together share one bill. `idempotency_key` (8 to 80 letters, digits, `_` or `-`) is required, `400` `idempotency_key_required` without it; a retry with a key already used answers from the stored result without printing again, before any limit is checked. In one transaction a phone then waits 5 seconds between orders (`429` `order_cooldown` with `retry_after`), and an order that takes the session past 20 orders or 150 items is held for staff (`202` `order_held`, the same answer for every resend, `409` `order_rejected` once staff turn it down). `201 { success, order_number }`. |
@@ -1084,12 +1083,15 @@ so `GET /` is two mutually exclusive registrations rather than two routes.
 All four `/api/guest/*` routes answer `403` with `code` `guest_ordering_disabled` while the
 `guest_qr_ordering_enabled` setting is `false`. A phone joins the table's open guest session once:
 the slip QR's `t` (an HMAC of the session id under the `guest_qr_secret` setting) joins on its own,
-and the sticker QR's `s` joins with the session PIN (an HMAC of the session id and its PIN round).
-Five wrong PINs move the session to its next PIN round and open a `pin_reset` staff alert. A join
+and the sticker QR's `s` (an HMAC of the table id and its sticker version) joins whatever session
+is open, so friends arriving later share the bill. The guest view joins from a sticker only after the
+guest taps to start; at a table with no open session that tap opens one `unlock_request` staff alert
+per table, and the view asks again every 3 seconds until staff unlock the table. A join
 returns a random device token, stored as a SHA-256 hash in `guest_session_devices`, that the phone
 sends with its orders; a new session drops every phone of the old one. An unknown table answers
 `404`; a known table without a matching open session answers `410` `qr_expired`, and the guest view
-asks for a new QR from staff, or for the new PIN when it came from a sticker.
+asks for a new QR from staff, or for another tap when it came from a sticker.
+`GET /api/guest/table` also accepts the sticker code `s`, for the table name on the tap screen.
 `POST /api/tables/:id/guest-session` puts the slip token in the link as `t`, builds
 the link on `guest_qr_public_base_url` when it is set (otherwise the shop-network address), and
 reports `public`. The Server App's `trust proxy` accepts `X-Forwarded-For` only from the address in

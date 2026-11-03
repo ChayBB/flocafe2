@@ -13,7 +13,6 @@ import { parseDbTimestamp } from '@/lib/utils';
 interface GuestSession {
   table: { id: string; name: string };
   session: { created_at: string; expires_at: string };
-  pin: string;
   url: string;
   data_url: string;
   store_timezone?: string;
@@ -158,15 +157,6 @@ export default function GuestTableQrDialog({ tableId, api, apiPrefix, onClose }:
               {t('guestQrValidUntil', { time: validUntil })}
             </p>
             <p className="text-center text-xs text-muted-foreground">{t('guestQrHint')}</p>
-            <div className="w-full rounded-lg bg-muted/60 px-3 py-2 text-center">
-              <p className="text-xs text-muted-foreground">{t('guestQrPin')}</p>
-              <p
-                className="font-mono text-3xl font-bold tracking-[0.3em]"
-                data-testid="guest-table-qr-pin"
-              >
-                {data.pin}
-              </p>
-            </div>
           </>
         )}
         <div className="grid w-full grid-cols-3 gap-2">

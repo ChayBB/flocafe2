@@ -103,16 +103,6 @@ export function verifyGuestStickerCode(tableId: string, version: number, code: u
   return sameCode(guestStickerCode(tableId, version), code);
 }
 
-/** The 4-digit PIN staff give a party for joining from the sticker; a new round gives a new PIN. */
-export function guestSessionPin(sessionId: string, round: number): string {
-  const digest = createHmac('sha256', guestQrSecret()).update(`pin:${sessionId}:${round}`).digest();
-  return String(digest.readUInt32BE(0) % 10000).padStart(4, '0');
-}
-
-export function verifyGuestSessionPin(sessionId: string, round: number, pin: unknown): boolean {
-  return sameCode(guestSessionPin(sessionId, round), pin);
-}
-
 /** True while `token` belongs to the table's open session. */
 export function verifyGuestTableToken(tableId: string, token: unknown): boolean {
   if (typeof token !== 'string' || token.length !== 22) return false;

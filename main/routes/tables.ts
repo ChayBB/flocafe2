@@ -10,12 +10,7 @@ import {
 import * as QRCode from 'qrcode';
 import { getLocalIP } from '../server-state';
 import { getServerAppPort } from '../server-app-state';
-import {
-  guestSessionPin,
-  guestSessionToken,
-  guestStickerCode,
-  readGuestQrNetwork,
-} from '../lib/guest-qr';
+import { guestSessionToken, guestStickerCode, readGuestQrNetwork } from '../lib/guest-qr';
 import {
   closeGuestTableSession,
   openGuestTableSession,
@@ -375,8 +370,8 @@ function stickerUrl(baseUrl: string, table: { id: string; guest_sticker_version:
   return `${baseUrl}?table=${encodeURIComponent(table.id)}&s=${guestStickerCode(table.id, table.guest_sticker_version)}`;
 }
 
-// The permanent sticker QR for each table: it opens the menu, and ordering needs the PIN staff give
-// the seated party. `renew` retires a table's printed sticker, for one that was copied or lost.
+// The permanent sticker QR for each table: phones scanning it join the table's open session, or ask
+// staff to open the table. `renew` retires a table's printed sticker, for one that was copied or lost.
 router.post(
   '/guest-stickers',
   requirePermission('tables.manage'),
@@ -459,7 +454,6 @@ router.post(
       res.json({
         table: { id: table.id, name: table.number },
         session: { created_at: session.created_at, expires_at: session.expires_at },
-        pin: guestSessionPin(session.id, session.pin_round),
         url,
         data_url: await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1, width: 320 }),
         store_timezone: storeTimezone(getDatabase()),

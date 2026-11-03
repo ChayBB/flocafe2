@@ -8001,6 +8001,64 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 133,
+    name: 'unlock_table_stickers_without_pin',
+    up: () => {
+      // A sticker joins an open session directly; a scan at a table staff have not opened asks
+      // them to unlock it. The PIN and its guess alerts go away.
+      const sessionColumns = getColumns(db, 'guest_table_sessions');
+      for (const column of ['pin_round', 'pin_failures']) {
+        if (sessionColumns.includes(column)) {
+          db.exec(`ALTER TABLE guest_table_sessions DROP COLUMN ${column}`);
+        }
+      }
+      db.exec(`
+        CREATE TABLE guest_session_devices_next (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL REFERENCES guest_table_sessions(id) ON DELETE CASCADE,
+          token_hash TEXT NOT NULL UNIQUE,
+          joined_by TEXT NOT NULL CHECK (joined_by IN ('slip', 'sticker')),
+          created_at TEXT NOT NULL,
+          last_order_at TEXT
+        );
+        INSERT INTO guest_session_devices_next
+          (id, session_id, token_hash, joined_by, created_at, last_order_at)
+        SELECT id, session_id, token_hash,
+               CASE joined_by WHEN 'pin' THEN 'sticker' ELSE joined_by END,
+               created_at, last_order_at
+        FROM guest_session_devices;
+        DROP TABLE guest_session_devices;
+        ALTER TABLE guest_session_devices_next RENAME TO guest_session_devices;
+        CREATE INDEX idx_guest_session_devices_session ON guest_session_devices(session_id);
+
+        CREATE TABLE guest_alerts_next (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_id TEXT NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
+          session_id TEXT REFERENCES guest_table_sessions(id) ON DELETE SET NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('order_held', 'unlock_request')),
+          idempotency_key TEXT,
+          payload_json TEXT,
+          status TEXT NOT NULL DEFAULT 'open'
+            CHECK (status IN ('open', 'approved', 'rejected', 'dismissed')),
+          created_at TEXT NOT NULL,
+          resolved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          resolved_at TEXT
+        );
+        INSERT INTO guest_alerts_next
+          (id, table_id, session_id, kind, idempotency_key, payload_json, status, created_at,
+           resolved_by, resolved_at)
+        SELECT id, table_id, session_id, kind, idempotency_key, payload_json, status, created_at,
+               resolved_by, resolved_at
+        FROM guest_alerts WHERE kind = 'order_held';
+        DROP TABLE guest_alerts;
+        ALTER TABLE guest_alerts_next RENAME TO guest_alerts;
+        CREATE INDEX idx_guest_alerts_open ON guest_alerts(status, created_at);
+        CREATE UNIQUE INDEX idx_guest_alerts_key
+          ON guest_alerts(table_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
