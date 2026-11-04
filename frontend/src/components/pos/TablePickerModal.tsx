@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { Table } from '@/lib/types';
 import { useHeldOrdersStore } from '@/store/held-orders';
@@ -58,6 +59,30 @@ export default function TablePickerModal({
 }: Props) {
   const heldOrders = useHeldOrdersStore();
   const t = useTranslations('pos');
+  // Quick filters by seat count and by the zone set on each table (Section), e.g. "by the stage".
+  const [filter, setFilter] = useState<string>('all');
+  const seatCounts = [...new Set(tables.map((table) => table.capacity).filter((n) => n > 0))].sort(
+    (a, b) => a - b,
+  );
+  const zones = [
+    ...new Set(tables.map((table) => table.section?.trim() ?? '').filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  const filters = [
+    ...seatCounts.map((count) => ({
+      key: `seats:${count}`,
+      label: t('tableSeats', { count }),
+    })),
+    ...zones.map((zone) => ({ key: `zone:${zone}`, label: zone })),
+  ];
+  const activeFilter = filters.some((option) => option.key === filter) ? filter : 'all';
+  const shownTables =
+    activeFilter === 'all'
+      ? tables
+      : tables.filter((table) =>
+          activeFilter.startsWith('seats:')
+            ? `seats:${table.capacity}` === activeFilter
+            : `zone:${table.section?.trim() ?? ''}` === activeFilter,
+        );
 
   const handleClick = (table: Table) => {
     if (heldOrders.hasHeldOrder(table.id)) {
@@ -85,11 +110,34 @@ export default function TablePickerModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold">{t('selectTable')}</h2>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="shrink-0 text-lg font-bold">{t('selectTable')}</h2>
+          <div
+            role="group"
+            aria-label={t('tableFilter')}
+            data-testid="table-picker-filters"
+            className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none]"
+          >
+            {filters.length > 1 &&
+              [{ key: 'all', label: t('tableFilterAll') }, ...filters].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={activeFilter === option.key}
+                  onClick={() => setFilter(option.key)}
+                  className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    activeFilter === option.key
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-border bg-card text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+          </div>
           <button
             onClick={onClose}
-            className="touch-target rounded-full text-gray-400 hover:text-muted-foreground active:bg-muted"
+            className="touch-target shrink-0 rounded-full text-gray-400 hover:text-muted-foreground active:bg-muted"
             aria-label={t('close')}
           >
             <X size={20} />
@@ -97,7 +145,7 @@ export default function TablePickerModal({
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          {tables.map((table) => {
+          {shownTables.map((table) => {
             const isHeld = heldOrders.hasHeldOrder(table.id);
             const isSelected = selectedTableId === table.id;
             const style = statusStyles[table.status] || statusStyles.available;
@@ -147,7 +195,7 @@ export default function TablePickerModal({
           })}
         </div>
 
-        {tables.length === 0 && (
+        {shownTables.length === 0 && (
           <p className="text-center text-muted-foreground py-8">{t('noTablesFound')}</p>
         )}
 
