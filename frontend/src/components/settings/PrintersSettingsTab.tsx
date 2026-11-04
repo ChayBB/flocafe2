@@ -560,7 +560,7 @@ export function PrintersSettingsTab({
                   {p.connection_type === 'network' ? (
                     <Wifi size={18} className="text-muted-foreground" />
                   ) : p.connection_type === 'webusb' ? (
-                    <Usb size={18} className="text-blue-500" />
+                    <Usb size={18} className="text-orange-500" />
                   ) : (
                     <Usb size={18} className="text-muted-foreground" />
                   )}
@@ -738,7 +738,7 @@ export function PrintersSettingsTab({
                 )}
 
                 {printerForm.connection_type === 'webusb' && (
-                  <div className="md:col-span-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <div className="md:col-span-2 bg-orange-50 dark:bg-orange-950/40 rounded-lg p-3 text-sm text-orange-700 dark:text-orange-300">
                     {t('webusbHint')}
                   </div>
                 )}

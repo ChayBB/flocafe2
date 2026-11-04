@@ -62,8 +62,8 @@ export const orderStatusBadge: Record<
     labelKey: 'pending',
   },
   preparing: {
-    bg: 'bg-blue-100 dark:bg-blue-950/40',
-    text: 'text-blue-700 dark:text-blue-300',
+    bg: 'bg-orange-100 dark:bg-orange-950/40',
+    text: 'text-orange-700 dark:text-orange-300',
     labelKey: 'preparing',
   },
   ready: {
@@ -134,7 +134,7 @@ export const whatsappReceiptStatusBadge: Record<
 
 export const itemStatusDot: Record<OrderItem['status'], { dot: string; labelKey: OrdersKey }> = {
   pending: { dot: 'bg-yellow-400', labelKey: 'itemStatusWaiting' },
-  preparing: { dot: 'bg-blue-500', labelKey: 'itemStatusPreparing' },
+  preparing: { dot: 'bg-orange-500', labelKey: 'itemStatusPreparing' },
   ready: { dot: 'bg-purple-500', labelKey: 'itemStatusReady' },
   served: { dot: 'bg-green-500', labelKey: 'itemStatusServed' },
   cancelled: { dot: 'bg-red-400', labelKey: 'itemStatusCancelled' },
@@ -574,14 +574,14 @@ export function OrderCard({
 
       {/* ── CUSTOMER STRIP ───────────────────────────────────────────────────── */}
       {isLinkingCustomer ? (
-        <div className="px-4 py-2.5 bg-blue-50/80 dark:bg-blue-950/40 border-b border-blue-100 dark:border-blue-900/40 space-y-2">
+        <div className="px-4 py-2.5 bg-orange-50/80 dark:bg-orange-950/40 border-b border-orange-100 dark:border-orange-900/40 space-y-2">
           <div className="flex items-center gap-2">
             <input
               type="text"
               value={linkCustomerSearch || ''}
               onChange={(e) => onSearchCustomer?.(e.target.value)}
               placeholder={tOrders('searchCustomer')}
-              className="flex-1 px-3 py-1.5 text-xs sm:text-sm border border-border bg-card rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="flex-1 px-3 py-1.5 text-xs sm:text-sm border border-border bg-card rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
               autoFocus
             />
             <button
@@ -623,7 +623,7 @@ export function OrderCard({
             type="button"
             onClick={() => onCreateCustomer?.(order.id, linkCustomerSearch || '')}
             disabled={linkingCustomer}
-            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-blue-600 dark:text-blue-400 bg-card hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md border border-dashed border-blue-300 dark:border-blue-700 font-medium text-start disabled:opacity-50 transition-colors"
+            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-orange-600 dark:text-orange-400 bg-card hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-md border border-dashed border-orange-300 dark:border-orange-700 font-medium text-start disabled:opacity-50 transition-colors"
           >
             <Plus size={14} />
             {linkCustomerSearch?.trim()
@@ -632,21 +632,21 @@ export function OrderCard({
           </button>
         </div>
       ) : (
-        <div className="px-4 py-2 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100/50 dark:border-blue-900/20 flex items-center justify-between min-h-[44px]">
+        <div className="px-4 py-2 bg-orange-50/50 dark:bg-orange-950/20 border-b border-orange-100/50 dark:border-orange-900/20 flex items-center justify-between min-h-[44px]">
           <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
-            <User size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+            <User size={14} className="text-orange-600 dark:text-orange-400 shrink-0" />
             {order.customer ? (
               <>
-                <span className="text-xs font-semibold text-blue-900 dark:text-blue-200 truncate">
+                <span className="text-xs font-semibold text-orange-900 dark:text-orange-200 truncate">
                   {order.customer.name}
                 </span>
                 {order.customer.phone && (
-                  <span className="text-xs text-blue-600 dark:text-blue-400 shrink-0">
+                  <span className="text-xs text-orange-600 dark:text-orange-400 shrink-0">
                     <Ltr>{order.customer.phone}</Ltr>
                   </span>
                 )}
                 {order.type === 'delivery' && order.customer.address && (
-                  <span className="inline-flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 truncate ms-1">
+                  <span className="inline-flex items-center gap-1 text-xs text-orange-700 dark:text-orange-300 truncate ms-1">
                     <MapPin size={11} className="shrink-0" />
                     <span className="truncate">{order.customer.address}</span>
                   </span>
@@ -666,7 +666,7 @@ export function OrderCard({
                 e.stopPropagation();
                 onCreateNewOrderForCustomer(order);
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/60 hover:bg-blue-200 dark:hover:bg-blue-900/60 active:scale-95 px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 ms-2 touch-manipulation"
+              className="flex items-center gap-1 text-xs font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-950/60 hover:bg-orange-200 dark:hover:bg-orange-900/60 active:scale-95 px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 ms-2 touch-manipulation"
               title={tOrders('startNewOrderForCustomer')}
             >
               <Plus size={13} />
@@ -678,7 +678,7 @@ export function OrderCard({
             <button
               type="button"
               onClick={() => onLinkCustomer(order.id)}
-              className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 active:scale-95 px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 ms-2 touch-manipulation"
+              className="flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 active:scale-95 px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 ms-2 touch-manipulation"
               title={tOrders('linkCustomer')}
             >
               <Plus size={13} />
@@ -1097,7 +1097,7 @@ export function OrderCard({
               disabled={generatingBillId === order.id || awaitingWeight}
               className={`flex-1 h-10 justify-center active:scale-95 touch-manipulation font-semibold text-xs ${
                 payStatus === 'partial'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
                   : 'bg-foreground text-background hover:bg-foreground/90'
               }`}
             >

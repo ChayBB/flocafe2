@@ -25,7 +25,7 @@ type StaffKey = keyof AppConfig['Messages']['staff'];
 const roleColors: Record<string, string> = {
   owner: 'bg-red-100 text-red-800',
   manager: 'bg-purple-100 text-purple-800',
-  cashier: 'bg-blue-100 text-blue-800',
+  cashier: 'bg-orange-100 text-orange-800',
   server: 'bg-green-100 text-green-800',
   chef: 'bg-orange-100 text-orange-800',
 };
@@ -278,7 +278,11 @@ export default function StaffPage() {
       </div>
 
       {tabs.length > 1 && (
-        <div role="tablist" aria-label={t('title')} className="mb-6 inline-flex rounded-lg border border-border p-1">
+        <div
+          role="tablist"
+          aria-label={t('title')}
+          className="mb-6 inline-flex rounded-lg border border-border p-1"
+        >
           {tabs.map(({ tab: entry, labelKey }) => (
             <button
               key={entry}
@@ -307,7 +311,9 @@ export default function StaffPage() {
                   <div>
                     <p className="font-bold text-foreground">{s.name}</p>
                     <p className="text-xs text-muted-foreground">{s.email || '—'}</p>
-                    {Boolean(s.has_pin) && <p className="text-xs text-green-600 mt-1">{t('pinSet')}</p>}
+                    {Boolean(s.has_pin) && (
+                      <p className="text-xs text-green-600 mt-1">{t('pinSet')}</p>
+                    )}
                     {Boolean(s.has_staff_code) && (
                       <p className="text-xs text-green-600 mt-1">{t('staffCodeSet')}</p>
                     )}
@@ -329,41 +335,41 @@ export default function StaffPage() {
                   </Button>
                   {canManageStaff &&
                     (canManagePrivilegedStaff || !hasRole(s.role, ROLE_ACCESS.ownerManager)) && (
-                    <>
-                      <Button
-                        ref={(el) => {
-                          editTriggerRefs.current[s.id] = el;
-                        }}
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => openEdit(s, e)}
-                      >
-                        <Edit size={14} className="me-1" /> {tCommon('edit')}
-                      </Button>
-                      <Button
-                        ref={(el) => {
-                          resetPwTriggerRefs.current[s.id] = el;
-                        }}
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => openResetPw(s, e)}
-                      >
-                        <RotateCcw size={14} className="me-1" /> {t('resetPwButton')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleActive(s)}
-                        className={
-                          s.is_active
-                            ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                            : 'text-green-500 hover:text-green-700 hover:bg-green-50'
-                        }
-                      >
-                        {s.is_active ? t('deactivate') : t('reactivate')}
-                      </Button>
-                    </>
-                  )}
+                      <>
+                        <Button
+                          ref={(el) => {
+                            editTriggerRefs.current[s.id] = el;
+                          }}
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => openEdit(s, e)}
+                        >
+                          <Edit size={14} className="me-1" /> {tCommon('edit')}
+                        </Button>
+                        <Button
+                          ref={(el) => {
+                            resetPwTriggerRefs.current[s.id] = el;
+                          }}
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => openResetPw(s, e)}
+                        >
+                          <RotateCcw size={14} className="me-1" /> {t('resetPwButton')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleActive(s)}
+                          className={
+                            s.is_active
+                              ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                              : 'text-green-500 hover:text-green-700 hover:bg-green-50'
+                          }
+                        >
+                          {s.is_active ? t('deactivate') : t('reactivate')}
+                        </Button>
+                      </>
+                    )}
                 </div>
               </div>
             ))}
@@ -375,7 +381,9 @@ export default function StaffPage() {
         </>
       )}
       {tab === 'attendance' && canViewStaff && <AttendancePanel canManage={canManageStaff} />}
-      {tab === 'zones' && canViewTables && <ZoneResponsibilityPanel staff={staff} canManageTables={canManageTables} />}
+      {tab === 'zones' && canViewTables && (
+        <ZoneResponsibilityPanel staff={staff} canManageTables={canManageTables} />
+      )}
       {tab === 'permissions' && canManagePermissions && (
         <div className="[&>section:first-child]:mt-0">
           <PermissionMatrix staff={staff} />
@@ -444,7 +452,9 @@ export default function StaffPage() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      password: isOperationalRole(form.role) ? digitsOnly(e.target.value) : e.target.value,
+                      password: isOperationalRole(form.role)
+                        ? digitsOnly(e.target.value)
+                        : e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 pe-10 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
@@ -482,13 +492,16 @@ export default function StaffPage() {
                   : {})}
               />
               {isOperationalRole(form.role) && (
-                <p className="text-xs text-muted-foreground -mt-2">{t('operationalPasswordHint')}</p>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  {t('operationalPasswordHint')}
+                </p>
               )}
               <select
                 value={form.role}
                 onChange={(e) => {
                   const role = e.target.value;
-                  const passwordKindChanged = isOperationalRole(role) !== isOperationalRole(form.role);
+                  const passwordKindChanged =
+                    isOperationalRole(role) !== isOperationalRole(form.role);
                   setForm({
                     ...form,
                     role,
@@ -551,7 +564,9 @@ export default function StaffPage() {
               <div>
                 <input
                   type="text"
-                  placeholder={editingStaff ? t('staffCodePlaceholderEdit') : t('staffCodePlaceholderAdd')}
+                  placeholder={
+                    editingStaff ? t('staffCodePlaceholderEdit') : t('staffCodePlaceholderAdd')
+                  }
                   value={form.staff_code}
                   onChange={(e) =>
                     setForm({ ...form, staff_code: e.target.value.replace(/\D/g, '').slice(0, 4) })
@@ -632,7 +647,9 @@ export default function StaffPage() {
                   value={newPassword}
                   onChange={(e) =>
                     setNewPassword(
-                      isOperationalRole(resetPwStaff.role) ? digitsOnly(e.target.value) : e.target.value,
+                      isOperationalRole(resetPwStaff.role)
+                        ? digitsOnly(e.target.value)
+                        : e.target.value,
                     )
                   }
                   className="w-full px-3 py-2 pe-10 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
@@ -656,7 +673,9 @@ export default function StaffPage() {
                 value={confirmNewPassword}
                 onChange={(e) =>
                   setConfirmNewPassword(
-                    isOperationalRole(resetPwStaff.role) ? digitsOnly(e.target.value) : e.target.value,
+                    isOperationalRole(resetPwStaff.role)
+                      ? digitsOnly(e.target.value)
+                      : e.target.value,
                   )
                 }
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
@@ -665,7 +684,9 @@ export default function StaffPage() {
                   : {})}
               />
               {isOperationalRole(resetPwStaff.role) && (
-                <p className="text-xs text-muted-foreground -mt-2">{t('operationalPasswordHint')}</p>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  {t('operationalPasswordHint')}
+                </p>
               )}
               <Button onClick={handleResetPassword} className="w-full">
                 {t('resetPasswordTitle')}

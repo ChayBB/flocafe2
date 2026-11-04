@@ -39,7 +39,7 @@ const statusColors: Record<string, string> = {
   occupied: 'bg-red-500',
   reserved: 'bg-yellow-500',
   cleaning: 'bg-gray-500',
-  held: 'bg-blue-500',
+  held: 'bg-teal-500',
 };
 
 type OrdersKey = keyof AppConfig['Messages']['orders'];
@@ -150,16 +150,16 @@ function ReserveModal({ table, onClose, onDone }: ReserveModalProps) {
         {selected ? (
           <div className="flex items-center justify-between px-3 py-2.5 bg-brand-light dark:bg-[var(--color-brand-light)] rounded-xl mb-4">
             <div>
-              <p className="font-semibold text-brand dark:text-indigo-300 text-sm">
+              <p className="font-semibold text-brand dark:text-orange-300 text-sm">
                 {selected.name}
               </p>
-              <p className="text-xs text-brand/70 dark:text-indigo-300">
+              <p className="text-xs text-brand/70 dark:text-orange-300">
                 <Ltr>{selected.phone}</Ltr>
               </p>
             </div>
             <button
               onClick={() => setSelected(null)}
-              className="text-brand dark:text-indigo-300 hover:text-brand-hover dark:hover:text-indigo-200"
+              className="text-brand dark:text-orange-300 hover:text-brand-hover dark:hover:text-orange-200"
             >
               <X size={14} />
             </button>
@@ -272,9 +272,9 @@ const itemStatusColors: Record<string, { bg: string; text: string; dot: string }
     dot: 'bg-yellow-400',
   },
   preparing: {
-    bg: 'bg-blue-50 dark:bg-blue-950',
-    text: 'text-blue-700 dark:text-blue-300',
-    dot: 'bg-blue-500 dark:bg-blue-400',
+    bg: 'bg-orange-50 dark:bg-orange-950',
+    text: 'text-orange-700 dark:text-orange-300',
+    dot: 'bg-orange-500 dark:bg-orange-400',
   },
   ready: {
     bg: 'bg-purple-50 dark:bg-purple-950',
@@ -686,7 +686,7 @@ export default function TablesPage() {
                                 order.status === 'pending'
                                   ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                                   : order.status === 'preparing'
-                                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                                    ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
                                     : order.status === 'ready'
                                       ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
                                       : order.status === 'served'

@@ -1700,9 +1700,9 @@ export default function OrdersPage() {
             {Object.values(heldOrdersStore.orders).map((heldOrder) => (
               <div
                 key={heldOrder.tableId}
-                className="bg-card rounded-xl border border-blue-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow"
+                className="bg-card rounded-xl border border-orange-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="p-4 border-b border-border bg-blue-50/50 flex justify-between items-center">
+                <div className="p-4 border-b border-border bg-orange-50/50 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-foreground">
                       {tables.find((t) => t.id === heldOrder.tableId)?.name ||
@@ -1710,7 +1710,7 @@ export default function OrdersPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">{formatTime(heldOrder.heldAt)}</p>
                   </div>
-                  <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">
+                  <span className="bg-orange-100 text-orange-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">
                     {tOrders('held')}
                   </span>
                 </div>

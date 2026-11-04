@@ -349,9 +349,9 @@ export function DatabaseSettingsTab({
       </div>
 
       {/* Database Backup */}
-      <div className="bg-card rounded-xl border border-blue-100 bg-blue-50/30 p-6">
+      <div className="bg-card rounded-xl border border-orange-100 bg-orange-50/30 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Database size={20} className="text-blue-600" />
+          <Database size={20} className="text-orange-600" />
           <h2 className="font-semibold text-foreground">{t('createBackup')}</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">{t('createBackupHint')}</p>
@@ -519,9 +519,9 @@ export function DatabaseSettingsTab({
               </div>
 
               {/* Allow Google Drive file access banner */}
-              <div className="flex items-start gap-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl p-4">
-                <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-900/90 dark:text-blue-300/90 leading-relaxed font-medium">
+              <div className="flex items-start gap-3 bg-orange-50/80 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/50 rounded-xl p-4">
+                <Info size={18} className="text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-900/90 dark:text-orange-300/90 leading-relaxed font-medium">
                   {t('googleDrivePermissionNotice')}
                 </p>
               </div>
@@ -555,7 +555,7 @@ export function DatabaseSettingsTab({
                       <button
                         onClick={onConnectGoogleDrive}
                         disabled={connectingGoogleDrive}
-                        className="px-5 py-2.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 font-medium shrink-0 transition-colors shadow-sm"
+                        className="px-5 py-2.5 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50 font-medium shrink-0 transition-colors shadow-sm"
                       >
                         {connectingGoogleDrive
                           ? t('googleDriveConnecting')
@@ -790,7 +790,7 @@ export function DatabaseSettingsTab({
                     <button
                       onClick={onBackupToGoogleDriveNow}
                       disabled={backingUpGoogleDrive}
-                      className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 font-medium shrink-0 transition-colors shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50 font-medium shrink-0 transition-colors shadow-sm"
                     >
                       <UploadCloud size={16} />
                       {backingUpGoogleDrive ? t('googleDriveBackingUp') : t('googleDriveBackupNow')}
@@ -854,7 +854,7 @@ export function DatabaseSettingsTab({
                                 <span
                                   className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                                     backup.kind === 'automatic'
-                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300'
                                       : 'bg-muted text-muted-foreground'
                                   }`}
                                 >

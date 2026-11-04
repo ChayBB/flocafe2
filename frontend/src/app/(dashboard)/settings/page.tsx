@@ -4214,7 +4214,7 @@ export default function SettingsPage() {
 
               <ChargesSettingsCard canManage={isAdmin} />
 
-              <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300">
+              <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/40 rounded-xl p-4 text-sm text-orange-800 dark:text-orange-300">
                 <strong>{t('howItWorks')}</strong> {t('howItWorksBody')}
               </div>
 
@@ -4306,10 +4306,10 @@ export default function SettingsPage() {
                             ),
                           )}
                         </div>
-                        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-lg p-4">
+                        <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/40 rounded-lg p-4">
                           <div className="flex items-start gap-3">
                             <div className="flex-1">
-                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-1">
+                              <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 uppercase tracking-wide mb-1">
                                 {t('appleDevices')}
                               </p>
                               <Ltr
@@ -4317,11 +4317,11 @@ export default function SettingsPage() {
                                 href={posInfo.mdns_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block font-mono text-sm text-blue-600 dark:text-blue-400 break-all hover:underline"
+                                className="block font-mono text-sm text-orange-600 dark:text-orange-400 break-all hover:underline"
                               >
                                 {posInfo.mdns_url}
                               </Ltr>
-                              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
                                 {t('appleDevicesHint')}
                               </p>
                             </div>
@@ -4838,10 +4838,10 @@ export default function SettingsPage() {
                               ),
                             )}
                           </div>
-                          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-lg p-4">
+                          <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/40 rounded-lg p-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
-                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-1">
+                                <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 uppercase tracking-wide mb-1">
                                   {t('appleDevices')}
                                 </p>
                                 <Ltr
@@ -4849,11 +4849,11 @@ export default function SettingsPage() {
                                   href={kdsInfo.mdns_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="block font-mono text-sm text-blue-600 dark:text-blue-400 break-all hover:underline"
+                                  className="block font-mono text-sm text-orange-600 dark:text-orange-400 break-all hover:underline"
                                 >
                                   {kdsInfo.mdns_url}
                                 </Ltr>
-                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                                <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
                                   {t('appleDevicesHint')}
                                 </p>
                               </div>
@@ -5077,8 +5077,8 @@ export default function SettingsPage() {
                               ),
                             )}
                           </div>
-                          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-lg p-4">
-                            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-1">
+                          <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/40 rounded-lg p-4">
+                            <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 uppercase tracking-wide mb-1">
                               {t('appleDevices')}
                             </p>
                             <Ltr
@@ -5086,11 +5086,11 @@ export default function SettingsPage() {
                               href={serverAppInfo.mdns_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block font-mono text-sm text-blue-600 dark:text-blue-400 break-all hover:underline"
+                              className="block font-mono text-sm text-orange-600 dark:text-orange-400 break-all hover:underline"
                             >
                               {serverAppInfo.mdns_url}
                             </Ltr>
-                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
                               {t('appleDevicesHint')}
                             </p>
                           </div>

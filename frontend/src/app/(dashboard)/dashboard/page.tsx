@@ -212,7 +212,7 @@ function formatWeekdayLabel(dayIndex: number, locale: string): string {
 
 const orderStatusColor: Record<string, string> = {
   pending: 'text-yellow-600 dark:text-yellow-400',
-  preparing: 'text-blue-600 dark:text-blue-400',
+  preparing: 'text-orange-600 dark:text-orange-400',
   ready: 'text-purple-600 dark:text-purple-400',
   served: 'text-green-600 dark:text-green-400',
   completed: 'text-muted-foreground',
@@ -489,8 +489,9 @@ export default function DashboardPage() {
             label: t('grossCollections'),
             value: fmtFinancial(financialSummary?.grossCollected ?? 0),
             icon: TrendingUp,
-            color: 'border-blue-200 bg-blue-50/80 dark:border-blue-800/50 dark:bg-blue-950/30',
-            iconBg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+            color:
+              'border-orange-200 bg-orange-50/80 dark:border-orange-800/50 dark:bg-orange-950/30',
+            iconBg: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
             href: '/orders',
           },
           {
@@ -529,8 +530,9 @@ export default function DashboardPage() {
               value: stats?.runningOrders ?? 0,
               meta: t('liveNow'),
               icon: ChefHat,
-              color: 'border-blue-200 bg-blue-50/80 dark:border-blue-800/50 dark:bg-blue-950/30',
-              iconBg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+              color:
+                'border-orange-200 bg-orange-50/80 dark:border-orange-800/50 dark:bg-orange-950/30',
+              iconBg: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
               href: '/orders',
             },
             {
@@ -570,8 +572,9 @@ export default function DashboardPage() {
               label: t('orders'),
               value: daySummary?.orders.count ?? 0,
               icon: ClipboardList,
-              color: 'border-blue-200 bg-blue-50/80 dark:border-blue-800/50 dark:bg-blue-950/30',
-              iconBg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+              color:
+                'border-orange-200 bg-orange-50/80 dark:border-orange-800/50 dark:bg-orange-950/30',
+              iconBg: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
               href: '/orders',
             },
             {
@@ -819,7 +822,7 @@ export default function DashboardPage() {
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex size-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
                     <ClipboardList size={16} />
                   </span>
                   <h2 className="font-semibold text-foreground">

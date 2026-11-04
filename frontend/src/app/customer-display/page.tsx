@@ -135,7 +135,7 @@ function OrderBoardRow({
       ref={measureRef}
       data-testid="customer-display-order-row"
       data-order-id={getOrderId(order)}
-      className={`min-w-0 rounded-2xl border bg-white px-4 py-3 text-center md:px-6 md:py-4 ${accent === 'blue' ? 'border-blue-200' : 'border-emerald-200'}`}
+      className={`min-w-0 rounded-2xl border bg-white px-4 py-3 text-center md:px-6 md:py-4 ${accent === 'blue' ? 'border-orange-200' : 'border-emerald-200'}`}
     >
       <span className="block min-w-0 break-all text-[clamp(1.875rem,1.5vw,3.75rem)] font-black leading-tight">
         {order.number}
@@ -471,16 +471,16 @@ function OrderBoardSection({
 
   return (
     <section
-      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border ${accent === 'blue' ? 'border-blue-200 bg-blue-50' : 'border-emerald-200 bg-emerald-50'}`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border ${accent === 'blue' ? 'border-orange-200 bg-orange-50' : 'border-emerald-200 bg-emerald-50'}`}
     >
       <div
-        className={`shrink-0 border-b px-5 py-4 md:px-6 md:py-5 ${accent === 'blue' ? 'border-blue-200 bg-blue-100 text-blue-950' : 'border-emerald-200 bg-emerald-100 text-emerald-950'}`}
+        className={`shrink-0 border-b px-5 py-4 md:px-6 md:py-5 ${accent === 'blue' ? 'border-orange-200 bg-orange-100 text-orange-950' : 'border-emerald-200 bg-emerald-100 text-emerald-950'}`}
       >
         <h2 className="text-[clamp(1.875rem,1.5vw,3.75rem)] font-extrabold uppercase tracking-wide">
           {title}
         </h2>
         <p
-          className={`mt-1 text-[clamp(1rem,0.8vw,2rem)] ${accent === 'blue' ? 'text-blue-700/80' : 'text-emerald-700/80'}`}
+          className={`mt-1 text-[clamp(1rem,0.8vw,2rem)] ${accent === 'blue' ? 'text-orange-700/80' : 'text-emerald-700/80'}`}
         >
           {hint}
         </p>

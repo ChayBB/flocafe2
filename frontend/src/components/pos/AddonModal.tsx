@@ -51,13 +51,13 @@ function groupInitialAddons(addons: Addon[]): Record<string | number, Addon[]> {
 function variantPillClassName(isSelected: boolean, soldOut: boolean): string {
   if (soldOut) return 'border-border opacity-50 cursor-not-allowed';
   if (isSelected)
-    return 'border-brand bg-[var(--color-brand-light)] text-brand dark:text-indigo-300';
+    return 'border-brand bg-[var(--color-brand-light)] text-brand dark:text-orange-300';
   return 'border-border hover:border-brand/40';
 }
 
 function addonRowClassName(isSelected: boolean, soldOut: boolean): string {
   if (isSelected)
-    return 'border-brand bg-[var(--color-brand-light)] text-brand dark:text-indigo-300';
+    return 'border-brand bg-[var(--color-brand-light)] text-brand dark:text-orange-300';
   if (soldOut) return 'border-border opacity-50 cursor-not-allowed';
   return 'border-border hover:border-gray-300 dark:hover:border-border dark:border-border';
 }
@@ -303,7 +303,7 @@ export default function AddonModal({
                     >
                       <span className="font-medium text-foreground">{variant.name}</span>
                       <span
-                        className={`text-xs ${isSel ? 'text-brand dark:text-indigo-300 font-semibold' : 'text-muted-foreground'}`}
+                        className={`text-xs ${isSel ? 'text-brand dark:text-orange-300 font-semibold' : 'text-muted-foreground'}`}
                       >
                         {fmt(variantUnitPrice(variant))}
                       </span>
@@ -396,10 +396,10 @@ export default function AddonModal({
                     const atStockCeiling = stockCeiling != null && addonQty >= stockCeiling;
                     const plusDisabled = soldOut || atStockCeiling;
                     const priceTone = isSel
-                      ? 'text-brand dark:text-indigo-300 font-semibold'
+                      ? 'text-brand dark:text-orange-300 font-semibold'
                       : 'text-muted-foreground';
                     const counterButton =
-                      'touch-target rounded flex items-center justify-center text-brand dark:text-indigo-300 hover:bg-brand-light dark:hover:bg-[var(--color-brand-light)] active:bg-brand-light dark:active:bg-[var(--color-brand-light)]';
+                      'touch-target rounded flex items-center justify-center text-brand dark:text-orange-300 hover:bg-brand-light dark:hover:bg-[var(--color-brand-light)] active:bg-brand-light dark:active:bg-[var(--color-brand-light)]';
                     const badges = addonStockBadges(soldOut, lowStock, {
                       outOfStock: t('outOfStock'),
                       lowStock: t('lowStock'),
@@ -430,7 +430,7 @@ export default function AddonModal({
                                 >
                                   <Minus size={14} />
                                 </button>
-                                <span className="text-sm font-bold w-5 text-center text-brand dark:text-indigo-300 tabular-nums">
+                                <span className="text-sm font-bold w-5 text-center text-brand dark:text-orange-300 tabular-nums">
                                   {addonQty}
                                 </span>
                                 <button
@@ -481,7 +481,7 @@ export default function AddonModal({
                               >
                                 <Minus size={14} />
                               </button>
-                              <span className="text-sm font-bold w-5 text-center text-brand dark:text-indigo-300 tabular-nums">
+                              <span className="text-sm font-bold w-5 text-center text-brand dark:text-orange-300 tabular-nums">
                                 1
                               </span>
                               <button

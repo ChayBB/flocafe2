@@ -43,7 +43,7 @@ test('the Server App uses an orange brand colour while the rest of the app stays
   await expect(allChip).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/theme-server-app/);
   expect(await brandVariable(page)).toBe('#ea580c');
-  // The selected category tab is underlined in the brand colour: orange, not blue.
+  // The selected category tab is underlined in the brand colour.
   await expect(allChip).toHaveCSS('border-bottom-color', 'rgb(234, 88, 12)');
 
   // The same page signed out (login form) is orange too.
@@ -51,8 +51,8 @@ test('the Server App uses an orange brand colour while the rest of the app stays
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/theme-server-app/);
 
-  // The main app keeps the blue brand and carries no Server App theme class.
+  // The main app carries no Server App theme class.
   await page.goto(`${E2E_BASE_URL}/auth/login`);
   await expect(page.locator('html')).not.toHaveClass(/theme-server-app/);
-  expect(await brandVariable(page)).toBe('#3248ff');
+  expect(await brandVariable(page)).toBe('#ea580c');
 });
