@@ -19,7 +19,7 @@ import { parseQuantitySearch } from '@/lib/quantity-search';
 import CollapsiblePosChoices from './CollapsiblePosChoices';
 
 const FLAT_TAB =
-  'max-w-56 truncate border-b-2 px-0.5 py-1.5 text-[15px] whitespace-nowrap transition-colors';
+  'max-w-56 shrink-0 truncate border-b-2 px-0.5 py-1.5 text-[15px] whitespace-nowrap transition-colors';
 const FLAT_TAB_ACTIVE = 'border-brand font-medium text-foreground';
 const FLAT_TAB_IDLE = 'border-transparent text-muted-foreground';
 
