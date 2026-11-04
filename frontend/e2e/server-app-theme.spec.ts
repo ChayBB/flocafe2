@@ -12,9 +12,7 @@ const brandVariable = (page: import('@playwright/test').Page) =>
       .toLowerCase(),
   );
 
-test('the Server App uses an orange brand colour while the rest of the app stays blue', async ({
-  page,
-}) => {
+test('the Server App and the rest of the app share the orange brand colour', async ({ page }) => {
   const manager = {
     Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
   };

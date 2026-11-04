@@ -60,6 +60,7 @@ import toast from 'react-hot-toast';
 import { formatPhoneLocal, normalizeOptionalPhone } from '@/lib/phone';
 import { useConfirm } from '@/hooks/use-confirm';
 import { GuestQrNetworkSettings } from '@/components/settings/GuestQrNetworkSettings';
+import { StoreBrandingCard } from '@/components/settings/StoreBrandingCard';
 import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
 import AutoUpdateCheckToggle from '@/components/settings/AutoUpdateCheckToggle';
 import BetaChannelToggle from '@/components/settings/BetaChannelToggle';
@@ -4967,6 +4968,8 @@ export default function SettingsPage() {
                   {t('serverAppPairingHiddenHint')}
                 </p>
               )}
+
+              {serverAppEnabledSetting && <StoreBrandingCard />}
 
               {serverAppEnabledSetting && (
                 <div className="bg-card rounded-xl border border-border p-6">

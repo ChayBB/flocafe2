@@ -81,6 +81,7 @@ import {
   validateLanguagePolicySetting,
 } from '../lib/print-language-settings';
 import { isThemeMode } from '../title-bar-theme';
+import { STORE_IMAGE_KEYS, storeImageError } from '../lib/store-branding';
 import {
   ChargeValidationError,
   CUSTOM_CHARGES_SETTING_KEY,
@@ -719,6 +720,40 @@ router.put('/kds', requirePermission('settings.manage'), (req: Request, res: Res
     res.json({
       kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
     });
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Store logo and cover photo (must come BEFORE /:key wildcard) ───────────
+
+const brandingBody = (s: Record<string, string>) => ({
+  store_logo: s[STORE_IMAGE_KEYS.logo] || '',
+  store_cover: s[STORE_IMAGE_KEYS.cover] || '',
+});
+
+router.get('/branding', requirePermission('settings.view'), (_req: Request, res: Response) => {
+  try {
+    res.json(brandingBody(getAllSettings(getDatabase())));
+  } catch (error: any) {
+    console.error('[API] Internal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/branding', requirePermission('settings.manage'), (req: Request, res: Response) => {
+  try {
+    const updates: Record<string, string> = {};
+    for (const kind of ['logo', 'cover'] as const) {
+      const value = req.body?.[STORE_IMAGE_KEYS[kind]];
+      if (value === undefined) continue;
+      const error = storeImageError(kind, value);
+      if (error) return res.status(400).json({ error });
+      updates[STORE_IMAGE_KEYS[kind]] = value;
+    }
+    if (Object.keys(updates).length > 0) upsertSettings(getDatabase(), updates);
+    res.json(brandingBody(getAllSettings(getDatabase())));
   } catch (error: any) {
     console.error('[API] Internal error:', error);
     res.status(500).json({ error: 'Internal server error' });

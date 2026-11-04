@@ -72,6 +72,17 @@ test.describe('Server App guest from a table QR', () => {
     await expect(header.getByTestId('server-app-session-button')).toHaveCount(0);
     await expect(header).toContainText(table.name);
     await expect(page.getByRole('heading', { name: 'Tables' })).toHaveCount(0);
+
+    // A guest may switch the page's language, and the choice outlives a reload.
+    const history = page.getByTestId('server-app-history-button');
+    await page.getByTestId('server-app-language-button').click();
+    await page.getByRole('menuitem', { name: 'ไทย' }).click();
+    await expect(history).toHaveAttribute('aria-label', 'ประวัติการสั่ง');
+    await page.reload();
+    await expect(history).toHaveAttribute('aria-label', 'ประวัติการสั่ง');
+    await page.getByTestId('server-app-language-button').click();
+    await page.getByRole('menuitem', { name: 'English' }).click();
+    await expect(history).toHaveAttribute('aria-label', 'Order history');
     await expect(page.getByPlaceholder('Phone')).toHaveCount(0);
 
     const grid = page.getByTestId('pos-product-grid');
@@ -109,6 +120,13 @@ test.describe('Server App guest from a table QR', () => {
       })
     ).json();
     expect(again.orders).toHaveLength(1);
+
+    // The header lists what this table has ordered.
+    await page.getByTestId('server-app-history-button').click();
+    await expect(
+      page.getByTestId('server-app-guest-history-item').filter({ hasText: 'E2E Coffee' }).first(),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // The Guest account that placed the orders never shows up as staff.
     const ownerHeaders = {

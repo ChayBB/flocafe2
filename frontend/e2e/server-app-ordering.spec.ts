@@ -143,16 +143,18 @@ test.describe('Server App tableside ordering', () => {
       await openServerApp(page, serverToken);
       await expect(page.getByTestId('pos-product-grid')).toBeVisible();
 
-      // Select Table opens the tables; besides it only the session button remains.
+      // Select Table opens the tables; beside it sit language, order history and the session button.
       const header = page.locator('header');
       const tableButton = header.getByTestId('server-app-table-button');
       const logoutButton = header.getByRole('button', { name: 'Logout' });
+      const languageButton = header.getByTestId('server-app-language-button');
+      const historyButton = header.getByTestId('server-app-history-button');
       await expect(tableButton).toBeVisible();
       await expect(logoutButton).toBeVisible();
-      await expect(header.getByRole('button')).toHaveCount(2);
+      await expect(header.getByRole('button')).toHaveCount(4);
       await expect(header.getByRole('img', { name: 'Flo' })).toHaveCount(0);
 
-      for (const button of [tableButton, logoutButton]) {
+      for (const button of [tableButton, logoutButton, languageButton, historyButton]) {
         const box = await button.boundingBox();
         expect(box).not.toBeNull();
         expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -165,9 +167,9 @@ test.describe('Server App tableside ordering', () => {
       expect(hasOverflow).toBeFalsy();
     }
 
-    // A tablet keeps only the session button in the header and still fits.
+    // A tablet drops Select Table from the header, keeping language, history and session, and still fits.
     await page.setViewportSize({ width: 768, height: 1024 });
-    await expect(page.locator('header').getByRole('button')).toHaveCount(1);
+    await expect(page.locator('header').getByRole('button')).toHaveCount(3);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
     ).toBeFalsy();

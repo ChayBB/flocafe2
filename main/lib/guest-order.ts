@@ -180,3 +180,42 @@ export function sanitizeGuestProduct(product: Record<string, unknown>): Record<s
   }
   return clean;
 }
+
+export interface GuestTableOrder {
+  order_number: string;
+  customer_name: string | null;
+  items: {
+    id: number;
+    product_name: string;
+    quantity: number;
+    status: string;
+    total: number;
+    created_at: string | null;
+  }[];
+}
+
+/** The table's open dine-in order as its guests may see it: dish names, counts, kitchen status. */
+export function guestTableOrder(
+  db: Database.Database,
+  tableId: string | number,
+): GuestTableOrder | null {
+  const order = db
+    .prepare(
+      `SELECT o.id, o.order_number, c.name AS customer_name
+         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+        WHERE o.table_id = ? AND o.type = 'dine_in'
+          AND o.status IN ('pending', 'preparing', 'ready')
+        ORDER BY o.id DESC LIMIT 1`,
+    )
+    .get(tableId) as { id: number; order_number: string; customer_name: string | null } | undefined;
+  if (!order) return null;
+  const items = db
+    .prepare(
+      `SELECT id, product_name, quantity, status, total, created_at
+         FROM order_items
+        WHERE order_id = ? AND status NOT IN ('voided', 'void_adjustment', 'refunded')
+        ORDER BY id`,
+    )
+    .all(order.id) as GuestTableOrder['items'];
+  return { order_number: order.order_number, customer_name: order.customer_name, items };
+}

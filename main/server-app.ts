@@ -49,6 +49,7 @@ import { resolveContainedPath } from './lib/path-containment';
 import { RegionalNotConfiguredError, resolveRegionalSnapshot } from './countries';
 import { nextDailyResetEpochSeconds } from './lib/daily-session-reset';
 import {
+  guestTableOrder,
   sanitizeGuestOrderItems,
   sanitizeGuestOrderNote,
   sanitizeGuestProduct,
@@ -72,6 +73,12 @@ import {
   releaseGuestOrderQuota,
 } from './lib/guest-table-session';
 import { startQrRelay, stopQrRelay } from './services/qr-relay';
+import {
+  STORE_IMAGE_KEYS,
+  decodeStoreImage,
+  isStoreImageKind,
+  storeImageVersion,
+} from './lib/store-branding';
 
 let serverApp: http.Server | null = null;
 let stopPromise: Promise<void> | null = null;
@@ -325,6 +332,9 @@ export function startServerApp(): Promise<void> {
       }
       res.json({
         language: settings.language || null,
+        business_name: settings.business_name || '',
+        store_logo_version: storeImageVersion(settings[STORE_IMAGE_KEYS.logo]),
+        store_cover_version: storeImageVersion(settings[STORE_IMAGE_KEYS.cover]),
         country: snapshot.country,
         currency: snapshot.currency,
         currency_symbol: snapshot.currencySymbol,
@@ -335,6 +345,24 @@ export function startServerApp(): Promise<void> {
         server_time: clockNow().toISOString(),
         frontend_build: frontendBuild(),
       });
+    });
+
+    app.get('/api/server-app/branding/:kind', serverAppApiRateLimit, (req, res) => {
+      if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      const kind = req.params.kind;
+      if (!isStoreImageKind(kind)) return res.status(404).json({ error: 'Not found' });
+      const row = getDatabase()
+        .prepare('SELECT value FROM settings WHERE key = ?')
+        .get(STORE_IMAGE_KEYS[kind]) as { value: string } | undefined;
+      const image = decodeStoreImage(row?.value);
+      if (!image) return res.status(404).json({ error: 'Not found' });
+      res.setHeader('Content-Type', image.type);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader(
+        'Cache-Control',
+        req.query.v ? 'public, max-age=31536000, immutable' : 'no-cache',
+      );
+      res.send(image.body);
     });
 
     app.post('/api/auth/login', loginAuthRateLimit(), (req: Request, res: Response) => {
@@ -578,6 +606,16 @@ export function startServerApp(): Promise<void> {
         return guestQrExpired(res);
       }
       res.json({ table: { id: row.id, name: row.number } });
+    });
+
+    app.get('/api/guest/order', serverAppApiRateLimit, (req: Request, res: Response) => {
+      if (!isServerAppEnabled()) return res.status(404).json({ error: 'Not found' });
+      if (!isGuestQrOrderingEnabled()) return guestOrderingClosed(res);
+      const db = getDatabase();
+      const row = guestTableRow(req.query.table_id);
+      if (!row) return res.status(404).json({ error: 'Table not found' });
+      if (!findGuestDevice(db, row.id, req.query.d)) return guestQrExpired(res);
+      res.json({ order: guestTableOrder(db, row.id) });
     });
 
     app.get('/api/guest/menu', serverAppApiRateLimit, async (req: Request, res: Response) => {

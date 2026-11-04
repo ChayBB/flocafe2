@@ -134,3 +134,33 @@ export const MAX_IMAGE_LENGTH = MAX_BASE64_LENGTH;
 
 /** Max raw file size before loading into memory (5 MB). */
 export const MAX_RAW_FILE_SIZE = 5 * 1024 * 1024;
+
+/** Scales an image file to fit `maxSide` (keeping its shape) and encodes WebP within `maxLength`. */
+export function fitImage(file: File, maxSide: number, maxLength: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(null);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try {
+        for (const quality of [0.85, 0.7, 0.55, 0.4]) {
+          const dataUri = canvas.toDataURL('image/webp', quality);
+          if (dataUri !== 'data:,' && dataUri.length <= maxLength) return resolve(dataUri);
+        }
+      } catch {}
+      resolve(null);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}

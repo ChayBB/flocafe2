@@ -3,7 +3,6 @@
 import axios, { AxiosInstance } from 'axios';
 import toast from 'react-hot-toast';
 import {
-  ChefHat,
   LayoutGrid,
   Minus,
   Plus,
@@ -23,7 +22,11 @@ import {
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { parsePhone } from '@/lib/phone';
-import { useSyncServerLanguage } from '@/lib/i18n';
+import { useSyncServerLanguage, writeLanguageOverride } from '@/lib/i18n';
+import type { Language } from '@/lib/i18n/languages';
+import { usePosSettingsStore } from '@/store/pos-settings';
+import { ServerAppHeader } from '@/components/server-app/ServerAppHeader';
+import { GuestOrderHistory, type GuestOrder } from '@/components/server-app/GuestOrderHistory';
 import { useReloadOnNewBuild } from '@/hooks/useReloadOnNewBuild';
 import { holdDarkClass } from '@/lib/kds-screen-mode';
 import { useTranslations } from 'use-intl';
@@ -104,9 +107,13 @@ type ServerAppInfo = {
   currency_fraction_digits: number;
   timezone?: string;
   server_time?: string;
+  business_name?: string;
+  store_logo_version?: string | null;
+  store_cover_version?: string | null;
 };
 
 const TOKEN_KEY = 'flocafe:server-app-token';
+const LANGUAGE_KEY = 'flocafe:server-app-language';
 const LIVE_REFRESH_MS = 5000;
 
 const subscribeToNothing = () => () => {};
@@ -217,7 +224,13 @@ function removeGuestDevice(key: string): void {
 
 export default function ServerStandalonePage() {
   // Syncs tenant language preference from /api/server-app/info.
-  useSyncServerLanguage('/api/server-app/info');
+  useSyncServerLanguage('/api/server-app/info', LANGUAGE_KEY);
+  const language = usePosSettingsStore((s) => s.language);
+  const setLanguage = usePosSettingsStore((s) => s.setLanguage);
+  const chooseLanguage = (next: Language) => {
+    writeLanguageOverride(LANGUAGE_KEY, next);
+    setLanguage(next);
+  };
   const t = useTranslations('serverApp');
   const tAuth = useTranslations('auth');
   const tTables = useTranslations('tables');
@@ -269,6 +282,9 @@ export default function ServerStandalonePage() {
   );
   const [guestTable, setGuestTable] = useState<{ id: string; name: string } | null>(null);
   const [guestDeviceToken, setGuestDeviceToken] = useState<string | null>(null);
+  const [guestOrder, setGuestOrder] = useState<GuestOrder | null>(null);
+  const [guestOrderLoaded, setGuestOrderLoaded] = useState(false);
+  const [guestHistoryOpen, setGuestHistoryOpen] = useState(false);
   const [guestGate, setGuestGate] = useState<{
     kind: 'tap' | 'waiting' | 'declined';
     table: { id: string; name: string };
@@ -449,6 +465,30 @@ export default function ServerStandalonePage() {
       throw error;
     }
   }
+
+  // A guest's table order feeds the header's customer name and the order history.
+  useEffect(() => {
+    if (!api || !guestTable || !guestDeviceToken) return;
+    let cancelled = false;
+    const load = () =>
+      api
+        .get<{ order: GuestOrder | null }>('/api/guest/order', {
+          params: { table_id: guestTable.id, d: guestDeviceToken },
+        })
+        .then((res) => {
+          if (!cancelled) setGuestOrder(res.data.order);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setGuestOrderLoaded(true);
+        });
+    void load();
+    const timer = window.setInterval(load, LIVE_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [api, guestTable, guestDeviceToken]);
 
   useEffect(() => {
     if (!api) return;
@@ -1743,80 +1783,105 @@ export default function ServerStandalonePage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-20 border-b border-border bg-card/95 px-3 py-2 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
-            <ChefHat size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold">{t('title')}</h1>
-            <p className="truncate text-xs text-muted-foreground">{headerTableText}</p>
-          </div>
-          {user ? (
-            <>
+      <ServerAppHeader
+        businessName={regional?.business_name ?? ''}
+        logoUrl={
+          regional?.store_logo_version
+            ? `/api/server-app/branding/logo?v=${regional.store_logo_version}`
+            : null
+        }
+        coverUrl={
+          regional?.store_cover_version
+            ? `/api/server-app/branding/cover?v=${regional.store_cover_version}`
+            : null
+        }
+        tableText={headerTableText}
+        customerName={
+          (user
+            ? (currentOrder?.customer?.name ?? customerName.trim())
+            : guestOrder?.customer_name) || null
+        }
+        language={language}
+        onLanguage={chooseLanguage}
+        onHistory={() => (user ? setOrderedItemsOpen(true) : setGuestHistoryOpen(true))}
+        historyDisabled={user ? !activeTable : !guestTable}
+        actions={
+          <>
+            {user ? (
+              <>
+                <span
+                  data-testid="server-app-staff-name"
+                  className="hidden max-w-[96px] truncate text-sm font-medium text-white drop-shadow min-[400px]:block"
+                >
+                  {user.name}
+                </span>
+                {!isWide && (
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => setTablePickerOpen((open) => !open)}
+                    aria-expanded={showTablePicker}
+                    data-testid="server-app-table-button"
+                    className="flex h-12 items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-400 bg-amber-50 px-4 text-sm font-medium text-amber-700 shadow-md transition-colors hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    <UtensilsCrossed size={14} />
+                    {t('selectTable')}
+                  </button>
+                )}
+                {selectedTableId && (
+                  <button
+                    type="button"
+                    onClick={() => setTableQrOpen(true)}
+                    aria-label={tTables('guestQrButton')}
+                    title={tTables('guestQrButton')}
+                    data-testid="server-app-table-qr-button"
+                    className="flex size-12 items-center justify-center rounded-full bg-white text-neutral-800 shadow-md"
+                  >
+                    <QrCode size={17} />
+                  </button>
+                )}
+              </>
+            ) : (
               <span
-                data-testid="server-app-staff-name"
-                className="hidden max-w-[96px] truncate text-sm font-medium min-[400px]:block"
+                data-testid="server-app-guest-name"
+                className="text-sm font-medium text-white drop-shadow"
               >
-                {user.name}
+                {t('guestLabel')}
               </span>
-              {!isWide && (
-                <button
-                  type="button"
-                  disabled={sending}
-                  onClick={() => setTablePickerOpen((open) => !open)}
-                  aria-expanded={showTablePicker}
-                  data-testid="server-app-table-button"
-                  className="flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-400 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
-                >
-                  <UtensilsCrossed size={14} />
-                  {t('selectTable')}
-                </button>
-              )}
-              {selectedTableId && (
-                <button
-                  type="button"
-                  onClick={() => setTableQrOpen(true)}
-                  aria-label={tTables('guestQrButton')}
-                  title={tTables('guestQrButton')}
-                  data-testid="server-app-table-qr-button"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border p-2 text-muted-foreground"
-                >
-                  <QrCode size={17} />
-                </button>
-              )}
-            </>
-          ) : (
-            <span
-              data-testid="server-app-guest-name"
-              className="text-sm font-medium text-muted-foreground"
-            >
-              {t('guestLabel')}
-            </span>
-          )}
-          {user ? (
-            <button
-              onClick={logout}
-              aria-label={tNav('logout')}
-              title={tNav('logout')}
-              data-testid="server-app-session-button"
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-green-600 p-2 text-green-600"
-            >
-              <UserRound size={17} />
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowLogin(true)}
-              aria-label={tAuth('signIn')}
-              title={tAuth('signIn')}
-              data-testid="server-app-login-button"
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-orange-500 p-2 text-white hover:bg-orange-600"
-            >
-              <UserRound size={17} />
-            </button>
-          )}
-        </div>
-      </header>
+            )}
+            {user ? (
+              <button
+                onClick={logout}
+                aria-label={tNav('logout')}
+                title={tNav('logout')}
+                data-testid="server-app-session-button"
+                className="flex size-12 items-center justify-center rounded-full border border-green-600 bg-white text-green-600 shadow-md"
+              >
+                <UserRound size={17} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLogin(true)}
+                aria-label={tAuth('signIn')}
+                title={tAuth('signIn')}
+                data-testid="server-app-login-button"
+                className="flex size-12 items-center justify-center rounded-full bg-orange-500 text-white shadow-md hover:bg-orange-600"
+              >
+                <UserRound size={17} />
+              </button>
+            )}
+          </>
+        }
+      />
+      {!user && (
+        <GuestOrderHistory
+          open={guestHistoryOpen}
+          onClose={() => setGuestHistoryOpen(false)}
+          order={guestOrder}
+          loading={!guestOrderLoaded}
+          formatPrice={(amount) => money(amount, regional)}
+        />
+      )}
 
       {tablesLoaded && tables.length === 0 ? (
         <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 px-6 text-center">

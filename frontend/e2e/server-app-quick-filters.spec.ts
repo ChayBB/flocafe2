@@ -54,10 +54,15 @@ test('the search box shares the category row, followed by popular, recommended a
 
   const grid = page.getByTestId('pos-product-grid');
   const search = grid.getByTestId('pos-product-search');
+  const menu = grid.getByTestId('pos-category-menu');
   const row = grid.getByTestId('pos-category-row');
   await expect(search).toBeVisible();
   const searchBox = (await search.boundingBox())!;
   const rowBox = (await row.boundingBox())!;
+  const menuBox = (await menu.boundingBox())!;
+  expect(menuBox.x).toBeGreaterThan(searchBox.x + searchBox.width - 1);
+  expect(rowBox.x).toBeGreaterThan(menuBox.x + menuBox.width - 1);
+  expect(searchBox.width, 'an empty search is a round magnifier').toBeLessThan(48);
   expect(
     Math.abs(searchBox.y + searchBox.height / 2 - (rowBox.y + rowBox.height / 2)),
   ).toBeLessThan(12);
@@ -86,6 +91,14 @@ test('the search box shares the category row, followed by popular, recommended a
   await grid.getByTestId('pos-quick-filter-popular').click();
   await expect(card('Sold')).toBeVisible();
   await expect(card('Deal')).toHaveCount(0);
+
+  await menu.click();
+  await page.getByRole('menuitem', { name: 'Recommended' }).click();
+  await expect(grid.getByTestId('pos-quick-filter-recommended')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(card('Chef')).toBeVisible();
 
   await chips.nth(0).click();
   await expect(chips.nth(0)).toHaveAttribute('aria-pressed', 'true');

@@ -882,6 +882,7 @@
     "addingItemsToOrder": "กำลังเพิ่มสินค้าเข้าคำสั่งซื้อ #{number}",
     "addonPrice": "+{currency}{price}",
     "allCategories": "ทั้งหมด",
+    "categoryMenu": "หมวดหมู่",
     "allocateAllItems": "จัดสรรจำนวนสินค้าทุกรายการก่อนสร้างบิล",
     "alreadyOrdered": "สั่งซื้อแล้ว",
     "anotherCustomer": "ลูกค้าอื่น",
@@ -1233,7 +1234,9 @@
     "splitCheckCheckAvailability": "ตรวจสอบความพร้อม",
     "viewMore": "ดูเพิ่มเติม",
     "viewLess": "ดูน้อยลง",
-    "splitCheckSettingDenied": "บัญชีนี้ไม่สามารถตรวจสอบความพร้อมในการแบ่งบิลได้"
+    "splitCheckSettingDenied": "บัญชีนี้ไม่สามารถตรวจสอบความพร้อมในการแบ่งบิลได้",
+    "tableFilter": "กรองโต๊ะ",
+    "tableFilterAll": "ทั้งหมด"
   },
   "printTest": {
     "amt": "จำนวนเงิน",
@@ -1793,7 +1796,12 @@
     "guestTapToOrder": "แตะเพื่อเริ่มสั่งอาหาร",
     "guestWaitingHint": "รอพนักงานเปิดโต๊ะ เปิดแล้วเริ่มสั่งได้ทันทีในหน้านี้",
     "guestDeclinedHint": "พนักงานยังไม่เปิดโต๊ะนี้ โปรดสอบถามพนักงาน",
-    "guestAskAgain": "ขออีกครั้ง"
+    "guestAskAgain": "ขออีกครั้ง",
+    "changeLanguage": "เปลี่ยนภาษา",
+    "orderHistory": "ประวัติการสั่ง",
+    "orderHistoryEmpty": "โต๊ะนี้ยังไม่ได้สั่งอะไร",
+    "orderHistoryLoading": "กำลังโหลด…",
+    "orderHistoryTotal": "รวม"
   },
   "settings": {
     "aboutDescription": "FloPOS คือระบบ POS ร้านอาหารแบบโอเพนซอร์สและใช้ฟรีตลอดชีวิต สำหรับร้านกาแฟ ร้านอาหาร เบเกอรี่ รถขายอาหาร ครัวคลาวด์ และบาร์ ระบบครอบคลุมการสั่งซื้อ โต๊ะ เมนู จอแสดงผลในครัว การพิมพ์ใบเสร็จ การเข้าถึงของพนักงาน และการจัดเก็บข้อมูลในเครื่อง ดาวน์โหลด เปิดให้บริการ เก็บข้อมูลของคุณ และเป็นเจ้าของระบบ POS ของคุณเอง",
@@ -2695,7 +2703,15 @@
     "chargePresetCustom": "กำหนดเอง",
     "editCharge": "แก้ไขค่าธรรมเนียม",
     "chargeReopenRequired": "ค่าธรรมเนียมนี้ไม่พร้อมใช้งานแล้ว โปรดเปิดใหม่อีกครั้งแล้วลองใหม่",
-    "qrTableStickers": "สติกเกอร์ QR โต๊ะ"
+    "qrTableStickers": "สติกเกอร์ QR โต๊ะ",
+    "menuBranding": "รูปร้านสำหรับ Server App และเมนู QR ที่โต๊ะ",
+    "menuBrandingHint": "แสดงที่ส่วนหัวที่พนักงานและลูกค้าเห็นขณะสั่งอาหาร",
+    "menuLogo": "โลโก้ร้าน",
+    "menuCover": "ภาพพื้นหลังร้าน",
+    "menuImageUpload": "อัปโหลด",
+    "menuImageChange": "เปลี่ยน",
+    "menuImageRemove": "ลบรูป",
+    "menuImageTooLarge": "ใช้รูปนี้ไม่ได้ เลือกไฟล์ PNG, JPEG หรือ WebP ขนาดไม่เกิน 5 MB"
   },
   "setup": {
     "alreadyCompleted": "ตั้งค่าการติดตั้งนี้เสร็จสมบูรณ์แล้ว กำลังกลับไปหน้าเข้าสู่ระบบ…",

@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { List, Search, SlidersHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import toast from 'react-hot-toast';
 import type { Category, Product, ProductVariant } from '@/lib/types';
 import { useCartStore } from '@/store/cart';
@@ -67,6 +73,71 @@ function CategoryChip({
     >
       {categoryName}
     </button>
+  );
+}
+
+/** The flat row's menu button that lists every filter and category in one dropdown. */
+function CategoryMenu({
+  label,
+  allLabel,
+  allSelected,
+  categories,
+  selectedCategory,
+  setSelectedCategory,
+  extraChips,
+}: {
+  label: string;
+  allLabel: string;
+  allSelected: boolean;
+  categories: Category[];
+  selectedCategory: Category['id'] | null;
+  setSelectedCategory: (id: Category['id'] | null) => void;
+  extraChips: { key: string; label: string; active: boolean; onSelect: () => void }[];
+}) {
+  const itemClass = (active: boolean) =>
+    `py-2.5 text-[15px] ${active ? 'font-medium text-brand' : ''}`;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-testid="pos-category-menu"
+          aria-label={label}
+          title={label}
+          className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted/60 text-foreground transition-colors hover:bg-muted"
+        >
+          <List size={18} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-[60vh] min-w-44 overflow-y-auto">
+        <DropdownMenuItem
+          onSelect={() => setSelectedCategory(null)}
+          className={itemClass(allSelected)}
+        >
+          {allLabel}
+        </DropdownMenuItem>
+        {extraChips.map((chip) => (
+          <DropdownMenuItem
+            key={`quick:${chip.key}`}
+            onSelect={chip.onSelect}
+            className={itemClass(chip.active)}
+          >
+            {chip.label}
+          </DropdownMenuItem>
+        ))}
+        {categories
+          .filter((cat) => cat.id != null)
+          .map((cat) => (
+            <DropdownMenuItem
+              key={String(cat.id)}
+              onSelect={() => setSelectedCategory(cat.id)}
+              className={itemClass(selectedCategory === cat.id)}
+            >
+              {cat.name}
+            </DropdownMenuItem>
+          ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -401,6 +472,9 @@ export default function ProductGrid({
   };
   const tenantFmt = useFormatCurrency();
   const fmt = formatPrice ?? tenantFmt;
+  const [searchOpen, setSearchOpen] = useState(false);
+  // The flat row shows the search as a round magnifier until it is tapped or holds text.
+  const searchCollapsed = flat && !searchOpen && !search;
   useEffect(() => {
     const focusSearchInput = () => {
       searchInputRef.current?.focus();
@@ -722,17 +796,21 @@ export default function ProductGrid({
       data-testid="pos-product-grid"
       className="flex-1 flex flex-col min-w-0 h-full overflow-hidden"
     >
-      <div className={`shrink-0 mb-3 ${flat ? 'flex items-center gap-4' : ''}`}>
-        <div className={`relative ${flat ? 'w-36 shrink-0 pb-1' : 'mb-2'}`}>
+      <div className={`shrink-0 mb-3 ${flat ? 'flex items-center gap-2' : ''}`}>
+        <div
+          className={`relative ${flat ? `shrink-0 pb-1 ${searchCollapsed ? 'w-9' : 'w-40'}` : 'mb-2'}`}
+        >
           <Search
-            size={16}
-            className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            size={searchCollapsed ? 18 : 16}
+            className={`absolute top-1/2 -translate-y-1/2 pointer-events-none ${searchCollapsed ? 'start-2.5 -mt-0.5 text-foreground' : 'start-3 text-muted-foreground'}`}
           />
           <input
             ref={searchInputRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setSearchOpen(true)}
+            onBlur={() => setSearchOpen(false)}
             onKeyDown={(e) => {
               if (
                 e.nativeEvent?.isComposing ||
@@ -778,9 +856,9 @@ export default function ProductGrid({
             }}
             placeholder={searchPlaceholder ?? `${t('searchProducts')} [/]`}
             data-testid="pos-product-search"
-            className={`w-full ps-9 pe-8 py-2 border outline-none transition-colors text-sm ${
+            className={`w-full py-2 border outline-none transition-colors text-sm ${searchCollapsed ? 'px-0' : 'ps-9 pe-8'} ${
               flat
-                ? 'bg-muted/60 border-transparent rounded-full focus:border-brand/40'
+                ? `bg-muted/60 border-transparent rounded-full focus:border-brand/40 ${searchCollapsed ? 'cursor-pointer placeholder:text-transparent' : ''}`
                 : 'bg-card border-border rounded-xl focus:border-brand'
             }`}
           />
@@ -790,8 +868,24 @@ export default function ProductGrid({
             </kbd>
           )}
         </div>
+        {flat && (
+          <CategoryMenu
+            label={t('categoryMenu')}
+            allLabel={t('allCategories')}
+            allSelected={!quickFilter && !selectedCategory}
+            categories={categories}
+            selectedCategory={quickFilter ? null : selectedCategory}
+            setSelectedCategory={chooseCategory}
+            extraChips={quickFilters.map((filter) => ({
+              key: filter.key,
+              label: filter.label,
+              active: quickKey === filter.key,
+              onSelect: () => chooseQuickFilter(filter.key),
+            }))}
+          />
+        )}
         <CategoryRow
-          className={`pb-1 ${flat ? 'min-w-0 flex-1' : ''}`}
+          className={`pb-1 ${flat ? 'min-w-0 flex-1 ms-2' : ''}`}
           collapse={collapseCategories}
           categories={categories}
           selectedCategory={quickFilter ? null : selectedCategory}

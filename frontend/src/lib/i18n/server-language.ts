@@ -32,7 +32,11 @@ export async function fetchServerInfo(
       language: isLanguage(data.language) ? data.language : null,
       country: data.country || null,
       kdsDefaultView:
-        data.kds_default_view === 'kanban' ? 'kanban' : data.kds_default_view === 'tabs' ? 'tabs' : null,
+        data.kds_default_view === 'kanban'
+          ? 'kanban'
+          : data.kds_default_view === 'tabs'
+            ? 'tabs'
+            : null,
     };
   } catch {
     return empty;
@@ -43,11 +47,19 @@ export async function fetchServerInfo(
  * and updates posSettingsStore; safe best-effort sync for standalone views. A device left open while
  * the server was briefly replaced or unreachable therefore picks the store language up again
  * without a reload. */
-export function useSyncServerLanguage(infoPath = '/api/kds/info'): void {
+export function useSyncServerLanguage(
+  infoPath = '/api/kds/info',
+  overrideKey: string | null = null,
+): void {
   const setLanguage = usePosSettingsStore((s) => s.setLanguage);
   useEffect(() => {
     let cancelled = false;
     const sync = () => {
+      const chosen = overrideKey ? readLanguageOverride(overrideKey) : null;
+      if (chosen) {
+        setLanguage(chosen);
+        return;
+      }
       fetchServerInfo('', 1500, infoPath).then((info) => {
         if (cancelled) return;
         // Keep the existing tenant language when metadata is unavailable.
@@ -65,5 +77,21 @@ export function useSyncServerLanguage(infoPath = '/api/kds/info'): void {
       window.removeEventListener('focus', sync);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [setLanguage, infoPath]);
+  }, [setLanguage, infoPath, overrideKey]);
+}
+
+/** A language this device chose for itself, which wins over the store language. */
+export function readLanguageOverride(key: string): Language | null {
+  try {
+    const value = localStorage.getItem(key);
+    return isLanguage(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLanguageOverride(key: string, language: Language): void {
+  try {
+    localStorage.setItem(key, language);
+  } catch {}
 }

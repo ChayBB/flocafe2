@@ -882,6 +882,7 @@
     "addingItemsToOrder": "Adding items to order #{number}",
     "addonPrice": "+{currency}{price}",
     "allCategories": "All",
+    "categoryMenu": "Categories",
     "allocateAllItems": "Allocate every item quantity before creating checks",
     "alreadyOrdered": "Already ordered",
     "anotherCustomer": "another customer",
@@ -1233,7 +1234,9 @@
     "splitCheckCheckAvailability": "Check availability",
     "viewMore": "View more",
     "viewLess": "View less",
-    "splitCheckSettingDenied": "This account cannot check split-check availability."
+    "splitCheckSettingDenied": "This account cannot check split-check availability.",
+    "tableFilter": "Filter tables",
+    "tableFilterAll": "All"
   },
   "printTest": {
     "amt": "Amt",
@@ -1793,7 +1796,12 @@
     "guestTapToOrder": "Tap to start ordering",
     "guestWaitingHint": "Waiting for staff to open your table. Ordering starts here by itself.",
     "guestDeclinedHint": "Staff did not open this table. Please ask a staff member.",
-    "guestAskAgain": "Ask again"
+    "guestAskAgain": "Ask again",
+    "changeLanguage": "Change language",
+    "orderHistory": "Order history",
+    "orderHistoryEmpty": "Nothing ordered at this table yet.",
+    "orderHistoryLoading": "Loading…",
+    "orderHistoryTotal": "Total"
   },
   "settings": {
     "aboutDescription": "FloPOS is a free forever, open-source restaurant POS for cafes, restaurants, bakeries, food trucks, cloud kitchens, and bars. It includes ordering, tables, menus, kitchen display, receipt printing, staff access, and local data storage. Download it, run service, keep your data, and own your POS.",
@@ -2695,7 +2703,15 @@
     "chargePresetCustom": "Custom",
     "editCharge": "Edit Charge",
     "chargeReopenRequired": "This charge is no longer available. Please reopen and try again.",
-    "qrTableStickers": "Table QR stickers"
+    "qrTableStickers": "Table QR stickers",
+    "menuBranding": "Store photos for the Server App and table QR menu",
+    "menuBrandingHint": "Shown in the header that staff and customers see when ordering.",
+    "menuLogo": "Store logo",
+    "menuCover": "Cover photo",
+    "menuImageUpload": "Upload",
+    "menuImageChange": "Change",
+    "menuImageRemove": "Remove photo",
+    "menuImageTooLarge": "This photo could not be used. Choose a PNG, JPEG or WebP under 5 MB."
   },
   "setup": {
     "alreadyCompleted": "Setup has already been completed on this install. Redirecting to login…",
