@@ -3499,6 +3499,11 @@ function applyPaymentBatch(
   const newPaidCents = oldPaidCents + totalAppliedCents;
   const newBalanceCents = Math.max(0, totalCents - newPaidCents);
   const paymentStatus = newBalanceCents === 0 ? 'paid' : 'partial';
+  const receiver = idempotencyUserId
+    ? (db.prepare('SELECT id, name FROM users WHERE id = ?').get(idempotencyUserId) as
+        | { id: string; name: string }
+        | undefined)
+    : undefined;
   const newPayments = prepared.map((line) => ({
     ...line.payment,
     cash_session_id: activeSessionId,
@@ -3511,6 +3516,7 @@ function applyPaymentBatch(
           change_amount: (line.changeCents || 0) / minorFactor,
         }
       : {}),
+    ...(receiver ? { received_by: receiver.id, received_by_name: receiver.name } : {}),
     timestamp: now(),
   }));
   let walletDebited = false;
@@ -5025,29 +5031,34 @@ router.patch(
   },
 );
 
-router.post('/:id/markPrinted', requirePermission('bills.print'), rejectBillWhileWeightPending, (req: Request, res: Response) => {
-  try {
-    const db = getDatabase();
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
-    if (!bill) {
-      return res.status(404).json({ error: 'Bill not found' });
+router.post(
+  '/:id/markPrinted',
+  requirePermission('bills.print'),
+  rejectBillWhileWeightPending,
+  (req: Request, res: Response) => {
+    try {
+      const db = getDatabase();
+      const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+      if (!bill) {
+        return res.status(404).json({ error: 'Bill not found' });
+      }
+
+      db.prepare('UPDATE bills SET printed_at = ?, updated_at = ? WHERE id = ?').run(
+        now(),
+        now(),
+        req.params.id,
+      );
+
+      const updatedBill = parseRowJson(
+        db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id),
+      );
+      res.json({ bill: updatedBill });
+    } catch (error: any) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    db.prepare('UPDATE bills SET printed_at = ?, updated_at = ? WHERE id = ?').run(
-      now(),
-      now(),
-      req.params.id,
-    );
-
-    const updatedBill = parseRowJson(
-      db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id),
-    );
-    res.json({ bill: updatedBill });
-  } catch (error: any) {
-    console.error('[API] Internal error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  },
+);
 
 // POST /api/bills/:id/print - Print or reprint bill
 router.post(

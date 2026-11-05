@@ -616,16 +616,10 @@ async function main() {
     const activeCompletedNumbers = activeCompleted.data.orders.map(
       (order: any) => order.order_number,
     );
-    for (const itemStatus of ['PENDING', 'PREPARING', 'READY']) {
-      assertOrThrow(
-        activeCompletedNumbers.includes(`ORD-COMPLETED-KITCHEN-${itemStatus}`),
-        `completed orders with ${itemStatus.toLowerCase()} kitchen work stay active when KDS is enabled`,
-      );
-    }
-    for (const itemStatus of ['SERVED', 'VOIDED', 'REFUNDED']) {
+    for (const itemStatus of ['PENDING', 'PREPARING', 'READY', 'SERVED', 'VOIDED', 'REFUNDED']) {
       assertOrThrow(
         !activeCompletedNumbers.includes(`ORD-COMPLETED-KITCHEN-${itemStatus}`),
-        `completed orders with ${itemStatus.toLowerCase()} items are not active kitchen work`,
+        `a paid order with ${itemStatus.toLowerCase()} items leaves the serving list`,
       );
     }
     db.prepare("UPDATE settings SET value = 'false' WHERE key = 'kds_enabled'").run();

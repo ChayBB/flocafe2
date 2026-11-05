@@ -33,6 +33,7 @@ const {
 const { getJWTSecret } = require('../main/routes/auth');
 const { orderRoutes } = require('../main/routes/orders');
 const { billRequestRoutes } = require('../main/routes/bill-requests');
+const { billRoutes } = require('../main/routes/bills');
 
 function seedUser(db: any, id: string, name: string, role: string) {
   db.prepare(`
@@ -59,7 +60,11 @@ async function main() {
     db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-BILL-1'").get() as any
   ).id;
 
-  const app = createApp({ '/api/orders': orderRoutes, '/api/bill-requests': billRequestRoutes });
+  const app = createApp({
+    '/api/orders': orderRoutes,
+    '/api/bill-requests': billRequestRoutes,
+    '/api/bills': billRoutes,
+  });
   const { baseUrl, server } = await startServer(app);
   const orderRow = () => db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
   const pending = async () =>
@@ -251,6 +256,129 @@ async function main() {
       headers: serverAuth,
     });
     assertEqualOrThrow(closed.status, 409, 'a closed order cannot ask for its bill');
+
+    // The cashier prints the bill before taking the money: the table waits for confirmation,
+    // and the confirmed payment names the cashier who received it.
+    db.prepare(`INSERT INTO orders (order_number, type, status, table_id, subtotal, tax_amount, total, created_at, updated_at)
+      VALUES ('ORD-BILL-2', 'dine_in', 'served', 'tbl-26', 150, 0, 150, ?, ?)`).run(now(), now());
+    const cashierOrderId = (
+      db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-BILL-2'").get() as any
+    ).id;
+    const cashierCoffee = insertItem.run(cashierOrderId, 'Coffee', 0, now(), now()).lastInsertRowid;
+    const cashierRequest = (headers: Record<string, string>, extra: Record<string, unknown> = {}) =>
+      api(baseUrl, `/api/orders/${cashierOrderId}/bill-request`, {
+        method: 'POST',
+        body: { cashier: true, ...extra },
+        headers,
+      });
+    const cashierOrder = () =>
+      db.prepare('SELECT * FROM orders WHERE id = ?').get(cashierOrderId) as any;
+    const serverAsCashier = await cashierRequest(serverAuth);
+    assertEqualOrThrow(
+      serverAsCashier.status,
+      403,
+      'only staff who take payments print as cashier',
+    );
+
+    // An unconfirmed table blocks the cashier's print and flags the table for service staff.
+    const unconfirmedPrint = await cashierRequest(cashierAuth, { preflight: true });
+    assertEqualOrThrow(
+      unconfirmedPrint.status,
+      409,
+      'the cashier waits for the serve confirmation',
+    );
+    assertEqualOrThrow(unconfirmedPrint.data.code, 'served_unconfirmed', 'the refusal names it');
+    assertOrThrow(
+      Boolean(cashierOrder().serve_confirm_requested_at),
+      'the table is flagged for the Server App',
+    );
+    assertEqualOrThrow(
+      cashierOrder().serve_confirm_requested_by_name,
+      'Cashier',
+      'the flag names the cashier who asked',
+    );
+    assertEqualOrThrow(cashierOrder().bill_requested_at, null, 'nothing is printed yet');
+    const confirmed = await api(
+      baseUrl,
+      `/api/orders/${cashierOrderId}/items/${cashierCoffee}/confirm-served`,
+      { method: 'PATCH', body: {}, headers: serverAuth },
+    );
+    assertEqualOrThrow(confirmed.status, 200, 'service staff confirm the item');
+    assertEqualOrThrow(
+      cashierOrder().serve_confirm_requested_at,
+      null,
+      'confirming every item clears the flag',
+    );
+
+    const preflight = await cashierRequest(cashierAuth, { preflight: true });
+    assertEqualOrThrow(preflight.status, 200, 'the confirmed table may print');
+    assertEqualOrThrow(cashierOrder().bill_requested_at, null, 'a preflight records nothing');
+    const cashierPrint = await cashierRequest(cashierAuth);
+    assertEqualOrThrow(cashierPrint.status, 200, 'the printed bill is recorded');
+    const printed = cashierOrder();
+    assertEqualOrThrow(printed.status, 'served', 'printing the bill does not close the order');
+    assertEqualOrThrow(
+      printed.bill_requested_by_name,
+      'Cashier',
+      'the printing cashier is recorded',
+    );
+    assertEqualOrThrow(printed.bill_payment_received_at, null, 'the bill waits for confirmation');
+
+    const generated = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: cashierOrderId },
+      headers: cashierAuth,
+    });
+    assertOrThrow(generated.status < 300, `the bill is generated (status ${generated.status})`);
+    assertEqualOrThrow(
+      generated.data.bill.payment_status,
+      'unpaid',
+      'a printed bill is still unpaid',
+    );
+    const paid = await api(baseUrl, `/api/bills/${generated.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'card', amount: generated.data.bill.total },
+      headers: cashierAuth,
+    });
+    assertEqualOrThrow(
+      paid.status,
+      200,
+      `the cashier confirms the payment (status ${paid.status})`,
+    );
+    assertEqualOrThrow(paid.data.bill.payment_status, 'paid', 'the confirmed bill is paid');
+    const lines = paid.data.bill.payment_details as any[];
+    assertEqualOrThrow(
+      lines[lines.length - 1].received_by_name,
+      'Cashier',
+      'the payment line names the cashier who received it',
+    );
+    assertOrThrow(
+      Boolean(
+        (
+          db
+            .prepare('SELECT bill_payment_received_at FROM orders WHERE id = ?')
+            .get(cashierOrderId) as any
+        ).bill_payment_received_at,
+      ),
+      'the confirmed payment ends the wait',
+    );
+
+    db.prepare(`INSERT INTO orders (order_number, type, status, subtotal, tax_amount, total, created_at, updated_at)
+      VALUES ('ORD-BILL-3', 'takeaway', 'pending', 150, 0, 150, ?, ?)`).run(now(), now());
+    const takeawayId = (
+      db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-BILL-3'").get() as any
+    ).id;
+    insertItem.run(takeawayId, 'Coffee', 0, now(), now());
+    const takeawayPrint = await api(baseUrl, `/api/orders/${takeawayId}/bill-request`, {
+      method: 'POST',
+      body: { cashier: true },
+      headers: cashierAuth,
+    });
+    assertEqualOrThrow(
+      takeawayPrint.status,
+      200,
+      'a take-away bill prints without a table confirmation',
+    );
 
     console.log('\nAll bill request checks passed');
   } finally {

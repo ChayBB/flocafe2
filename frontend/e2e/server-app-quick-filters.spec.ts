@@ -92,7 +92,14 @@ test('the search box shares the category row, followed by popular, recommended a
   await expect(card('Sold')).toBeVisible();
   await expect(card('Deal')).toHaveCount(0);
 
+  // The menu lists only All and the quick filters, never the categories.
   await menu.click();
+  await expect(page.getByRole('menuitem')).toHaveText([
+    'All',
+    'Popular',
+    'Recommended',
+    'Promotions',
+  ]);
   await page.getByRole('menuitem', { name: 'Recommended' }).click();
   await expect(grid.getByTestId('pos-quick-filter-recommended')).toHaveAttribute(
     'aria-pressed',

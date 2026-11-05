@@ -175,7 +175,8 @@ payment with `409`. A zero-balance payment retry on an already-settled bill retu
 idempotently without rejecting. The response carries the updated bill plus the wallet and loyalty
 effects; `bill.payment_details` is the
 settlement ledger, one entry per line with the applied amount, the requested amount, cash tendered
-and change, the `cash_session_id`, and the timestamp.
+and change, the `cash_session_id`, the staff member who received it (`received_by`,
+`received_by_name`, shown on the Orders page as Paid: name), and the timestamp.
 
 ## Settlement and completion
 

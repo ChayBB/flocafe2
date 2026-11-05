@@ -8,6 +8,11 @@ import { useHeldOrdersStore } from '@/store/held-orders';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { useSidebar } from '@/components/ui/sidebar';
 import toast from 'react-hot-toast';
+import {
+  checkCashierBillPrint,
+  needsBillPrintBeforePayment,
+  recordCashierBillPrint,
+} from '@/lib/bill-print-flow';
 import { ShoppingCart, X } from 'lucide-react';
 import type {
   Addon,
@@ -237,6 +242,7 @@ export default function POSPage() {
   } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
   const t = useTranslations('pos');
+  const tOrders = useTranslations('orders');
   const tExpenses = useTranslations('expenses');
   const tCommon = useTranslations('common');
   const tSupport = useTranslations('support');
@@ -877,15 +883,20 @@ export default function POSPage() {
     return data.bill as Bill;
   };
 
-  const printBillForTenant = async (bill: Bill, force = false, reservedWindow?: Window | null) => {
+  const printBillForTenant = async (
+    bill: Bill,
+    force = false,
+    reservedWindow?: Window | null,
+  ): Promise<boolean> => {
     if (!currentTenant || (!force && !autoPrintBill)) {
       if (reservedWindow && !reservedWindow.closed) reservedWindow.close();
-      return;
+      return false;
     }
 
     try {
       const printWarnings = await printBill(bill, currentTenant, undefined, reservedWindow);
       showPrintWarningsToast(printWarnings);
+      return true;
     } catch (err) {
       // Non-fatal: print failure should not block the checkout flow.
       const code = 'print.receipt.failed';
@@ -903,7 +914,29 @@ export default function POSPage() {
         reasonCode: code,
       });
       toast.error(formatReceiptErrorToast(t('receiptPrintFailed'), t('saleCompletePrintFailed')));
+      return false;
     }
+  };
+
+  // The payment window's main button prints the bill while it still has to print first.
+  const printBillBeforePayment = async (bill: Bill): Promise<boolean> => {
+    if (!bill.order) return false;
+    const check = await checkCashierBillPrint(bill.order.id);
+    if (check !== 'ok') {
+      toast.error(
+        check === 'serve_unconfirmed'
+          ? tOrders('serveConfirmNeeded')
+          : tOrders('billRequestFailed'),
+      );
+      return false;
+    }
+    if (!(await printBillForTenant(bill, true))) return false;
+    if (!(await recordCashierBillPrint(bill.order.id))) {
+      toast.error(tOrders('billRequestFailed'));
+      return false;
+    }
+    refreshTables();
+    return true;
   };
 
   const refreshTables = async () => {
@@ -2181,7 +2214,9 @@ export default function POSPage() {
 
     if (bill) {
       try {
-        await printBillForTenant(await fetchLatestBill(bill.id));
+        const latestBill = await fetchLatestBill(bill.id);
+        // The bill printed before the payment was confirmed, so nothing prints again.
+        if (!latestBill.order?.bill_requested_at) await printBillForTenant(latestBill);
       } catch {
         toast.error(t('receiptPrintFailed'));
       }
@@ -2635,9 +2670,7 @@ export default function POSPage() {
             refreshTables();
           }}
           onAddItems={handleAddItemsToOrder}
-          onPrintBill={async (bill, reservedWindow) => {
-            await printBillForTenant(bill, true, reservedWindow);
-          }}
+          onPrintBill={(bill, reservedWindow) => printBillForTenant(bill, true, reservedWindow)}
           reservePrintWindow={() => {
             const printer = usePrinterStore.getState();
             const expectedBrowserPrint =
@@ -2676,6 +2709,15 @@ export default function POSPage() {
           }}
           onPaid={handlePaymentComplete}
           onBillUpdate={(updated) => setPaymentBill(updated)}
+          onPrintBill={
+            paymentBill.order &&
+            needsBillPrintBeforePayment({
+              ...paymentBill.order,
+              bill: paymentBill.order.bill ?? paymentBill,
+            })
+              ? printBillBeforePayment
+              : undefined
+          }
           onSplit={(departingBill) => {
             if (departingBill) {
               // Clear current paymentBill synchronously so the cashier cannot

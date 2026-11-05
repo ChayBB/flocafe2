@@ -76,21 +76,17 @@ function CategoryChip({
   );
 }
 
-/** The flat row's menu button that lists every filter and category in one dropdown. */
+/** The flat row's menu button: All and the quick filters; categories stay in the row. */
 function CategoryMenu({
   label,
   allLabel,
   allSelected,
-  categories,
-  selectedCategory,
   setSelectedCategory,
   extraChips,
 }: {
   label: string;
   allLabel: string;
   allSelected: boolean;
-  categories: Category[];
-  selectedCategory: Category['id'] | null;
   setSelectedCategory: (id: Category['id'] | null) => void;
   extraChips: { key: string; label: string; active: boolean; onSelect: () => void }[];
 }) {
@@ -125,17 +121,6 @@ function CategoryMenu({
             {chip.label}
           </DropdownMenuItem>
         ))}
-        {categories
-          .filter((cat) => cat.id != null)
-          .map((cat) => (
-            <DropdownMenuItem
-              key={String(cat.id)}
-              onSelect={() => setSelectedCategory(cat.id)}
-              className={itemClass(selectedCategory === cat.id)}
-            >
-              {cat.name}
-            </DropdownMenuItem>
-          ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -873,8 +858,6 @@ export default function ProductGrid({
             label={t('categoryMenu')}
             allLabel={t('allCategories')}
             allSelected={!quickFilter && !selectedCategory}
-            categories={categories}
-            selectedCategory={quickFilter ? null : selectedCategory}
             setSelectedCategory={chooseCategory}
             extraChips={quickFilters.map((filter) => ({
               key: filter.key,

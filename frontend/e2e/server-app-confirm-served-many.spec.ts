@@ -78,9 +78,15 @@ test('several dishes are confirmed served at once from a ticked list, leaving ou
   await expect(dialog).toBeHidden();
   await expect(page.getByText('2 dishes confirmed served').first()).toBeVisible();
 
-  // One dish is left to confirm, so the bulk button steps aside for the single-item menu.
+  // One dish is left to confirm, and the footer button still offers it.
   const items = page.getByTestId('server-app-ordered-item');
   await expect(items.getByTestId('server-app-served-confirmed-tag')).toHaveCount(2);
   await expect(items.nth(0).getByTestId('server-app-served-confirmed-tag')).toHaveCount(0);
+  await expect(confirmMany).toHaveText('Confirm 1 dish served');
+
+  // The last dish is confirmed with one tap, without the checklist.
+  await confirmMany.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(items.getByTestId('server-app-served-confirmed-tag')).toHaveCount(3);
   await expect(confirmMany).toHaveCount(0);
 });

@@ -12,6 +12,8 @@ import {
   Send,
   ChevronDown,
   Users,
+  Loader2,
+  Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api, {
@@ -55,6 +57,7 @@ import { parseAppliedCharges, type AppliedCharge } from '@/lib/charges';
 import { useChargesStore, chargesForOrderType } from '@/store/charges';
 import { classifyOrderRequestFailure, type OperationFailureMetadata } from '@/lib/order-attempt';
 import { ApproverSelect } from '@/components/ApproverSelect';
+import { isAwaitingBillPayment } from '@/lib/bill-print-flow';
 import { useManagerApprovers } from '@/hooks/useManagerApprovers';
 
 interface Props {
@@ -70,6 +73,11 @@ interface Props {
    * all-items split still reports no bill of its own.
    */
   onSplit?: (departingBill?: Bill) => void;
+  /**
+   * Set while the bill still has to print before payment: the main button prints it instead of
+   * taking money, and resolves true once the bill printed and the order waits for confirmation.
+   */
+  onPrintBill?: (bill: Bill) => Promise<boolean>;
 }
 
 interface Payment {
@@ -128,7 +136,19 @@ export default function PaymentModal({
   onPaid,
   onBillUpdate,
   onSplit,
+  onPrintBill,
 }: Props) {
+  const [printingBill, setPrintingBill] = useState(false);
+  const awaitingConfirmation = Boolean(bill.order && isAwaitingBillPayment(bill.order));
+  const handlePrintInstead = async () => {
+    if (!onPrintBill || printingBill) return;
+    setPrintingBill(true);
+    try {
+      if (await onPrintBill(bill)) onClose();
+    } finally {
+      setPrintingBill(false);
+    }
+  };
   const remaining = Number(bill.balance);
   const cartCustomerId = useCartStore((s) => s.customerId);
   const cartCustomer = useCartStore((s) => s.customer);
@@ -1152,6 +1172,8 @@ export default function PaymentModal({
         toast.success(t('paymentRecorded'));
       }
       setJustPaid(true);
+      // A settled bill closes the window straight away; the toast confirms it.
+      onPaid();
     } catch (error: unknown) {
       const response = (
         error as {
@@ -2289,34 +2311,51 @@ export default function PaymentModal({
             </>
           ) : (
             <>
-              <Button
-                onClick={handlePay}
-                disabled={
-                  processing ||
-                  openingSplitCheck ||
-                  applyingDiscount ||
-                  Boolean(updatingChargeId) ||
-                  chargeStateUncertain ||
-                  (!pendingAttempt && totalPaymentMinor === 0 && remainingMinor > 0) ||
-                  Boolean(
-                    kitchenOverridePin &&
-                    (managerApprovers.loading ||
-                      managerApprovers.loadFailed ||
-                      managerApprovers.approvers.length === 0 ||
-                      !(kitchenApproverId ?? managerApprovers.selectedApproverId)),
-                  )
-                }
-                className="w-full"
-                size="lg"
-              >
-                {processing
-                  ? t('processingPayment')
-                  : paymentOutcomeUnknown
-                    ? t('checkPaymentStatus')
-                    : pendingAttempt
-                      ? t('retrySamePayment')
-                      : `${t('pay')} ${currencyFmt(totalPayment)}`}
-              </Button>
+              {onPrintBill ? (
+                <Button
+                  data-testid="payment-print-bill"
+                  onClick={handlePrintInstead}
+                  disabled={printingBill || processing}
+                  className="w-full border border-green-300 bg-green-100 text-green-800 hover:bg-green-200"
+                  size="lg"
+                >
+                  {printingBill ? (
+                    <Loader2 size={16} className="me-2 animate-spin" />
+                  ) : (
+                    <Printer size={16} className="me-2" />
+                  )}
+                  {tReceipt('printBill')}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handlePay}
+                  disabled={
+                    processing ||
+                    openingSplitCheck ||
+                    applyingDiscount ||
+                    Boolean(updatingChargeId) ||
+                    chargeStateUncertain ||
+                    (!pendingAttempt && totalPaymentMinor === 0 && remainingMinor > 0) ||
+                    Boolean(
+                      kitchenOverridePin &&
+                      (managerApprovers.loading ||
+                        managerApprovers.loadFailed ||
+                        managerApprovers.approvers.length === 0 ||
+                        !(kitchenApproverId ?? managerApprovers.selectedApproverId)),
+                    )
+                  }
+                  className="w-full border border-green-300 bg-green-100 text-green-800 hover:bg-green-200"
+                  size="lg"
+                >
+                  {processing
+                    ? t('processingPayment')
+                    : paymentOutcomeUnknown
+                      ? t('checkPaymentStatus')
+                      : pendingAttempt
+                        ? t('retrySamePayment')
+                        : `${awaitingConfirmation ? tOrders('confirmPayment') : t('pay')} ${currencyFmt(totalPayment)}`}
+                </Button>
+              )}
             </>
           )}
         </div>

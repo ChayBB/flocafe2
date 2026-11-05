@@ -3908,7 +3908,7 @@ export default function SettingsPage() {
               onClick={handleSettingsTabChange}
             />
 
-            {/* Customers group */}
+            {/* Marketing group */}
             <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-border">
               <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 {t('navGroupCustomers')}

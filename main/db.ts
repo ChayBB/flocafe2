@@ -8092,6 +8092,18 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 135,
+    name: 'add_order_serve_confirm_request',
+    up: () => {
+      // The cashier tried to print a bill before every item was confirmed served; the Server App flags the table.
+      const columns = getColumns(db, 'orders');
+      for (const column of ['serve_confirm_requested_at', 'serve_confirm_requested_by_name']) {
+        if (!columns.includes(column))
+          db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

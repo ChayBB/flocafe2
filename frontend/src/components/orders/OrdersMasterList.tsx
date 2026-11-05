@@ -35,11 +35,14 @@ export function OrdersMasterList({
   selectedOrderId,
   onSelect,
   now,
+  leavingOrderIds,
 }: {
   orders: Order[];
   selectedOrderId: number | null;
   onSelect: (orderId: number) => void;
   now: number;
+  /** Orders just paid: they flash green and fold away before leaving the list. */
+  leavingOrderIds?: ReadonlySet<number>;
 }) {
   const tOrders = useTranslations('orders');
   const tCommon = useTranslations('common');
@@ -64,7 +67,11 @@ export function OrdersMasterList({
           (i) => !['cancelled', 'voided', 'void_adjustment'].includes(i.status),
         ).length;
         return (
-          <li key={order.id}>
+          <li
+            key={order.id}
+            data-order-leaving={leavingOrderIds?.has(order.id) || undefined}
+            className={leavingOrderIds?.has(order.id) ? 'animate-order-paid-leave' : undefined}
+          >
             <button
               type="button"
               onClick={() => onSelect(order.id)}

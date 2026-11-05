@@ -1,6 +1,11 @@
 'use client';
 
-import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
+import {
+  BillRequestBadge,
+  isAwaitingBillPayment,
+  paymentReceiverName,
+} from '@/components/orders/BillRequestBadge';
+import { amountDue, needsBillPrintBeforePayment } from '@/lib/bill-print-flow';
 import { OrderFoodStatusBar, type FoodStage } from '@/components/orders/OrderFoodStatusBar';
 import { useState } from 'react';
 import {
@@ -267,12 +272,18 @@ function OrderDetailContent({
     return tCommon('timeHoursMinutesAgo', { h: Math.floor(minutes / 60), m: minutes % 60 });
   };
 
+  const awaitingBillPayment = isAwaitingBillPayment(order);
+  const receiverName = payStatus === 'paid' ? paymentReceiverName(order) : null;
+  // An unpaid bill is printed first; the cashier then confirms the payment.
+  const printBillFirst = needsBillPrintBeforePayment(order);
   const checkoutButtonLabel =
     generatingBillId === order.id
       ? tOrders('generating')
       : payStatus === 'partial'
         ? tOrders('takePayment')
-        : tOrders('checkout');
+        : awaitingBillPayment
+          ? `${tOrders('confirmPayment')} ${money(amountDue(order))}`
+          : tOrders('checkout');
 
   const orderTypeIcon = (() => {
     switch (order.type) {
@@ -313,6 +324,7 @@ function OrderDetailContent({
                 className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}
               >
                 {tOrders(payBadge.labelKey)}
+                {receiverName && <>: {receiverName}</>}
               </span>
             )}
             <BillRequestBadge order={order} showRequester />
@@ -935,18 +947,43 @@ function OrderDetailContent({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Button
-              onClick={() => onCheckout(order.id)}
-              disabled={generatingBillId === order.id || awaitingWeight}
-              className={`flex-1 h-10 font-semibold text-xs ${
-                payStatus === 'partial'
-                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                  : 'bg-foreground text-background hover:bg-foreground/90'
-              }`}
-            >
-              <CreditCard size={15} className="me-1.5" />
-              {checkoutButtonLabel}
-            </Button>
+            {printBillFirst ? (
+              <Button
+                data-testid="order-print-bill"
+                onClick={() => {
+                  if (bill) onPrint(bill.id);
+                  else onPrintOrder?.(order);
+                }}
+                disabled={
+                  (bill && printingBillId === bill.id) ||
+                  generatingBillId === order.id ||
+                  awaitingWeight ||
+                  (!bill && !onPrintOrder)
+                }
+                className="flex-1 h-10 font-semibold text-xs bg-foreground text-background hover:bg-foreground/90"
+              >
+                {(bill && printingBillId === bill.id) || generatingBillId === order.id ? (
+                  <Loader2 size={15} className="animate-spin me-1.5" />
+                ) : (
+                  <Printer size={15} className="me-1.5" />
+                )}
+                {tReceipt('printBill')}
+              </Button>
+            ) : (
+              <Button
+                data-testid="order-checkout"
+                onClick={() => onCheckout(order.id)}
+                disabled={generatingBillId === order.id || awaitingWeight}
+                className={`flex-1 h-10 font-semibold text-xs ${
+                  payStatus === 'partial'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-foreground text-background hover:bg-foreground/90'
+                }`}
+              >
+                <CreditCard size={15} className="me-1.5" />
+                {checkoutButtonLabel}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => onAddItems(order)}

@@ -40,6 +40,7 @@ import {
   TableKitchenSummary,
   type OrderedItem,
 } from '@/components/server-app/OrderedItems';
+import { isCancelledItem } from '@/components/server-app/ItemStatus';
 import {
   TableTransferDialog,
   type TransferMode,
@@ -63,6 +64,9 @@ import type {
   ProductVariant,
 } from '@/lib/types';
 import { cartItemToOrderItem } from '@/lib/cart-order-item';
+import { playSoundFile, unlockKdsAlertSound } from '@/lib/kds-alert-sound';
+
+const SERVE_CONFIRM_BELL = '/sounds/serve-confirm-bell.wav';
 
 type User = { id: string; name: string; email: string; role: string };
 type Table = {
@@ -97,6 +101,8 @@ type Order = {
   kitchen_counts?: { waiting: number; ready: number; served: number };
   bill_requested_at?: string | null;
   bill_payment_received_at?: string | null;
+  /** The cashier tried to print the bill before every item was confirmed served. */
+  serve_confirm_requested_at?: string | null;
 };
 type DraftLine = CartItem;
 type ServerAppInfo = {
@@ -305,6 +311,34 @@ export default function ServerStandalonePage() {
   // Best sellers of the last 30 days; staff only, so a guest at a QR table sees no popular filter.
   const [popularIds, setPopularIds] = useState<string[] | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
+  // Tables whose bill the cashier could not print yet: every item must be confirmed served first.
+  const serveConfirmTables = user
+    ? ownedOrAllTables(tables, user.id).filter(
+        (table) => (table.activeOrder || table.current_order)?.serve_confirm_requested_at,
+      )
+    : [];
+  // Each new serve-confirmation request rings the bell on the phones that see that table.
+  const serveConfirmKeys = serveConfirmTables
+    .map(
+      (table) =>
+        `${table.id}|${(table.activeOrder || table.current_order)?.serve_confirm_requested_at}`,
+    )
+    .join(',');
+  const serveConfirmRungRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const keys = serveConfirmKeys ? serveConfirmKeys.split(',') : [];
+    const fresh = keys.some((key) => !serveConfirmRungRef.current.has(key));
+    serveConfirmRungRef.current = new Set(keys);
+    if (fresh) void playSoundFile(SERVE_CONFIRM_BELL);
+  }, [serveConfirmKeys]);
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockKdsAlertSound);
+    window.addEventListener('keydown', unlockKdsAlertSound);
+    return () => {
+      window.removeEventListener('pointerdown', unlockKdsAlertSound);
+      window.removeEventListener('keydown', unlockKdsAlertSound);
+    };
+  }, []);
   const [tablesLoaded, setTablesLoaded] = useState(false);
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [orderLoadedTableId, setOrderLoadedTableId] = useState<string>('');
@@ -1383,6 +1417,23 @@ export default function ServerStandalonePage() {
   }
 
   const activeTable = tables.find((table) => table.id === selectedTableId) || null;
+  // When the cashier asks this table to confirm serving, its ordered items open without a tap.
+  const activeServeConfirmFlag = (activeTable?.activeOrder || activeTable?.current_order)
+    ?.serve_confirm_requested_at;
+  // Kitchen chips only for a table that has ordered, or that the cashier asked to confirm serving.
+  const showKitchenSummary =
+    Boolean(activeServeConfirmFlag) ||
+    (currentOrder?.items ?? []).some((item) => !isCancelledItem(String(item.status)));
+  const serveConfirmSeenRef = useRef('');
+  useEffect(() => {
+    const key =
+      activeServeConfirmFlag && selectedTableId
+        ? `${selectedTableId}|${activeServeConfirmFlag}`
+        : '';
+    if (!key || key === serveConfirmSeenRef.current) return;
+    serveConfirmSeenRef.current = key;
+    setOrderedItemsOpen(true);
+  }, [activeServeConfirmFlag, selectedTableId]);
   const orderingLocked =
     awaitingPayment(currentOrder) ||
     awaitingPayment(activeTable?.activeOrder || activeTable?.current_order);
@@ -1615,7 +1666,7 @@ export default function ServerStandalonePage() {
         )}
       </div>
 
-      {isWide && user && currentOrder && selectedTableId && (
+      {isWide && user && currentOrder && selectedTableId && showKitchenSummary && (
         <div className="mt-2">
           <TableKitchenSummary
             items={(currentOrder.items ?? []) as OrderedItem[]}
@@ -1902,6 +1953,28 @@ export default function ServerStandalonePage() {
               onClose={() => setTableQrOpen(false)}
             />
           )}
+          {serveConfirmTables.length > 0 && (
+            <div
+              data-testid="serve-confirm-alerts"
+              className="flex flex-wrap gap-2 md:col-span-full"
+            >
+              {serveConfirmTables.map((table) => (
+                <button
+                  key={table.id}
+                  type="button"
+                  data-testid="serve-confirm-alert"
+                  onClick={() => {
+                    selectTable(table.id);
+                    if (!isWide) setTablePickerOpen(false);
+                    setOrderedItemsOpen(true);
+                  }}
+                  className="animate-pulse rounded-lg border-2 border-red-500 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"
+                >
+                  {t('serveConfirmRequested', { table: table.name || table.number || '' })}
+                </button>
+              ))}
+            </div>
+          )}
           {showTablePicker && (
             <section
               ref={tablePickerRef}
@@ -1918,14 +1991,17 @@ export default function ServerStandalonePage() {
                   // Serving tables are light green, ones waiting to pay amber with a clock, cleaning
                   // ones light yellow, free ones white.
                   const tone = order
-                    ? awaitingPayment(order)
-                      ? 'awaiting'
-                      : 'serving'
+                    ? order.serve_confirm_requested_at
+                      ? 'confirm'
+                      : awaitingPayment(order)
+                        ? 'awaiting'
+                        : 'serving'
                     : table.status === 'cleaning'
                       ? 'cleaning'
                       : 'available';
                   const toneClass = {
                     serving: 'border-green-300 bg-green-100',
+                    confirm: 'animate-pulse border-2 border-red-500 bg-red-50',
                     awaiting: 'border-amber-300 bg-amber-50',
                     cleaning: 'border-yellow-300 bg-yellow-100',
                     available: 'border-gray-200 bg-white',
@@ -1938,6 +2014,7 @@ export default function ServerStandalonePage() {
                       onClick={() => {
                         selectTable(table.id);
                         if (!isWide) setTablePickerOpen(false);
+                        if (tone === 'confirm') setOrderedItemsOpen(true);
                         if (reopenCartAfterTableRef.current) {
                           reopenCartAfterTableRef.current = false;
                           if (!isWide) setMobileCartOpen(true);
@@ -1951,13 +2028,19 @@ export default function ServerStandalonePage() {
                           {table.name || table.number}
                         </span>
                         <span className="text-xs text-gray-600">
-                          {tone === 'awaiting'
-                            ? t('tableAwaitingPayment')
-                            : order
-                              ? t('openOrder')
-                              : tone === 'cleaning'
-                                ? tTables('statusCleaning')
-                                : tTables('statusAvailable')}
+                          {tone === 'confirm' ? (
+                            <span className="font-semibold text-red-700">
+                              {t('serveConfirmNeeded')}
+                            </span>
+                          ) : tone === 'awaiting' ? (
+                            t('tableAwaitingPayment')
+                          ) : order ? (
+                            t('openOrder')
+                          ) : tone === 'cleaning' ? (
+                            tTables('statusCleaning')
+                          ) : (
+                            tTables('statusAvailable')
+                          )}
                           {order?.kitchen_counts && (
                             <Ltr
                               as="span"
@@ -1989,7 +2072,7 @@ export default function ServerStandalonePage() {
           {/* svh, not dvh: the menu keeps its height while a phone browser's toolbar slides in and out.
               On a phone the menu has no frame of its own, so the photos get the full width. */}
           <section className="flex h-[calc(100svh-5rem)] min-h-96 min-w-0 flex-col md:rounded-lg md:border md:border-border md:bg-card md:p-3">
-            {user && !tablePickerOpen && activeTable && !isWide && (
+            {user && !tablePickerOpen && activeTable && !isWide && showKitchenSummary && (
               <div data-testid="server-app-table-actions" className="mb-3">
                 <TableKitchenSummary
                   items={(currentOrder?.items ?? []) as OrderedItem[]}
@@ -2085,6 +2168,7 @@ export default function ServerStandalonePage() {
           onCancel={(item) => changeSentItem(item.id, 'cancel')}
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
           onConfirmServedMany={confirmServedMany}
+          serveConfirmRequested={Boolean(currentOrder?.serve_confirm_requested_at)}
           onPrintBill={requestBill}
           onMoveTable={() => setTransferMode('move')}
           onMergeTable={() => setTransferMode('merge')}

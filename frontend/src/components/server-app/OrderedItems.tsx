@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
-import { formatItemHeading } from '@/lib/printer/item-heading';
+import { kdsItemLine } from '@/lib/item-options-note';
 import { parseDbTimestamp } from '@/lib/utils';
 import {
   ItemStatusBadge,
@@ -38,6 +38,11 @@ import {
 } from '@/components/server-app/ItemStatus';
 import { itemStatusDot } from '@/components/orders/OrderCard';
 
+/** The dish as ordered, named the way the kitchen screen names it. */
+export function orderedItemName(item: OrderedItem): string {
+  return kdsItemLine(item).name;
+}
+
 export interface OrderedItem {
   id: number;
   product_id?: string | number;
@@ -45,6 +50,8 @@ export interface OrderedItem {
   quantity: number;
   status: string;
   variant_selection?: unknown;
+  /** Chosen options; a listed choice such as "หมู/กุ้ง" gives way to the chosen one, as on the KDS. */
+  addons?: { name: string }[] | null;
   created_at?: string;
   /** A change service staff made after sending: 'takeaway' or 'cancelled'. */
   service_change?: string | null;
@@ -151,7 +158,7 @@ export function OrderedItemList({
   const run = async (item: OrderedItem, change: 'takeaway' | 'cancel' | 'confirmServed') => {
     setMenuFor(null);
     if (change === 'cancel') {
-      const ok = await confirm(t('cancelItemConfirm', { name: item.product_name }), {
+      const ok = await confirm(t('cancelItemConfirm', { name: orderedItemName(item) }), {
         title: t('cancelItem'),
         confirmLabel: t('cancelItem'),
         destructive: true,
@@ -203,8 +210,7 @@ export function OrderedItemList({
               </Ltr>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
-                  <Ltr>{item.quantity}</Ltr> ×{' '}
-                  {formatItemHeading(item.product_name, item.variant_selection)}
+                  <Ltr>{item.quantity}</Ltr> × {orderedItemName(item)}
                 </p>
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Ltr className="tabular-nums">{timeOf(item.created_at)}</Ltr>
@@ -342,7 +348,7 @@ function ConfirmServedDialog({
                   <span className="min-w-0 flex-1 truncate text-sm">
                     <Ltr className="font-semibold tabular-nums">{item.quantity}</Ltr>
                     {' × '}
-                    {formatItemHeading(item.product_name, item.variant_selection)}
+                    {orderedItemName(item)}
                   </span>
                 </label>
               </li>
@@ -395,6 +401,7 @@ export function OrderedItemsScreen({
   onPrintBill,
   onMoveTable,
   onMergeTable,
+  serveConfirmRequested = false,
 }: {
   tableName: string;
   orderNumber?: string;
@@ -413,6 +420,8 @@ export function OrderedItemsScreen({
   onPrintBill: () => Promise<void>;
   onMoveTable?: () => void;
   onMergeTable?: () => void;
+  /** The cashier is waiting to print this table's bill. */
+  serveConfirmRequested?: boolean;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
@@ -420,6 +429,7 @@ export function OrderedItemsScreen({
   const [printing, setPrinting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingMany, setConfirmingMany] = useState(false);
+  const [confirmingOne, setConfirmingOne] = useState(false);
   const tableActions = [
     onMoveTable && { key: 'move', label: t('moveTable'), icon: ArrowLeftRight, run: onMoveTable },
     onMergeTable && { key: 'merge', label: t('mergeTable'), icon: Merge, run: onMergeTable },
@@ -589,12 +599,25 @@ export function OrderedItemsScreen({
       />
 
       <footer className="grid grid-cols-2 gap-2 border-t border-border bg-card p-3">
-        {toConfirm.length >= 2 && (
+        {toConfirm.length > 0 && (
           <button
             type="button"
             data-testid="server-app-confirm-served-many"
-            onClick={() => setConfirmingMany(true)}
-            className="col-span-2 flex h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white"
+            disabled={confirmingOne}
+            onClick={async () => {
+              // A single dish needs no checklist: confirm it straight away.
+              if (toConfirm.length > 1) {
+                setConfirmingMany(true);
+                return;
+              }
+              setConfirmingOne(true);
+              try {
+                await onConfirmServedMany(toConfirm);
+              } finally {
+                setConfirmingOne(false);
+              }
+            }}
+            className={`col-span-2 flex h-12 disabled:opacity-60 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white ${serveConfirmRequested ? 'animate-pulse ring-2 ring-red-500' : ''}`}
           >
             <CheckCheck size={17} />
             {t('confirmServedMany', { count: toConfirm.length })}

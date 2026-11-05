@@ -48,6 +48,8 @@ import { parseDbTimestamp } from '@/lib/utils';
 import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
+import { isAwaitingBillPayment, paymentReceiverName } from './BillRequestBadge';
+import { amountDue, needsBillPrintBeforePayment } from '@/lib/bill-print-flow';
 
 type OrdersKey = keyof AppConfig['Messages']['orders'];
 type WhatsAppStatusKey = keyof AppConfig['Messages']['whatsapp']['status'];
@@ -355,9 +357,15 @@ export function OrderCard({
     ) ||
     hasCollectedFunds;
 
+  const awaitingBillPayment = isAwaitingBillPayment(order);
+  const receiverName = payStatus === 'paid' ? paymentReceiverName(order) : null;
+  // An unpaid bill is printed first; the cashier then confirms the payment.
+  const showCheckout = !needsBillPrintBeforePayment(order);
+  const showPrintBill = !awaitingBillPayment && (Boolean(bill) || Boolean(onPrintOrder));
   const checkoutButtonLabel = (() => {
     if (generatingBillId === order.id) return tOrders('generating');
     if (payStatus === 'partial') return tOrders('takePayment');
+    if (awaitingBillPayment) return `${tOrders('confirmPayment')} ${money(amountDue(order))}`;
     return tOrders('checkout');
   })();
 
@@ -425,6 +433,7 @@ export function OrderCard({
                 className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}
               >
                 {tOrders(payBadge.labelKey)}
+                {receiverName && <>: {receiverName}</>}
               </span>
             )}
           </div>
@@ -1070,19 +1079,19 @@ export function OrderCard({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {onPrintOrder && order.type === 'dine_in' && (
+            {showPrintBill && (
               <Button
                 variant="outline"
                 onClick={() => {
                   if (bill) onPrint(bill.id);
-                  else onPrintOrder(order);
+                  else onPrintOrder?.(order);
                 }}
                 disabled={
                   (bill && printingBillId === bill.id) ||
                   generatingBillId === order.id ||
                   awaitingWeight
                 }
-                className="h-10 px-3 justify-center border-border text-foreground hover:bg-muted active:scale-95 touch-manipulation font-semibold text-xs"
+                className={`h-10 px-3 justify-center border-border text-foreground hover:bg-muted active:scale-95 touch-manipulation font-semibold text-xs ${showCheckout ? '' : 'flex-1'}`}
               >
                 {(bill && printingBillId === bill.id) || generatingBillId === order.id ? (
                   <Loader2 size={15} className="animate-spin me-1.5" />
@@ -1092,18 +1101,20 @@ export function OrderCard({
                 {tReceipt('printBill')}
               </Button>
             )}
-            <Button
-              onClick={() => onCheckout(order.id)}
-              disabled={generatingBillId === order.id || awaitingWeight}
-              className={`flex-1 h-10 justify-center active:scale-95 touch-manipulation font-semibold text-xs ${
-                payStatus === 'partial'
-                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                  : 'bg-foreground text-background hover:bg-foreground/90'
-              }`}
-            >
-              <CreditCard size={15} className="me-1.5" />
-              {checkoutButtonLabel}
-            </Button>
+            {showCheckout && (
+              <Button
+                onClick={() => onCheckout(order.id)}
+                disabled={generatingBillId === order.id || awaitingWeight}
+                className={`flex-1 h-10 justify-center active:scale-95 touch-manipulation font-semibold text-xs ${
+                  payStatus === 'partial'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-foreground text-background hover:bg-foreground/90'
+                }`}
+              >
+                <CreditCard size={15} className="me-1.5" />
+                {checkoutButtonLabel}
+              </Button>
+            )}
 
             <Button
               variant="outline"

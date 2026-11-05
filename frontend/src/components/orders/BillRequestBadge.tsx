@@ -6,11 +6,30 @@ import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { parseDbTimestamp } from '@/lib/utils';
+import type { Order } from '@/lib/types';
+import { isAwaitingBillPayment } from '@/lib/bill-print-flow';
+
+export { isAwaitingBillPayment };
 
 export interface BillRequestFields {
   bill_requested_at?: string | null;
   bill_requested_by_name?: string | null;
   bill_payment_received_at?: string | null;
+}
+
+/** Name of the staff member who received the latest payment on the order's bills. */
+export function paymentReceiverName(order: Pick<Order, 'bill' | 'bills'>): string | null {
+  const bills =
+    order.bills && order.bills.length > 0 ? order.bills : order.bill ? [order.bill] : [];
+  let latest: { name: string; at: string } | null = null;
+  for (const bill of bills) {
+    for (const line of bill.payment_details || []) {
+      if (!line.received_by_name) continue;
+      if (!latest || String(line.timestamp) >= latest.at)
+        latest = { name: line.received_by_name, at: String(line.timestamp) };
+    }
+  }
+  return latest?.name ?? null;
 }
 
 /** Current time, refreshed every second while a wait is being timed. */
@@ -38,10 +57,16 @@ export function formatWait(fromStamp: string, toMs: number): string {
  * The table asked for its bill: while the cashier has not received the money the wait counts up;
  * once paid it shows when, and how long the table waited.
  */
-export function BillRequestBadge({ order, showRequester = false }: { order: BillRequestFields; showRequester?: boolean }) {
+export function BillRequestBadge({
+  order,
+  showRequester = false,
+}: {
+  order: BillRequestFields;
+  showRequester?: boolean;
+}) {
   const t = useTranslations('orders');
   const { formatTime } = useFormatDate();
-  const waiting = Boolean(order.bill_requested_at) && !order.bill_payment_received_at;
+  const waiting = isAwaitingBillPayment(order);
   const now = useTickingNow(waiting);
   if (!order.bill_requested_at) return null;
 
@@ -68,7 +93,8 @@ export function BillRequestBadge({ order, showRequester = false }: { order: Bill
   const minutes = Math.max(
     0,
     Math.round(
-      (parseDbTimestamp(order.bill_payment_received_at!).getTime() - parseDbTimestamp(order.bill_requested_at).getTime()) /
+      (parseDbTimestamp(order.bill_payment_received_at!).getTime() -
+        parseDbTimestamp(order.bill_requested_at).getTime()) /
         60000,
     ),
   );

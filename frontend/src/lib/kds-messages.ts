@@ -1,4 +1,6 @@
 import type { KdsOrder } from '@/hooks/useKdsConnection';
+import { kdsItemLine, spokenItemName } from '@/lib/item-options-note';
+import { parseVariantSelection } from '@/lib/printer/item-heading';
 
 export type KdsMessageKind =
   | 'move'
@@ -25,13 +27,16 @@ export interface KdsItemPlace {
   orderId: number;
   place: string;
   change: string | null;
+  /** The dish as the board shows it, with the chosen option ("ข้าวผัดหมู"). */
   name: string;
+  /** The dish as it is read aloud. */
+  spoken: string;
 }
 
 export type KdsBoardChange =
   | { kind: 'move'; key: string; from: string; to: string }
   | { kind: 'merge'; key: string; from: string; to: string }
-  | { kind: 'takeaway' | 'cancelled'; key: string; place: string; item: string };
+  | { kind: 'takeaway' | 'cancelled'; key: string; place: string; item: string; spoken: string };
 
 export function kdsItemPlaces(
   orders: KdsOrder[],
@@ -45,7 +50,12 @@ export function kdsItemPlaces(
         orderId: order.id,
         place,
         change: item.service_change ?? null,
-        name: item.product_name,
+        name: kdsItemLine(item).name,
+        spoken: spokenItemName(
+          item.product_name,
+          parseVariantSelection(item.variant_selection)?.name,
+          item.addons,
+        ),
       });
     }
   }
@@ -74,11 +84,23 @@ export function detectKdsBoardChanges(
     }
     if (now.change === 'takeaway' && was.change !== 'takeaway') {
       const key = `takeaway:${itemId}`;
-      changes.set(key, { kind: 'takeaway', key, place: now.place, item: now.name });
+      changes.set(key, {
+        kind: 'takeaway',
+        key,
+        place: now.place,
+        item: now.name,
+        spoken: now.spoken,
+      });
     }
     if (now.change === 'cancelled' && was.change !== 'cancelled') {
       const key = `cancelled:${itemId}`;
-      changes.set(key, { kind: 'cancelled', key, place: now.place, item: now.name });
+      changes.set(key, {
+        kind: 'cancelled',
+        key,
+        place: now.place,
+        item: now.name,
+        spoken: now.spoken,
+      });
     }
   }
   return [...changes.values()];

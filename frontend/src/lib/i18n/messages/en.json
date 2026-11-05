@@ -658,6 +658,8 @@
     "tables": "Tables"
   },
   "orders": {
+    "printBillFirst": "Print the bill first, then confirm the payment.",
+    "serveConfirmNeeded": "The bill cannot print until every item is confirmed served. Service staff have been alerted.",
     "active": "Active",
     "addItem": "Add Item",
     "addItems": "Add Items to Order",
@@ -734,6 +736,8 @@
     "billAwaitingPayment": "Awaiting payment",
     "billRequestedBy": "Bill printed by {name}",
     "billPaymentReceived": "Paid {time} · waited {minutes} min",
+    "confirmPayment": "Confirm payment",
+    "billRequestFailed": "Could not update the bill status. Try again.",
     "managerPin": "Enter manager PIN",
     "managerPinLabel": "Manager PIN",
     "managerPinRequired": "Manager PIN required for discounts",
@@ -1675,6 +1679,8 @@
     "success": "Database restored successfully. Restarting..."
   },
   "serverApp": {
+    "serveConfirmRequested": "Table {table}: please confirm served",
+    "serveConfirmNeeded": "Please confirm served",
     "addToOrder": "Add to order",
     "billPrintFailed": "Order sent, but the bill didn't print",
     "continueAsGuest": "Continue as guest",
@@ -1724,7 +1730,7 @@
     "billRequestFailed": "Could not print the bill",
     "billBlockedPricePending": "Can't print the bill yet: an item is still waiting for its price",
     "billBlockedNotServed": "Can't print the bill yet: confirm every item is served first",
-    "confirmServedMany": "Confirm {count} dishes served",
+    "confirmServedMany": "Confirm {count, plural, one {# dish} other {# dishes}} served",
     "confirmServedManyTitle": "Which dishes reached the table?",
     "confirmServedManySubmit": "Confirm ({count})",
     "itemsServedConfirmed": "{count} dishes confirmed served",
@@ -2294,7 +2300,7 @@
     "moreAppsHint": "Companion apps for the Flo POS family. Scan a QR code with your phone to download.",
     "name": "Name",
     "navGroupAccount": "Account",
-    "navGroupCustomers": "Customers",
+    "navGroupCustomers": "Marketing",
     "navGroupData": "Integrations",
     "navGroupGeneral": "General",
     "navGroupOperations": "Operations",

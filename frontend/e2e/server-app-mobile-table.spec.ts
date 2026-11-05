@@ -167,3 +167,94 @@ for (const screenSize of SCREENS) {
     if (screenSize.phone) await expect(page.getByTestId('server-app-cart-button')).toBeVisible();
   });
 }
+
+for (const screenSize of [SCREENS[0], SCREENS[2]]) {
+  test(`on ${screenSize.name}, a table with nothing ordered shows no kitchen status`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: screenSize.width, height: screenSize.height });
+    const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+    const headers = { Authorization: `Bearer ${managerToken}` };
+    const run = Math.random().toString(36).slice(2, 7);
+    const tableRes = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers,
+      data: { number: `Empty ${run}`, capacity: 2 },
+    });
+    expect(tableRes.ok()).toBeTruthy();
+
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+    await page.evaluate(
+      ([key, token]) => {
+        localStorage.setItem(key, token);
+        const raw = localStorage.getItem('pos-settings');
+        const parsed = raw ? JSON.parse(raw) : { state: {} };
+        parsed.state = { ...parsed.state, language: 'en' };
+        localStorage.setItem('pos-settings', JSON.stringify(parsed));
+      },
+      [TOKEN_KEY, managerToken],
+    );
+    await page.reload();
+    await openServerAppTables(page);
+    await page.getByRole('button', { name: new RegExp(`Empty ${run}`) }).click();
+
+    await expect(page.locator('header')).toContainText(`Empty ${run}`);
+    await expect(page.getByTestId('pos-product-search')).toBeVisible();
+    await expect(page.getByTestId('server-app-kitchen-summary')).toHaveCount(0);
+    await expect(page.getByTestId('server-app-table-actions')).toHaveCount(0);
+  });
+}
+
+for (const screenSize of [SCREENS[0], SCREENS[2]]) {
+  test(`on ${screenSize.name}, a table asked to confirm serving shows a bare alert that opens its ordered items`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: screenSize.width, height: screenSize.height });
+    const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+    const headers = { Authorization: `Bearer ${managerToken}` };
+    const run = Math.random().toString(36).slice(2, 7);
+    const tableRes = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers,
+      data: { number: `Flag ${run}`, capacity: 2 },
+    });
+    const tableId = (await tableRes.json()).table.id;
+    const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+      headers,
+      data: {
+        type: 'dine_in',
+        table_id: tableId,
+        items: [
+          { product_id: 'e2e-product', quantity: 1 },
+          { product_id: 'e2e-product', quantity: 2, special_instructions: 'two' },
+        ],
+      },
+    });
+    expect(order.status()).toBe(201);
+    const created = (await order.json()).order;
+    const flag = await page.request.post(`${E2E_BASE_URL}/api/orders/${created.id}/bill-request`, {
+      headers,
+      data: { cashier: true, preflight: true },
+    });
+    expect(flag.status()).toBe(409);
+
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+    await page.evaluate(
+      ([key, token]) => {
+        localStorage.setItem(key, token);
+        const raw = localStorage.getItem('pos-settings');
+        const parsed = raw ? JSON.parse(raw) : { state: {} };
+        parsed.state = { ...parsed.state, language: 'en' };
+        localStorage.setItem('pos-settings', JSON.stringify(parsed));
+      },
+      [TOKEN_KEY, managerToken],
+    );
+    await page.reload();
+
+    const alert = page
+      .getByTestId('serve-confirm-alert')
+      .filter({ hasText: `Table Flag ${run}: please confirm served` });
+    await expect(alert).toBeVisible();
+    await expect(alert.getByTestId('server-app-kitchen-summary')).toHaveCount(0);
+    await alert.click();
+    await expect(page.getByTestId('server-app-ordered-items')).toContainText(created.order_number);
+  });
+}

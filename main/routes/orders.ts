@@ -620,21 +620,10 @@ router.get(
       if (!['all', 'active', 'unpaid'].includes(view)) {
         return res.status(400).json({ error: 'Invalid view parameter.' });
       }
-      const activeOrderPredicate = `(
-        (orders.status NOT IN ('cancelled', 'completed'))
-        OR (
-          orders.status = 'completed'
-          AND ? = 1
-          AND EXISTS (
-            SELECT 1 FROM order_items AS active_item
-            WHERE active_item.order_id = orders.id
-              AND active_item.status IN ('pending', 'preparing', 'ready')
-          )
-        )
-      )`;
+      // A paid (completed) order leaves the serving list; the KDS keeps any food still owed.
+      const activeOrderPredicate = "orders.status NOT IN ('cancelled', 'completed')";
       if (view === 'active') {
         wheres.push(activeOrderPredicate);
-        params.push(isKdsEnabled() ? 1 : 0);
       } else if (view === 'unpaid') {
         wheres.push("orders.status != 'cancelled'");
         wheres.push(`(
@@ -652,7 +641,6 @@ router.get(
         const statuses = req.query.status.split(',');
         if (statuses.length === 1 && statuses[0] === 'active') {
           wheres.push(activeOrderPredicate);
-          params.push(isKdsEnabled() ? 1 : 0);
         } else if (statuses.length === 1 && statuses[0] === 'bill_requested') {
           // The bill is printed and the table waits for the cashier to receive the money.
           wheres.push(`orders.bill_requested_at IS NOT NULL
@@ -5763,6 +5751,24 @@ function confirmItemServed(
       details: { product_name: item.product_name, from_status: item.status },
     });
   }
+  clearServeConfirmRequestWhenConfirmed(db, orderId);
+}
+
+function clearServeConfirmRequestWhenConfirmed(
+  db: ReturnType<typeof getDatabase>,
+  orderId: string,
+): void {
+  const unconfirmed = (
+    db
+      .prepare('SELECT status, served_confirmed_at FROM order_items WHERE order_id = ?')
+      .all(orderId) as { status: string; served_confirmed_at: string | null }[]
+  ).some((row) => !isTerminalItemStatus(row.status) && !row.served_confirmed_at);
+  if (!unconfirmed) {
+    db.prepare(
+      `UPDATE orders SET serve_confirm_requested_at = NULL, serve_confirm_requested_by_name = NULL
+       WHERE id = ? AND serve_confirm_requested_at IS NOT NULL`,
+    ).run(orderId);
+  }
 }
 
 function orderWithItems(db: ReturnType<typeof getDatabase>, orderId: string) {
@@ -5858,7 +5864,19 @@ router.post(
     try {
       const orderId = String(req.params.id);
       const actorId = String((req as any).user?.userId || '');
+      const cashierPrint = req.body?.cashier === true;
+      const preflight = cashierPrint && req.body?.preflight === true;
+      if (cashierPrint && !hasPermission(actorId, 'payments.take')) {
+        return res.status(403).json({ error: 'Taking payments is not allowed for this user' });
+      }
       const db = getDatabase();
+      const actorName = () =>
+        (
+          db.prepare('SELECT name FROM users WHERE id = ?').get(actorId) as
+            | { name: string }
+            | undefined
+        )?.name ?? null;
+      let serveConfirmRequested = false;
       const order = withTxn(() => {
         const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
         if (!current) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
@@ -5879,23 +5897,44 @@ router.post(
             served_confirmed_at: string | null;
           }[]
         ).filter((item) => !isTerminalItemStatus(item.status));
-        if (liveItems.length === 0 || liveItems.some((item) => !item.served_confirmed_at)) {
+        if (liveItems.length === 0) {
           throw Object.assign(new Error('Confirm every item is served before printing the bill'), {
             statusCode: 409,
             code: 'served_unconfirmed',
           });
         }
+        // Only a table's order is served at a table; a take-away or delivery bill prints for the cashier at once.
+        const needsServeConfirmation = !cashierPrint || current.type === 'dine_in';
+        if (needsServeConfirmation && liveItems.some((item) => !item.served_confirmed_at)) {
+          if (!cashierPrint) {
+            throw Object.assign(
+              new Error('Confirm every item is served before printing the bill'),
+              {
+                statusCode: 409,
+                code: 'served_unconfirmed',
+              },
+            );
+          }
+          // The cashier's attempt flags the table on the Server App until service staff confirm it.
+          if (!current.serve_confirm_requested_at) {
+            db.prepare(
+              `UPDATE orders SET serve_confirm_requested_at = ?, serve_confirm_requested_by_name = ?,
+                 updated_at = ? WHERE id = ?`,
+            ).run(now(), actorName(), now(), orderId);
+          }
+          serveConfirmRequested = true;
+          return null;
+        }
+        if (preflight) return current;
         // A reprint keeps the first request time, so the wait keeps counting from it.
         if (!current.bill_requested_at || current.bill_payment_received_at) {
-          const actor = db.prepare('SELECT name FROM users WHERE id = ?').get(actorId) as
-            | { name: string }
-            | undefined;
           db.prepare(
             `UPDATE orders
              SET bill_requested_at = ?, bill_requested_by = ?, bill_requested_by_name = ?,
-                 bill_payment_received_at = NULL, updated_at = ?
+                 bill_payment_received_at = NULL, serve_confirm_requested_at = NULL,
+                 serve_confirm_requested_by_name = NULL, updated_at = ?
              WHERE id = ?`,
-          ).run(now(), actorId, actor?.name ?? null, now(), orderId);
+          ).run(now(), actorId, actorName(), now(), orderId);
           recordOrderAudit(db, {
             orderId,
             actorUserId: actorId,
@@ -5905,7 +5944,14 @@ router.post(
         }
         return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
       });
-      notifyOrderUpdated();
+      if (serveConfirmRequested) {
+        notifyOrderUpdated();
+        return res.status(409).json({
+          error: 'Confirm every item is served before printing the bill',
+          code: 'served_unconfirmed',
+        });
+      }
+      if (!preflight) notifyOrderUpdated();
       res.json({ order });
     } catch (err) {
       const error = err as { statusCode?: number; message?: string; code?: string };

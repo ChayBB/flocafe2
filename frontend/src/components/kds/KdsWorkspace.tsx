@@ -64,6 +64,9 @@ const NONE_INACTIVE: KitchenStatus[] = [];
 const AFTER_READ_ALOUD_MS = 3000;
 // The pause between the parts of a read-out: an item and its special instructions, tables, the order note.
 const READ_ALOUD_PAUSE_MS = 700;
+// An order of more than two dishes reads each dish on its own, with a 30% longer pause between them.
+const READ_ALOUD_SPACED_DISHES_OVER = 2;
+const READ_ALOUD_DISH_PAUSE_MS = Math.round(READ_ALOUD_PAUSE_MS * 1.3);
 
 // Items switched to take-away are still cooked, so they are read out and announced; cancelled ones are not.
 function liveItems(order: UseKdsConnectionResult['orders'][number]) {
@@ -167,7 +170,7 @@ export function KdsWorkspace({
         'place' in change
           ? t(change.kind === 'takeaway' ? 'speechTakeaway' : 'speechCancelled', {
               place: change.place,
-              item: spokenItemName(change.item, null, null),
+              item: change.spoken,
             })
           : undefined,
       text:
@@ -278,29 +281,42 @@ export function KdsWorkspace({
       const parts = orders.flatMap((order) => {
         const fresh = liveItems(order).filter((item) => !knownItems.has(item.id));
         if (fresh.length === 0) return [];
-        const chunks: string[] = [];
+        const chunks: { text: string; pauseMs: number }[] = [];
+        const spaced = fresh.length > READ_ALOUD_SPACED_DISHES_OVER;
         let chunk = '';
         for (const item of fresh) {
           const variantName = parseVariantSelection(item.variant_selection)?.name;
           const name = spokenItemName(item.product_name, variantName, item.addons);
           const text = t('readAloudItem', { name, quantity: item.quantity });
-          chunk = chunk ? `${chunk}, ${text}` : text;
           const note = withoutOptionsNote(
             item.special_instructions,
             optionsNote(variantName, item.addons),
           );
+          if (spaced) {
+            chunks.push({ text, pauseMs: READ_ALOUD_DISH_PAUSE_MS });
+            if (note) chunks.push({ text: note, pauseMs: READ_ALOUD_PAUSE_MS });
+            continue;
+          }
+          chunk = chunk ? `${chunk}, ${text}` : text;
           if (note) {
-            chunks.push(chunk, note);
+            chunks.push({ text: chunk, pauseMs: READ_ALOUD_PAUSE_MS });
+            chunks.push({ text: note, pauseMs: READ_ALOUD_PAUSE_MS });
             chunk = '';
           }
         }
-        if (chunk) chunks.push(chunk);
-        chunks[0] = order.table?.name
-          ? t('readAloudTable', { table: order.table.name, items: chunks[0] })
-          : t('readAloudOrder', { number: order.order_number, items: chunks[0] });
+        if (chunk) chunks.push({ text: chunk, pauseMs: READ_ALOUD_PAUSE_MS });
+        chunks[0] = {
+          text: order.table?.name
+            ? t('readAloudTable', { table: order.table.name, items: chunks[0].text })
+            : t('readAloudOrder', { number: order.order_number, items: chunks[0].text }),
+          pauseMs: READ_ALOUD_PAUSE_MS,
+        };
         const orderNote = order.special_instructions?.trim() || '';
         if (orderNote && readOrderNotes.get(order.id) !== orderNote) {
-          chunks.push(t('readAloudOrderNote', { note: orderNote }));
+          chunks.push({
+            text: t('readAloudOrderNote', { note: orderNote }),
+            pauseMs: READ_ALOUD_PAUSE_MS,
+          });
         }
         return chunks;
       });
@@ -308,8 +324,8 @@ export function KdsWorkspace({
         const lang = kdsSpeechLang();
         queueKdsSound(async () => {
           for (const [index, part] of parts.entries()) {
-            if (index > 0) await new Promise((resolve) => setTimeout(resolve, READ_ALOUD_PAUSE_MS));
-            await speakKdsNow(part, lang);
+            if (index > 0) await new Promise((resolve) => setTimeout(resolve, part.pauseMs));
+            await speakKdsNow(part.text, lang);
           }
           readAloudEndedAtRef.current = Date.now();
         });

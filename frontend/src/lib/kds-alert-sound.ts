@@ -212,3 +212,31 @@ export async function playKdsAudio(data: ArrayBuffer): Promise<boolean> {
     return false;
   }
 }
+
+const soundFiles = new Map<string, Promise<AudioBuffer | null>>();
+
+/** Plays a bundled sound file once; two beeps stand in when it cannot load. False when sound is blocked. */
+export async function playSoundFile(url: string): Promise<boolean> {
+  const audio = getContext();
+  if (!audio || audio.state !== 'running') return false;
+  let loading = soundFiles.get(url);
+  if (!loading) {
+    loading = fetch(url)
+      .then((response) =>
+        response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status))),
+      )
+      .then((data) => audio.decodeAudioData(data))
+      .catch(() => null);
+    soundFiles.set(url, loading);
+  }
+  const buffer = await loading;
+  if (!buffer) {
+    soundFiles.delete(url);
+    return playKdsAlert(2);
+  }
+  const source = audio.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.destination);
+  source.start();
+  return true;
+}

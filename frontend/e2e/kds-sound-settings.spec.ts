@@ -186,6 +186,26 @@ test('orders already in the kitchen when the display signs in or switches statio
   expect(log.__spoken.join(' | ')).not.toContain('old note');
   await page.waitForTimeout(1500);
   expect(await spokenAboutProduct()).toHaveLength(1);
+
+  // More than two dishes are read one by one, 30% further apart than the parts of a smaller order.
+  const many = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+    headers,
+    data: {
+      type: 'takeaway',
+      items: [1, 2, 3].map((quantity) => ({ product_id: productId, quantity })),
+    },
+  });
+  expect(many.status()).toBe(201);
+  await expect.poll(async () => (await spokenAboutProduct()).length, { timeout: 15000 }).toBe(4);
+  const spaced = await sounds(page);
+  const first = spaced.__spoken.lastIndexOf(`New order: 1 ${productName}`);
+  expect(spaced.__spoken.slice(first, first + 3)).toEqual([
+    `New order: 1 ${productName}`,
+    `2 ${productName}`,
+    `3 ${productName}`,
+  ]);
+  expect(spaced.__spokenAt[first + 1] - spaced.__spokenAt[first]).toBeGreaterThanOrEqual(880);
+  expect(spaced.__spokenAt[first + 2] - spaced.__spokenAt[first + 1]).toBeGreaterThanOrEqual(880);
 });
 
 test('KDS sound switches turn reading new items aloud and the ready-to-serve announcement on and off', async ({

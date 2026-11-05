@@ -8,6 +8,8 @@ import {
   withoutOptionsNote,
 } from '../src/lib/item-options-note';
 import { itemLine, ticketItemLine } from '../../shared/item-line';
+import { detectKdsBoardChanges, kdsItemPlaces } from '../src/lib/kds-messages';
+import type { KdsOrder } from '../src/hooks/useKdsConnection';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
 
@@ -210,4 +212,120 @@ test('a one-kind option folds once picked, and the size and option go into the s
   } finally {
     await cleanup();
   }
+});
+
+test('the Server App lists a sent dish by its chosen option, as the KDS does', async ({ page }) => {
+  const managerToken = getE2eToken('e2e-manager', 'manager@flo.local', 'manager');
+  const headers = { Authorization: `Bearer ${managerToken}` };
+  const run = Math.random().toString(36).slice(2, 7);
+  const group = await page.request.post(`${E2E_BASE_URL}/api/addon-groups`, {
+    headers,
+    data: {
+      name: `Meat ${run}`,
+      min_selection: 1,
+      max_selection: 1,
+      addons: [
+        { name: 'หมู', price: 0 },
+        { name: 'กุ้ง', price: 0 },
+      ],
+    },
+  });
+  expect(group.status()).toBe(201);
+  const groupBody = (await group.json()).addon_group;
+  const groupId = groupBody.id as string;
+  const porkId = (groupBody.addons as { id: string; name: string }[]).find(
+    (a) => a.name === 'หมู',
+  )!.id;
+  const category = await page.request.post(`${E2E_BASE_URL}/api/categories`, {
+    headers,
+    data: { name: `Rice ${run}` },
+  });
+  const categoryId = (await category.json()).category.id;
+  const productName = `ข้าวผัด${run} หมู/กุ้ง`;
+  const product = await page.request.post(`${E2E_BASE_URL}/api/products`, {
+    headers,
+    data: {
+      name: productName,
+      category_id: categoryId,
+      price: 60,
+      tax_category_id: null,
+      tax_behavior: 'exempt',
+      addon_group_ids: [groupId],
+    },
+  });
+  expect(product.status()).toBe(201);
+  const productId = (await product.json()).product.id;
+  try {
+    const table = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers,
+      data: { number: `Named ${run}`, capacity: 2 },
+    });
+    const tableId = (await table.json()).table.id;
+    const order = await page.request.post(`${E2E_BASE_URL}/api/orders`, {
+      headers,
+      data: {
+        type: 'dine_in',
+        table_id: tableId,
+        items: [{ product_id: productId, quantity: 1, addons: [{ id: porkId, quantity: 1 }] }],
+      },
+    });
+    expect(order.status()).toBe(201);
+    const expected = kdsItemLine({ product_name: productName, addons: [{ name: 'หมู' }] }).name;
+    expect(expected).not.toContain('/');
+
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
+    await page.evaluate(
+      ([key, token]) => localStorage.setItem(key, token),
+      [TOKEN_KEY, managerToken],
+    );
+    await page.reload();
+    await page
+      .getByRole('button', { name: new RegExp(`Named ${run}`) })
+      .first()
+      .click();
+    await page.getByTestId('server-app-ordered-items-button').click();
+    const line = page.getByTestId('server-app-ordered-item');
+    await expect(line).toHaveCount(1);
+    await expect(line).toContainText(expected);
+    await expect(line).not.toContainText('หมู/กุ้ง');
+  } finally {
+    await page.request.delete(`${E2E_BASE_URL}/api/products/${productId}`, { headers });
+    await page.request.delete(`${E2E_BASE_URL}/api/addon-groups/${groupId}`, { headers });
+    await page.request.delete(`${E2E_BASE_URL}/api/categories/${categoryId}`, { headers });
+  }
+});
+
+test('a KDS take-away or cancel notice names the dish by its chosen option, shown and spoken', () => {
+  const order = (change: string | null) =>
+    ({
+      id: 1,
+      order_number: 'ORD-1',
+      table: { name: '26' },
+      items: [
+        {
+          id: 7,
+          product_name: 'ข้าวผัด หมู/กุ้ง/ไก่/ปลาหมึก',
+          variant_selection: JSON.stringify({ name: 'จานเล็ก' }),
+          addons: [{ name: 'หมู' }],
+          service_change: change,
+        },
+      ],
+    }) as unknown as KdsOrder;
+  const placeOf = () => 'โต๊ะ 26';
+  const [takeaway] = detectKdsBoardChanges(
+    kdsItemPlaces([order(null)], placeOf),
+    kdsItemPlaces([order('takeaway')], placeOf),
+  );
+  expect(takeaway).toEqual({
+    kind: 'takeaway',
+    key: 'takeaway:7',
+    place: 'โต๊ะ 26',
+    item: 'ข้าวผัดหมู (จานเล็ก)',
+    spoken: 'ข้าวผัดหมู จานเล็ก',
+  });
+  const [cancelled] = detectKdsBoardChanges(
+    kdsItemPlaces([order(null)], placeOf),
+    kdsItemPlaces([order('cancelled')], placeOf),
+  );
+  expect(cancelled).toMatchObject({ item: 'ข้าวผัดหมู (จานเล็ก)', spoken: 'ข้าวผัดหมู จานเล็ก' });
 });

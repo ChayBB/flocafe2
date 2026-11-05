@@ -211,6 +211,8 @@ export interface Order {
   bill_requested_at?: string | null;
   bill_requested_by_name?: string | null;
   bill_payment_received_at?: string | null;
+  /** The cashier tried to print before every item was confirmed served. */
+  serve_confirm_requested_at?: string | null;
   table_id: string | null;
   /** Staff owner of the table when the order was opened; kept for staff performance reporting. */
   table_owner_user_id?: string | null;
@@ -309,6 +311,8 @@ export interface Bill {
         timestamp: string;
         tendered_amount?: number;
         change_amount?: number;
+        received_by?: string;
+        received_by_name?: string;
       }[]
     | null;
   split_group_id?: string | null;

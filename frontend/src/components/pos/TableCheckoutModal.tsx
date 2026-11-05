@@ -5,6 +5,13 @@ import { X, ShoppingCart, Users, Printer, Loader2, ArrowRightLeft, Pencil } from
 import { Button } from '@/components/ui/button';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import api from '@/lib/api';
+import {
+  amountDue,
+  checkCashierBillPrint,
+  isAwaitingBillPayment,
+  needsBillPrintBeforePayment,
+  recordCashierBillPrint,
+} from '@/lib/bill-print-flow';
 import { useTranslations } from 'use-intl';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import toast from 'react-hot-toast';
@@ -28,7 +35,8 @@ interface Props {
   cartItemCount: number;
   onClose: () => void;
   onAddItems: (table: Table, order: Order) => void;
-  onPrintBill?: (bill: Bill, reservedWindow?: Window | null) => Promise<void>;
+  /** Resolves true once the printer accepted the bill. */
+  onPrintBill?: (bill: Bill, reservedWindow?: Window | null) => Promise<boolean>;
   reservePrintWindow?: () => Window | null | undefined;
   canGenerateBill: boolean;
   canReadBills?: boolean;
@@ -112,7 +120,7 @@ export default function TableCheckoutModal({
       .catch(() => setSplitChecksEnabled(false));
   }, []);
 
-  const handlePayment = (bill: Bill) => onPayment(bill);
+  const handlePayment = (bill: Bill) => onPayment(bill.order || !order ? bill : { ...bill, order });
 
   const handleCheckout = async () => {
     if (!order) return;
@@ -146,6 +154,18 @@ export default function TableCheckoutModal({
         return;
       }
       setOrder(currentOrder);
+      const printFirst = needsBillPrintBeforePayment(currentOrder);
+      if (printFirst) {
+        const check = await checkCashierBillPrint(currentOrder.id);
+        if (check !== 'ok') {
+          toast.error(
+            check === 'serve_unconfirmed'
+              ? tOrders('serveConfirmNeeded')
+              : tOrders('billRequestFailed'),
+          );
+          return;
+        }
+      }
       if (
         currentOrder.bill?.split_group_id ||
         currentOrder.bills?.some((bill) => bill.split_group_id)
@@ -166,10 +186,17 @@ export default function TableCheckoutModal({
       }
       if (targetBill) {
         windowTransferred = true;
-        await onPrintBill(
+        const printed = await onPrintBill(
           { ...targetBill, order: targetBill.order ?? currentOrder },
           reservedWindow,
         );
+        // Only a bill that actually printed waits for the cashier to confirm the payment.
+        if (printed && printFirst) {
+          if (await recordCashierBillPrint(currentOrder.id)) {
+            const { data } = await api.get(`/orders/${currentOrder.id}`);
+            setOrder(data.order as Order);
+          } else toast.error(tOrders('billRequestFailed'));
+        }
       }
     } catch {
       toast.error(t('generateBillFailed'));
@@ -252,6 +279,9 @@ export default function TableCheckoutModal({
   );
   const splitBills = (order.bills || []).filter((bill) => Boolean(bill.split_group_id));
   const awaitingWeight = orderAwaitingWeight(order);
+  // An unpaid bill is printed first; the cashier then confirms the payment.
+  const printFirst = needsBillPrintBeforePayment(order);
+  const showPrintButton = Boolean(order.bill || canGenerateBill) && !isAwaitingBillPayment(order);
 
   return (
     <>
@@ -414,7 +444,7 @@ export default function TableCheckoutModal({
                             {t('splitCheck')}
                           </Button>
                         )}
-                      {bill.payment_status !== 'paid' && (
+                      {bill.payment_status !== 'paid' && !printFirst && (
                         <Button size="sm" onClick={() => handlePayment(bill)}>
                           {t('pay')}
                         </Button>
@@ -456,19 +486,21 @@ export default function TableCheckoutModal({
                   <ShoppingCart size={16} className="me-2" />
                   {addingItems ? t('adding') : t('addToOrder', { count: cartItemCount })}
                 </Button>
-                <Button
-                  onClick={handleCheckout}
-                  variant="outline"
-                  className="w-full"
-                  disabled={generating}
-                >
-                  {generating ? t('generating') : t('checkoutInstead')}
-                </Button>
+                {!printFirst && (
+                  <Button
+                    onClick={handleCheckout}
+                    variant="outline"
+                    className="w-full"
+                    disabled={generating}
+                  >
+                    {generating ? t('generating') : t('checkoutInstead')}
+                  </Button>
+                )}
               </div>
             ) : splitBills.length === 0 ? (
               // Cart empty - show both options
               <div
-                className={`grid ${order.bill || canGenerateBill ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}
+                className={`grid ${showPrintButton && !printFirst ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}
               >
                 <Button
                   variant="outline"
@@ -477,9 +509,9 @@ export default function TableCheckoutModal({
                 >
                   {t('addItems')}
                 </Button>
-                {(order.bill || canGenerateBill) && (
+                {showPrintButton && (
                   <Button
-                    variant="outline"
+                    variant={printFirst ? 'default' : 'outline'}
                     onClick={handlePrintBill}
                     disabled={generating || printingBill || awaitingWeight}
                     className="font-medium"
@@ -492,12 +524,18 @@ export default function TableCheckoutModal({
                     {tReceipt('printBill')}
                   </Button>
                 )}
-                <Button
-                  onClick={handleCheckout}
-                  disabled={generating || printingBill || awaitingWeight}
-                >
-                  {generating ? t('generating') : t('checkout')}
-                </Button>
+                {!printFirst && (
+                  <Button
+                    onClick={handleCheckout}
+                    disabled={generating || printingBill || awaitingWeight}
+                  >
+                    {generating
+                      ? t('generating')
+                      : isAwaitingBillPayment(order)
+                        ? `${tOrders('confirmPayment')} ${fmt(amountDue(order))}`
+                        : t('checkout')}
+                  </Button>
+                )}
               </div>
             ) : null}
           </div>

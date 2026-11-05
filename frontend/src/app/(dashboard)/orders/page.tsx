@@ -51,6 +51,11 @@ import {
   type AppendAttemptStorage,
 } from '@/lib/append-attempt';
 import { preferChildScopedBill } from '@/lib/printer/tax-components';
+import {
+  checkCashierBillPrint,
+  needsBillPrintBeforePayment,
+  recordCashierBillPrint,
+} from '@/lib/bill-print-flow';
 import { fetchLoadedOrderPages } from '@/lib/orders-search';
 import { tenantCan } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
@@ -69,6 +74,8 @@ type OrdersKey = keyof AppConfig['Messages']['orders'];
 
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
 const ORDERS_PAGE_SIZE = 15;
+// Matches the .animate-order-paid-leave flash, fade and fold in globals.css.
+const ORDER_PAID_LEAVE_MS = 2000;
 
 // Statuses a tab already excludes; picking one of them alongside that tab could only list nothing.
 const tabExcludedStatuses: Record<FilterType, string[]> = {
@@ -245,6 +252,8 @@ export default function OrdersPage() {
 
   // Print states
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
+  // Orders just paid on the serving tab stay in the list long enough to animate out.
+  const [leavingOrders, setLeavingOrders] = useState<Order[]>([]);
   const [printingBillId, setPrintingBillId] = useState<number | null>(null);
   const [printingSlipOrderId, setPrintingSlipOrderId] = useState<number | null>(null);
   const [sendingWaOrderId, setSendingWaOrderId] = useState<number | null>(null);
@@ -975,15 +984,36 @@ export default function OrdersPage() {
     setPaymentBill(billToPay);
   };
 
+  const leavingOrderIds = new Set(leavingOrders.map((o) => o.id));
+  const masterListOrders = leavingOrders.some((leaving) => !orders.some((o) => o.id === leaving.id))
+    ? [
+        ...orders,
+        ...leavingOrders.filter((leaving) => !orders.some((o) => o.id === leaving.id)),
+      ].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
+    : orders;
+
   const handlePaymentComplete = async () => {
     const bill = paymentBill; // capture before clearing state
     setPaymentBill(null);
+    const paidOrder = bill ? orders.find((o) => o.id === bill.order_id) : undefined;
+    const settlesOrder = (paidOrder?.bills ?? []).every(
+      (b) => b.id === bill?.id || b.payment_status === 'paid',
+    );
+    if (paidOrder && settlesOrder && tabFilter === 'active') {
+      setLeavingOrders((prev) => [...prev.filter((o) => o.id !== paidOrder.id), paidOrder]);
+      window.setTimeout(
+        () => setLeavingOrders((prev) => prev.filter((o) => o.id !== paidOrder.id)),
+        ORDER_PAID_LEAVE_MS,
+      );
+    }
     fetchOrders(undefined, { refreshLoadedPages: true });
 
     if (bill && autoPrintBill) {
       try {
         const fallbackOrder = orders.find((o) => o.bill?.id === bill.id);
         const { data } = await api.get(`/bills/${bill.id}`);
+        // The bill printed before the payment was confirmed, so nothing prints again.
+        if ((data.bill as Bill)?.order?.bill_requested_at) return;
         const latestBill = preferChildScopedBill(data.bill as Bill, fallbackOrder);
         const printWarnings = await printBill(
           latestBill,
@@ -1013,12 +1043,13 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePrint = async (billId: number) => {
-    const order = orders.find((o) => o.bill?.id === billId);
-    if (!order?.bill) {
+  const handlePrint = async (billId: number, knownOrder?: Order): Promise<boolean> => {
+    const order = knownOrder ?? orders.find((o) => o.bill?.id === billId);
+    if (!order || (!knownOrder && !order.bill)) {
       toast.error(tOrders('billNotFound'));
-      return;
+      return false;
     }
+    let printed = false;
     const isReprint = (printHistory[billId]?.length ?? 0) > 0;
     setPrintingBillId(billId);
     try {
@@ -1041,6 +1072,16 @@ export default function OrdersPage() {
       );
       toast.success(isReprint ? tOrders('printReceiptReprint') : tOrders('printReceipt'));
       showPrintWarningsToast(printWarnings);
+      printed = true;
+      // Only a bill that actually printed waits for the cashier to confirm the payment.
+      if (needsBillPrintBeforePayment(order)) {
+        if (await recordCashierBillPrint(order.id))
+          fetchOrders(undefined, { refreshLoadedPages: true });
+        else {
+          printed = false;
+          toast.error(tOrders('billRequestFailed'));
+        }
+      }
       try {
         await api.post(`/bills/${billId}/print`, { print_type: isReprint ? 'reprint' : 'receipt' });
         fetchPrintHistory(billId);
@@ -1054,9 +1095,39 @@ export default function OrdersPage() {
       setPrintingBillId(null);
       setConfirmPrintBillId(null);
     }
+    return printed;
+  };
+
+  // The payment window's main button prints the bill while it still has to print first.
+  const printBillFromPayment = async (billToPrint: Bill): Promise<boolean> => {
+    const order = orders.find((o) => o.id === billToPrint.order_id) ?? billToPrint.order;
+    if (!order || !(await passesBillPrintGate(order))) return false;
+    return handlePrint(billToPrint.id, order);
+  };
+  const paymentOrder = paymentBill
+    ? (orders.find((o) => o.id === paymentBill.order_id) ?? paymentBill.order)
+    : undefined;
+
+  // An unpaid bill prints before payment; a table must have every item confirmed served first.
+  const passesBillPrintGate = async (order: Order) => {
+    if (!needsBillPrintBeforePayment(order)) return true;
+    const check = await checkCashierBillPrint(order.id);
+    if (check === 'ok') return true;
+    toast.error(
+      check === 'serve_unconfirmed' ? tOrders('serveConfirmNeeded') : tOrders('billRequestFailed'),
+    );
+    fetchOrders(undefined, { refreshLoadedPages: true });
+    return false;
+  };
+
+  const handlePrintBill = async (billId: number) => {
+    const order = orders.find((o) => o.bill?.id === billId);
+    if (order && !(await passesBillPrintGate(order))) return;
+    setConfirmPrintBillId(billId);
   };
 
   const handlePrintOrder = async (order: Order) => {
+    if (!(await passesBillPrintGate(order))) return;
     if (order.bill?.id) {
       setConfirmPrintBillId(order.bill.id);
       return;
@@ -1811,7 +1882,8 @@ export default function OrdersPage() {
           >
             {orders.length > 0 ? (
               <OrdersMasterList
-                orders={orders}
+                orders={masterListOrders}
+                leavingOrderIds={leavingOrderIds}
                 selectedOrderId={selectedOrderId}
                 onSelect={handleSelectOrder}
                 now={now}
@@ -1871,7 +1943,7 @@ export default function OrdersPage() {
                   approverId: null,
                 })
               }
-              onPrint={(billId) => setConfirmPrintBillId(billId)}
+              onPrint={handlePrintBill}
               onPrintOrder={
                 tenantCan(currentTenant, 'bills.generate') ? handlePrintOrder : undefined
               }
@@ -1952,7 +2024,7 @@ export default function OrdersPage() {
                   approverId: null,
                 })
               }
-              onPrint={(billId) => setConfirmPrintBillId(billId)}
+              onPrint={handlePrintBill}
               onPrintOrder={
                 tenantCan(currentTenant, 'bills.generate') ? handlePrintOrder : undefined
               }
@@ -2009,6 +2081,12 @@ export default function OrdersPage() {
           onClose={() => setPaymentBill(null)}
           onPaid={handlePaymentComplete}
           onBillUpdate={(updated) => setPaymentBill(updated)}
+          onPrintBill={
+            paymentOrder &&
+            needsBillPrintBeforePayment({ ...paymentOrder, bill: paymentOrder.bill ?? paymentBill })
+              ? printBillFromPayment
+              : undefined
+          }
           onSplit={(departingBill) => {
             fetchOrders(undefined, { refreshLoadedPages: true });
             // Synchronously clear paymentBill so the remainder check cannot be paid
