@@ -46,3 +46,7 @@ code-review/
 # Private shared docs repo — cloned in by hand, never tracked here (see AGENTS.md)
 specs/
 test-results/
+
+# Local IDE cache and build bundles
+.vs/
+server-app-bundle.zip
