@@ -5,6 +5,8 @@ import {
   printViaNetwork,
   NETWORK_PRINT_CHUNK_SIZE,
   NETWORK_PRINT_CHUNK_DELAY_MS,
+  NETWORK_PRINT_CONNECT_TIMEOUT_MS,
+  NETWORK_PRINT_WRITE_IDLE_TIMEOUT_MS,
 } from '../main/printers/thermal';
 
 class MockSocket extends EventEmitter {
@@ -50,7 +52,7 @@ class MockSocket extends EventEmitter {
 
   setTimeout(ms: number, cb?: () => void): this {
     this.timeoutMs = ms;
-    this.timeoutCb = cb;
+    if (cb) this.timeoutCb = cb;
     return this;
   }
 }
@@ -185,12 +187,50 @@ async function testAbortBeforeDrain(): Promise<void> {
   }
 }
 
+async function testSlowPrinterGetsWriteIdleTimeout(): Promise<void> {
+  const originalSocket = net.Socket;
+  let mock: MockSocket | null = null;
+  let connectTimeoutMs = 0;
+  (net as any).Socket = function () {
+    mock = new MockSocket();
+    mock.connect = function (port: number, host: string, cb?: () => void): MockSocket {
+      connectTimeoutMs = this.timeoutMs;
+      process.nextTick(() => cb?.());
+      return this;
+    };
+    mock.write = function (chunk: Buffer): boolean {
+      this.writtenChunks.push(Buffer.from(chunk));
+      return false;
+    };
+    return mock;
+  };
+
+  try {
+    const printPromise = printViaNetwork('192.168.1.102', 9100, Buffer.alloc(70 * 1024, 0xee));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(NETWORK_PRINT_CONNECT_TIMEOUT_MS, 5000);
+    assert.ok(NETWORK_PRINT_WRITE_IDLE_TIMEOUT_MS >= 30000);
+    assert.equal(connectTimeoutMs, 0, 'the connect timeout is armed after connect() is called');
+    assert.equal(mock!.timeoutMs, NETWORK_PRINT_WRITE_IDLE_TIMEOUT_MS);
+    assert.ok(mock!.timeoutCb, 'the timeout handler survives the post-connect re-arm');
+
+    mock!.timeoutCb!();
+    const result = await printPromise;
+    assert.equal(result.ok, false);
+    assert.match(result.detail || '', /Timed out writing to 192\.168\.1\.102:9100/);
+    assert.equal(mock!.destroyed, true);
+  } finally {
+    (net as any).Socket = originalSocket;
+  }
+}
+
 async function run(): Promise<void> {
   await testSmallPayloadDirectSend();
   await testLargePayloadChunkedSend();
   await testLargePayloadWithBackpressure();
   await testAbortSignalCancelsPrint();
   await testAbortBeforeDrain();
+  await testSlowPrinterGetsWriteIdleTimeout();
   console.log('✓ All network print chunking tests passed.');
 }
 

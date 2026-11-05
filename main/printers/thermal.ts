@@ -3954,6 +3954,9 @@ function decodeThermalPreviewBytes(bytes: number[], codePage: ThermalCodePage | 
 
 export const NETWORK_PRINT_CHUNK_SIZE = 4096;
 export const NETWORK_PRINT_CHUNK_DELAY_MS = 10;
+export const NETWORK_PRINT_CONNECT_TIMEOUT_MS = 5000;
+// A slow printer drains a large raster bill for many seconds; only a stalled socket should fail it.
+export const NETWORK_PRINT_WRITE_IDLE_TIMEOUT_MS = 30000;
 
 export async function printViaNetwork(
   ip: string,
@@ -3991,6 +3994,7 @@ async function sendViaNetwork(
 
     client.connect(port, ip, () => {
       connected = true;
+      client.setTimeout(NETWORK_PRINT_WRITE_IDLE_TIMEOUT_MS);
       // For small payloads (typical text receipts <4KB), write directly in a single pass.
       if (data.length <= NETWORK_PRINT_CHUNK_SIZE) {
         client.write(data, () => {
@@ -4044,7 +4048,7 @@ async function sendViaNetwork(
       finish({ ok: false, detail: `Network error: ${err.message}` });
     });
 
-    client.setTimeout(5000, () => {
+    client.setTimeout(NETWORK_PRINT_CONNECT_TIMEOUT_MS, () => {
       client.destroy();
       finish({
         ok: false,
