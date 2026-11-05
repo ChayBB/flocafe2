@@ -1,0 +1,37 @@
+[Unit]
+Description=POS API (port %i)
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+User=pos
+Group=pos
+WorkingDirectory=/opt/pos/app
+EnvironmentFile=/etc/pos/env
+Environment=NODE_ENV=production HOST=127.0.0.1 PORT=%i HOME=/opt/pos
+ExecStart=/usr/local/bin/bun run src/api.ts
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+LimitNOFILE=65536
+MemoryMax=768M
+
+# hardening (Bun ใช้ JIT จึงเปิด MemoryDenyWriteExecute ไม่ได้)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

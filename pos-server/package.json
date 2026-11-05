@@ -1,0 +1,25 @@
+{
+  "name": "pos-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/api.ts",
+    "start": "bun run src/api.ts",
+    "worker": "bun run src/worker.ts",
+    "migrate": "bun run src/migrate.ts",
+    "admin": "bun run src/admin.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun run test/smoke.ts && bun run test/connector.test.ts",
+    "connector": "bun run connector/flocafe.ts",
+    "bench": "bun run test/bench.ts"
+  },
+  "dependencies": {
+    "elysia": "^1.4.0",
+    "postgres": "^3.4.0",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

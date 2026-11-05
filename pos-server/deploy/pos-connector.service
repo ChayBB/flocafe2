@@ -1,0 +1,20 @@
+# ติดตั้งบนเครื่องในร้าน (ไม่ใช่เซิร์ฟเวอร์คลาวด์): /etc/pos-connector.env เก็บ POS_URL POS_TOKEN FLO_URL FLO_EMAIL FLO_PASSWORD (chmod 600)
+[Unit]
+Description=POS-Server ↔ FloCafe connector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pos
+WorkingDirectory=/opt/pos
+EnvironmentFile=/etc/pos-connector.env
+ExecStart=/usr/local/bin/bun run connector/flocafe.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

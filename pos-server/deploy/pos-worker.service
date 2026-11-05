@@ -1,0 +1,33 @@
+[Unit]
+Description=POS outbox worker
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+User=pos
+Group=pos
+WorkingDirectory=/opt/pos/app
+EnvironmentFile=/etc/pos/env
+Environment=NODE_ENV=production HOME=/opt/pos DB_POOL=3
+ExecStart=/usr/local/bin/bun run src/worker.ts
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+MemoryMax=384M
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

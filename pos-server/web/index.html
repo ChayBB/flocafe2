@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>สั่งอาหาร</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1 id="shop">สั่งอาหาร</h1>
+    <div id="table"></div>
+  </header>
+  <main>
+    <p id="msg" role="status"></p>
+    <button id="invite" type="button" hidden>ชวนเพื่อนร่วมโต๊ะ</button>
+    <section id="invitebox" hidden></section>
+    <section id="menu" aria-label="เมนู"></section>
+    <section id="orders" aria-label="ออเดอร์ของโต๊ะนี้"></section>
+  </main>
+  <footer id="cartbar" hidden>
+    <div><span id="count"></span> · <strong id="total"></strong></div>
+    <button id="submit" type="button">สั่งอาหาร</button>
+  </footer>
+  <script src="/vendor/qrcode.js"></script>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
