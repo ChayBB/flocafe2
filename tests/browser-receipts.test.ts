@@ -362,9 +362,9 @@ async function run() {
     });
     strictAssert.ok(
       namedQrHtml.includes(
-        '<p class="payment-qr-caption">Scan to pay</p><p class="payment-qr-account">Flo &lt;Cafe&gt;</p>',
-      ),
-      'the account holder name prints, escaped, on its own line under "scan to pay"',
+        '<p class="payment-qr-caption">Scan to pay</p><p class="payment-qr-account">Flo &lt;Cafe&gt;</p><img class="payment-qr" src="data:image/png;base64,QUJD"',
+      ) && /\.payment-qr-account \{[^}]*font-size: 1\.4em;[^}]*font-weight: 700;/.test(namedQrHtml),
+      'a named QR reads caption, then the larger bold holder name, then the QR',
     );
     strictAssert.ok(
       !qrHtml.includes('<p class="payment-qr-account">'),

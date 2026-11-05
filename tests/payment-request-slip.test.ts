@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildQrRasterBytes,
   renderPaymentRequestSlip,
+  renderPaymentRequestSlipHtml,
 } from '../main/printers/payment-request-slip';
 import { buildPromptPayPayload, parsePromptPayAccount } from '../main/lib/promptpay';
 
@@ -79,7 +80,7 @@ test('payment request slip carries the QR bitmap, the amount and a cut after the
   assert.ok(qrAt > 0 && cutAt > qrAt, 'the cut comes after the QR');
 });
 
-test('payment request slip prints the account holder name under "scan to pay" only when set', () => {
+test('payment request slip puts the account holder name between "scan to pay" and the QR only when set', async () => {
   const slip = {
     businessName: 'Flo Cafe',
     businessAddress: '',
@@ -104,21 +105,53 @@ test('payment request slip prints the account holder name under "scan to pay" on
     widthDots: 384,
     maxBandHeight: 200,
   };
+  const isQr = (line: string) => line.startsWith('{RAW_BYTES:');
+  const isScan = (line: string) => line.includes('Scan to pay');
   const plain = renderPaymentRequestSlip(slip, opts);
-  const named = renderPaymentRequestSlip({ ...slip, accountName: 'Flo Cafe Co., Ltd.' }, opts);
-  const scanAt = named.lines.findIndex((line) => line.includes('Scan to pay'));
-  assert.equal(named.lines[scanAt + 1], '{CENTER}{BOLD}Flo Cafe Co., Ltd.{/BOLD}{/CENTER}');
-  assert.deepEqual(
-    named.lines.filter((line) => !line.includes('Flo Cafe Co., Ltd.')),
-    plain.lines,
-    'only the name line is added',
+  assert.equal(
+    plain.lines.findIndex(isScan),
+    plain.lines.findIndex(isQr) + 1,
+    'without a name the caption stays under the QR',
   );
+
+  const named = renderPaymentRequestSlip({ ...slip, accountName: 'Flo Cafe Co., Ltd.' }, opts);
+  const scanAt = named.lines.findIndex(isScan);
+  assert.equal(
+    named.lines[scanAt + 1],
+    '{CENTER}{BOLD}{DOUBLE_HEIGHT}Flo Cafe Co., Ltd.{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}',
+  );
+  assert.ok(isQr(named.lines[scanAt + 2]), 'the QR follows the name');
+
   const longName = 'Somchai Jaidee Coffee and Bakery Company Limited';
   const wrapped = renderPaymentRequestSlip({ ...slip, accountName: longName }, opts);
-  const nameLines = wrapped.lines.slice(scanAt + 1, -1);
+  const nameLines = wrapped.lines.slice(scanAt + 1, wrapped.lines.findIndex(isQr));
   assert.ok(nameLines.length > 1, 'a long name wraps to the paper width');
-  assert.equal(
-    nameLines.map((line) => line.replace(/\{\/?(CENTER|BOLD)\}/g, '')).join(' '),
-    longName,
+  const nameText = nameLines.map((line) => line.replace(/\{\/?(CENTER|BOLD|DOUBLE_HEIGHT)\}/g, ''));
+  assert.equal(nameText.join(' '), longName);
+  assert.ok(
+    nameText.every((line) => line.length <= opts.columns),
+    'name lines fit the paper',
+  );
+
+  const html = await renderPaymentRequestSlipHtml(
+    { ...slip, accountName: 'Flo <Cafe>' },
+    { language: 'en', locale: 'en-US', currency: 'THB' },
+  );
+  assert.ok(
+    html.includes(
+      '<div class="center">Scan to pay</div><div class="center account-name">Flo &#60;Cafe&#62;</div><img src="data:image/png',
+    ),
+    'the page reads caption, name, then QR',
+  );
+  const plainHtml = await renderPaymentRequestSlipHtml(slip, {
+    language: 'en',
+    locale: 'en-US',
+    currency: 'THB',
+  });
+  assert.ok(
+    /<img src="data:image\/png[^"]*" alt="QR"><div class="center">Scan to pay<\/div><\/body>/.test(
+      plainHtml,
+    ),
+    'without a name the page keeps the caption under the QR',
   );
 });

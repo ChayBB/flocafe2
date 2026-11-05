@@ -951,8 +951,8 @@ export async function initPrinter(): Promise<void> {
 const FEED_BEFORE_CUT = [0x1b, 0x64, 0x05];
 
 /**
- * Puts the PromptPay QR for the bill total just above the paper cut, with a large centred
- * "scan to pay" line and the account holder's name under it; a shop without PromptPay prints none.
+ * Puts the PromptPay QR for the bill total just above the paper cut with a large centred
+ * "scan to pay" line; a shop without PromptPay prints none.
  */
 export async function insertBillPaymentQr(
   data: Buffer,
@@ -969,15 +969,15 @@ export async function insertBillPaymentQr(
     capabilities.raster?.widthDots ?? (columns <= 32 ? 384 : 576),
     capabilities.raster?.maxBandHeight ?? 200,
   );
-  const lines = [
-    '',
-    `{RAW_BYTES:${Buffer.from(qr).toString('base64')}}`,
-    `{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}${paymentQrCaption(language)}{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}`,
-    ...wrapText(readPaymentQrAccountName(), columns)
-      .filter((part) => part.trim())
-      .map((part) => `{CENTER}{BOLD}${part}{/BOLD}{/CENTER}`),
-    '',
-  ];
+  const qrLine = `{RAW_BYTES:${Buffer.from(qr).toString('base64')}}`;
+  const caption = `{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}${paymentQrCaption(language)}{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}`;
+  const nameLines = wrapText(readPaymentQrAccountName(), columns)
+    .filter((part) => part.trim())
+    .map((part) => `{CENTER}{BOLD}{DOUBLE_HEIGHT}${part}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}`);
+  // A named account reads caption, name, then QR; without a name the caption stays under the QR.
+  const lines = nameLines.length
+    ? ['', caption, ...nameLines, qrLine, '']
+    : ['', qrLine, caption, ''];
   const textOptions = { cutMode: profile.cutMode, columns, language };
   let block: Buffer | null = null;
   if (rasterCapabilityEnabled(capabilities)) {

@@ -112,6 +112,21 @@ export interface PaymentQrImage {
   accountName?: string;
 }
 
+/** A named account reads caption, name, then QR; without a name the caption stays under the QR. */
+function paymentQrBlock(
+  dataUrl: string | undefined,
+  caption: string,
+  accountName?: string,
+): string {
+  if (!dataUrl?.startsWith('data:image/')) return '';
+  const image = `<img class="payment-qr" src="${escapeHtml(dataUrl)}" alt="QR" />`;
+  const captionHtml = `<p class="payment-qr-caption">${escapeHtml(caption)}</p>`;
+  const name = accountName?.trim();
+  return name
+    ? `${captionHtml}<p class="payment-qr-account">${escapeHtml(name)}</p>${image}`
+    : `${image}${captionHtml}`;
+}
+
 /** Resolve tax-id label printed on receipt (special case for Iranian Economic Code). */
 function resolveTaxIdLabel(country: string | undefined, lang: Language): string {
   if (country?.toUpperCase() === 'IR') return printLabelResolver('receipt.economicCode', lang);
@@ -525,7 +540,7 @@ export function generateBillHtml(
     <div class="footer">
       ${messages?.footerNote ? `<p>${escapeHtml(messages.footerNote.text)}</p>` : `<p>${escapeHtml(L.thankYou)}</p>`}
       ${hasTax ? `<p>${escapeHtml(L.taxIncluded)}</p>` : ''}
-      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" /><p class="payment-qr-caption">${escapeHtml(L.scanToPay)}</p>${opts.paymentQrAccountName?.trim() ? `<p class="payment-qr-account">${escapeHtml(opts.paymentQrAccountName.trim())}</p>` : ''}` : ''}
+      ${paymentQrBlock(opts.paymentQrDataUrl, L.scanToPay, opts.paymentQrAccountName)}
     </div>
   </div>
 
@@ -614,7 +629,7 @@ function getPaperStyles(size: PaperSize): string {
     .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #999; }
     .payment-qr { display: block; width: 45mm; max-width: 80%; margin: 8px auto 0; }
     .payment-qr-caption { margin: 4px 0 0; text-align: center; font-size: 1.6em; font-weight: 700; }
-    .payment-qr-account { margin: 2px 0 0; text-align: center; font-weight: 700; }
+    .payment-qr-account { margin: 2px 0 0; text-align: center; font-size: 1.4em; font-weight: 700; }
     .text-end { text-align: end !important; }
     .num { unicode-bidi: isolate; white-space: nowrap; }
     .ltr { direction: ltr; unicode-bidi: isolate; }

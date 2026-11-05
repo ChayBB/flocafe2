@@ -145,11 +145,15 @@ export async function renderPaymentRequestSlipHtml(
     h1{font-size:15px;margin:10px 0;text-align:center}
     table{width:100%;border-collapse:collapse}td{padding:2px 0;vertical-align:top}.num{text-align:end;white-space:nowrap}
     .addon{color:#555;font-size:11px}.totals td{border-top:1px solid #000;font-weight:700}
-    .amount{font-size:22px;font-weight:700;text-align:center;margin:10px 0}.account-name{font-weight:700}img{display:block;width:60mm;max-width:100%;margin:0 auto}
+    .amount{font-size:22px;font-weight:700;text-align:center;margin:10px 0}.account-name{font-size:18px;font-weight:700;margin-bottom:6px}img{display:block;width:60mm;max-width:100%;margin:0 auto}
   </style></head><body><div class="center">${header}</div><h1>${escapeHtml(labels.title)}</h1>
   <div>${escapeHtml(`${labels.order}: ${slip.orderNumber}`)}</div>${slip.tableName ? `<div>${escapeHtml(`${labels.table}: ${slip.tableName}`)}</div>` : ''}${slip.createdAt ? `<div>${escapeHtml(slip.createdAt)}</div>` : ''}
   <table>${items}</table><table class="totals">${totals}</table>
-  <div class="amount">${money(slip.amount)}</div><img src="${qr}" alt="QR"><div class="center">${escapeHtml(labels.scan)}</div>${slip.accountName ? `<div class="center account-name">${escapeHtml(slip.accountName)}</div>` : ''}</body></html>`;
+  <div class="amount">${money(slip.amount)}</div>${
+    slip.accountName
+      ? `<div class="center">${escapeHtml(labels.scan)}</div><div class="center account-name">${escapeHtml(slip.accountName)}</div><img src="${qr}" alt="QR">`
+      : `<img src="${qr}" alt="QR"><div class="center">${escapeHtml(labels.scan)}</div>`
+  }</body></html>`;
 }
 
 function truncateToWidth(text: string, width: number): string {
@@ -253,11 +257,14 @@ export function renderPaymentRequestSlip(
   );
   lines.push('');
   const qrBytes = buildQrRasterBytes(slip.qrPayload, opts.widthDots, opts.maxBandHeight);
-  lines.push(`{RAW_BYTES:${Buffer.from(qrBytes).toString('base64')}}`);
-  lines.push('{CENTER}' + fit(labels.scan) + '{/CENTER}');
-  for (const part of wrapText(slip.accountName ?? '', cols)) {
-    if (part.trim()) lines.push('{CENTER}{BOLD}' + part + '{/BOLD}{/CENTER}');
-  }
+  const qrLine = `{RAW_BYTES:${Buffer.from(qrBytes).toString('base64')}}`;
+  const scanLine = '{CENTER}' + fit(labels.scan) + '{/CENTER}';
+  const nameLines = wrapText(slip.accountName ?? '', cols)
+    .filter((part) => part.trim())
+    .map((part) => '{CENTER}{BOLD}{DOUBLE_HEIGHT}' + part + '{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
+  // A named account reads caption, name, then QR; without a name the caption stays under the QR.
+  if (nameLines.length) lines.push(scanLine, ...nameLines, qrLine);
+  else lines.push(qrLine, scanLine);
   lines.push('{CUT}');
   const warnings: PrintWarning[] = [];
   const data = buildEscPos(

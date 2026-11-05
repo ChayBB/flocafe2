@@ -126,27 +126,20 @@ async function main() {
     assertOrThrow(html.includes('Latte &#60;b&#62;'), 'item names are escaped');
     assertOrThrow(/<img src="data:image\/png;base64,/.test(html), 'the page carries the QR image');
     assertOrThrow(
-      /Scan to pay<\/div><div class="center account-name">ก{60}<\/div>/.test(html),
-      'the page prints the holder name under "scan to pay"',
+      /Scan to pay<\/div><div class="center account-name">ก{60}<\/div><img src="data:image\/png;base64,/.test(
+        html,
+      ),
+      'the page prints the caption, then the holder name, then the QR',
     );
 
     // Thermal bills carry the PromptPay QR for the total just above the paper cut.
     const receipt = Buffer.from([0x41, 0x0a, 0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00]);
     const printer = { paper_width: '80mm' };
-    const unnamed = await (async () => {
-      await api(baseUrl, '/api/payment-methods/qr-account-name', {
-        method: 'PUT',
-        headers: authHeader,
-        body: { name: '' },
-      });
-      return insertBillPaymentQr(receipt, 250, printer);
-    })();
-    const savedName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+    await api(baseUrl, '/api/payment-methods/qr-account-name', {
       method: 'PUT',
       headers: authHeader,
-      body: { name: '  Flo   Cafe  Co. ' },
+      body: { name: '' },
     });
-    assertEqualOrThrow(savedName.data.name, 'Flo Cafe Co.', 'the holder name collapses spaces');
     const withQr = await insertBillPaymentQr(receipt, 250, printer);
     const qrAt = withQr.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
     assertOrThrow(qrAt > 1, 'the bill carries a QR raster');
@@ -154,7 +147,7 @@ async function main() {
       qrAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
       'the QR prints before the feed and cut',
     );
-    // A large centred "scan to pay" line sits under the QR, still above the cut.
+    // Without a holder name, a large centred "scan to pay" line sits under the QR, still above the cut.
     const captionAt = withQr.indexOf(Buffer.from('Scan to pay'));
     assertOrThrow(captionAt > qrAt, 'the scan-to-pay line prints under the QR');
     assertOrThrow(
@@ -165,17 +158,38 @@ async function main() {
       withQr.subarray(qrAt, captionAt).includes(Buffer.from([0x1b, 0x61, 0x01])),
       'the scan-to-pay line is centred',
     );
-    const nameAt = withQr.indexOf(Buffer.from('Flo Cafe Co.'));
-    assertOrThrow(nameAt > captionAt, 'the holder name prints under the scan-to-pay line');
+
+    // With a holder name the bill reads caption, then the name in large bold, then the QR.
+    const savedName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+      method: 'PUT',
+      headers: authHeader,
+      body: { name: '  Flo   Cafe  Co. ' },
+    });
+    assertEqualOrThrow(savedName.data.name, 'Flo Cafe Co.', 'the holder name collapses spaces');
+    const named = await insertBillPaymentQr(receipt, 250, printer);
+    const namedCaptionAt = named.indexOf(Buffer.from('Scan to pay'));
+    const nameAt = named.indexOf(Buffer.from('Flo Cafe Co.'));
+    const namedQrAt = named.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
     assertOrThrow(
-      nameAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
-      'the holder name prints before the feed and cut',
+      namedCaptionAt > 0 && nameAt > namedCaptionAt && namedQrAt > nameAt,
+      'a named bill prints the caption, then the holder name, then the QR',
     );
-    assertOrThrow(!unnamed.includes(Buffer.from('Flo Cafe')), 'no name line without a name');
     assertOrThrow(
-      unnamed.includes(Buffer.from('Scan to pay')) && unnamed.length < withQr.length,
-      'an empty name keeps the caption and adds nothing under it',
+      named.lastIndexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00])) <
+        named.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
+      'the QR still prints before the feed and cut',
     );
+    const nameStyle = named.subarray(namedCaptionAt + 'Scan to pay'.length, nameAt);
+    assertOrThrow(
+      nameStyle.includes(Buffer.from([0x1b, 0x61, 0x01])),
+      'the holder name is centred',
+    );
+    const modeAt = nameStyle.lastIndexOf(Buffer.from([0x1b, 0x21]));
+    assertOrThrow(
+      modeAt >= 0 && (nameStyle[modeAt + 2] & 0x18) === 0x18,
+      'the holder name prints bold and double height',
+    );
+    assertOrThrow(!withQr.includes(Buffer.from('Flo Cafe')), 'no name line without a name');
     // A printer that cannot draw Thai as text still prints the QR; the line follows the bill's raster path.
     const thai = await insertBillPaymentQr(receipt, 250, printer, 'th');
     assertOrThrow(thai.includes(Buffer.from([0x1d, 0x76, 0x30, 0x00])), 'a Thai bill keeps its QR');
