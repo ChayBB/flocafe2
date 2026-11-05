@@ -43,9 +43,11 @@ const MAX_REQUEST_BODY = 64 * 1024;
 const MAX_RESPONSE_BODY = 10 * 1024 * 1024;
 
 const GUEST_ROUTES: [string, RegExp][] = [
-  ['GET', /^\/api\/guest\/(table|menu)$/],
+  ['GET', /^\/api\/guest\/(table|menu|order)$/],
   ['POST', /^\/api\/guest\/(order|join)$/],
   ['GET', /^\/api\/server-app\/info$/],
+  ['GET', /^\/api\/server-app\/branding\/(logo|cover)$/],
+  ['GET', /^\/api\/products\/[\w-]+\/image$/],
 ];
 const STATIC_PATH =
   /^\/(server-standalone(\/[\w.-]*)*|_next\/static\/[\w./@-]+|favicon\.ico|icons\/[\w.-]+|fonts\/[\w.-]+|[\w.-]+\.(png|svg|ico|webmanifest|woff2?))$/;
