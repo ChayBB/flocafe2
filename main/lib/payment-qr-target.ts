@@ -8,6 +8,25 @@ export const QR_ACCOUNT_SETTING = 'qr_payment_account';
  */
 export const BANK_QR_ACCOUNT_SETTING = 'bank_qr_account';
 
+/** Name of the PromptPay account holder, printed under the payment QR so customers see who they pay. */
+export const QR_ACCOUNT_NAME_SETTING = 'qr_payment_account_name';
+export const QR_ACCOUNT_NAME_MAX_LENGTH = 60;
+
+export function normalizeQrAccountName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return Array.from(value.trim().replace(/\s+/g, ' '))
+    .slice(0, QR_ACCOUNT_NAME_MAX_LENGTH)
+    .join('')
+    .trim();
+}
+
+/** The holder name for a payment QR; only the PromptPay QR account has one. */
+export function readPaymentQrAccountName(kind: PaymentQrKind = 'promptpay'): string {
+  return kind === 'promptpay'
+    ? normalizeQrAccountName(getSettingValue(QR_ACCOUNT_NAME_SETTING))
+    : '';
+}
+
 export type PaymentQrKind = 'promptpay' | 'bank';
 
 export function parsePaymentQrKind(value: unknown): PaymentQrKind {

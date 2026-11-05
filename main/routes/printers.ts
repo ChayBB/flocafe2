@@ -5,6 +5,7 @@ import { buildPromptPayPayload } from '../lib/promptpay';
 import {
   missingQrAccountCode,
   parsePaymentQrKind,
+  readPaymentQrAccountName,
   resolvePaymentQrTarget,
 } from '../lib/payment-qr-target';
 import {
@@ -1680,6 +1681,7 @@ router.post(
               .filter(Boolean),
           })),
         qrPayload: buildPromptPayPayload(target, rounded),
+        accountName: readPaymentQrAccountName(qrKind),
       };
       const language = resolveTenantReceiptLanguages(db).primary;
       // A document printer or no printer at all prints this page through the system print dialog.

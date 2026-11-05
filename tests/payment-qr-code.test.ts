@@ -67,6 +67,24 @@ async function main() {
     const read = await api(baseUrl, '/api/payment-methods/qr-account', { headers: authHeader });
     assertEqualOrThrow(read.data.account, '0812345678', 'account is readable by managers');
 
+    const noName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+      headers: authHeader,
+    });
+    assertEqualOrThrow(noName.data.name, '', 'the account holder name starts empty');
+    assertEqualOrThrow((await qr(10)).data.account_name, '', 'the QR has no holder name yet');
+    const badName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+      method: 'PUT',
+      headers: authHeader,
+      body: { name: 42 },
+    });
+    assertEqualOrThrow(badName.status, 400, 'a non-text holder name is rejected');
+    const longName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+      method: 'PUT',
+      headers: authHeader,
+      body: { name: `  ${'ก'.repeat(70)}  ` },
+    });
+    assertEqualOrThrow(longName.data.name, 'ก'.repeat(60), 'the holder name is trimmed and capped');
+
     const ok = await qr(267.5);
     assertEqualOrThrow(ok.status, 200, 'QR is created once an account exists');
     assertOrThrow(
@@ -79,6 +97,8 @@ async function main() {
       crc16Ccitt(ok.data.payload.slice(0, -4)),
       'payload checksum is valid',
     );
+
+    assertEqualOrThrow(ok.data.account_name, 'ก'.repeat(60), 'the QR carries the holder name');
 
     for (const amount of [0, -5, 'abc']) {
       const response = await qr(amount);
@@ -105,10 +125,28 @@ async function main() {
     assertOrThrow(html.includes('ORD-QR-1'), 'the page names the order');
     assertOrThrow(html.includes('Latte &#60;b&#62;'), 'item names are escaped');
     assertOrThrow(/<img src="data:image\/png;base64,/.test(html), 'the page carries the QR image');
+    assertOrThrow(
+      /Scan to pay<\/div><div class="center account-name">ก{60}<\/div>/.test(html),
+      'the page prints the holder name under "scan to pay"',
+    );
 
     // Thermal bills carry the PromptPay QR for the total just above the paper cut.
     const receipt = Buffer.from([0x41, 0x0a, 0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00]);
     const printer = { paper_width: '80mm' };
+    const unnamed = await (async () => {
+      await api(baseUrl, '/api/payment-methods/qr-account-name', {
+        method: 'PUT',
+        headers: authHeader,
+        body: { name: '' },
+      });
+      return insertBillPaymentQr(receipt, 250, printer);
+    })();
+    const savedName = await api(baseUrl, '/api/payment-methods/qr-account-name', {
+      method: 'PUT',
+      headers: authHeader,
+      body: { name: '  Flo   Cafe  Co. ' },
+    });
+    assertEqualOrThrow(savedName.data.name, 'Flo Cafe Co.', 'the holder name collapses spaces');
     const withQr = await insertBillPaymentQr(receipt, 250, printer);
     const qrAt = withQr.indexOf(Buffer.from([0x1d, 0x76, 0x30, 0x00]));
     assertOrThrow(qrAt > 1, 'the bill carries a QR raster');
@@ -126,6 +164,17 @@ async function main() {
     assertOrThrow(
       withQr.subarray(qrAt, captionAt).includes(Buffer.from([0x1b, 0x61, 0x01])),
       'the scan-to-pay line is centred',
+    );
+    const nameAt = withQr.indexOf(Buffer.from('Flo Cafe Co.'));
+    assertOrThrow(nameAt > captionAt, 'the holder name prints under the scan-to-pay line');
+    assertOrThrow(
+      nameAt < withQr.lastIndexOf(Buffer.from([0x1b, 0x64, 0x05, 0x1d, 0x56, 0x00])),
+      'the holder name prints before the feed and cut',
+    );
+    assertOrThrow(!unnamed.includes(Buffer.from('Flo Cafe')), 'no name line without a name');
+    assertOrThrow(
+      unnamed.includes(Buffer.from('Scan to pay')) && unnamed.length < withQr.length,
+      'an empty name keeps the caption and adds nothing under it',
     );
     // A printer that cannot draw Thai as text still prints the QR; the line follows the bill's raster path.
     const thai = await insertBillPaymentQr(receipt, 250, printer, 'th');

@@ -1,5 +1,5 @@
 import { formatPhoneLocal } from '../lib/phone';
-import { resolvePaymentQrTarget } from '../lib/payment-qr-target';
+import { readPaymentQrAccountName, resolvePaymentQrTarget } from '../lib/payment-qr-target';
 import { buildPromptPayPayload } from '../lib/promptpay';
 import {
   buildQrRasterBytes,
@@ -952,7 +952,7 @@ const FEED_BEFORE_CUT = [0x1b, 0x64, 0x05];
 
 /**
  * Puts the PromptPay QR for the bill total just above the paper cut, with a large centred
- * "scan to pay" line under it; a shop without PromptPay prints none.
+ * "scan to pay" line and the account holder's name under it; a shop without PromptPay prints none.
  */
 export async function insertBillPaymentQr(
   data: Buffer,
@@ -973,6 +973,9 @@ export async function insertBillPaymentQr(
     '',
     `{RAW_BYTES:${Buffer.from(qr).toString('base64')}}`,
     `{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}${paymentQrCaption(language)}{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}`,
+    ...wrapText(readPaymentQrAccountName(), columns)
+      .filter((part) => part.trim())
+      .map((part) => `{CENTER}{BOLD}${part}{/BOLD}{/CENTER}`),
     '',
   ];
   const textOptions = { cutMode: profile.cutMode, columns, language };

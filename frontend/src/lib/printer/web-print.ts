@@ -101,8 +101,15 @@ export interface WebPrintOptions {
   languages?: ResolvedPrintLanguages;
   /** PromptPay QR (PNG data URL) for the bill total, printed centred under the footer. */
   paymentQrDataUrl?: string;
-  /** Fetches `paymentQrDataUrl` after the print window opens; resolving undefined prints no QR. */
-  loadPaymentQr?: () => Promise<string | undefined>;
+  /** PromptPay account holder printed under the "scan to pay" line; empty prints nothing. */
+  paymentQrAccountName?: string;
+  /** Fetches the payment QR after the print window opens; resolving undefined prints no QR. */
+  loadPaymentQr?: () => Promise<PaymentQrImage | undefined>;
+}
+
+export interface PaymentQrImage {
+  dataUrl: string;
+  accountName?: string;
 }
 
 /** Resolve tax-id label printed on receipt (special case for Iranian Economic Code). */
@@ -147,15 +154,25 @@ export async function printWebBill(
   let html: string;
   try {
     const failedLanguages = await ensurePrintLanguagesLoaded(languages);
-    const paymentQrDataUrl =
-      opts.paymentQrDataUrl ?? (await opts.loadPaymentQr?.().catch(() => undefined));
+    const loadedQr = opts.paymentQrDataUrl
+      ? undefined
+      : await opts.loadPaymentQr?.().catch(() => undefined);
+    const paymentQrDataUrl = opts.paymentQrDataUrl ?? loadedQr?.dataUrl;
+    const paymentQrAccountName = opts.paymentQrDataUrl
+      ? opts.paymentQrAccountName
+      : loadedQr?.accountName;
     warnings = failedLanguages.map((language) => ({
       field: 'receipt language',
       text: language,
       message: `Receipt language "${language}" could not be loaded, so English labels were used. Check the locale bundle and retry.`,
       kind: 'locale' as const,
     }));
-    html = generateBillHtml(bill, tenant, { ...opts, languages, paymentQrDataUrl });
+    html = generateBillHtml(bill, tenant, {
+      ...opts,
+      languages,
+      paymentQrDataUrl,
+      paymentQrAccountName,
+    });
   } catch (error) {
     if (!printWindow.closed) printWindow.close();
     throw error;
@@ -508,7 +525,7 @@ export function generateBillHtml(
     <div class="footer">
       ${messages?.footerNote ? `<p>${escapeHtml(messages.footerNote.text)}</p>` : `<p>${escapeHtml(L.thankYou)}</p>`}
       ${hasTax ? `<p>${escapeHtml(L.taxIncluded)}</p>` : ''}
-      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" /><p class="payment-qr-caption">${escapeHtml(L.scanToPay)}</p>` : ''}
+      ${opts.paymentQrDataUrl?.startsWith('data:image/') ? `<img class="payment-qr" src="${escapeHtml(opts.paymentQrDataUrl)}" alt="QR" /><p class="payment-qr-caption">${escapeHtml(L.scanToPay)}</p>${opts.paymentQrAccountName?.trim() ? `<p class="payment-qr-account">${escapeHtml(opts.paymentQrAccountName.trim())}</p>` : ''}` : ''}
     </div>
   </div>
 
@@ -597,6 +614,7 @@ function getPaperStyles(size: PaperSize): string {
     .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #999; }
     .payment-qr { display: block; width: 45mm; max-width: 80%; margin: 8px auto 0; }
     .payment-qr-caption { margin: 4px 0 0; text-align: center; font-size: 1.6em; font-weight: 700; }
+    .payment-qr-account { margin: 2px 0 0; text-align: center; font-weight: 700; }
     .text-end { text-align: end !important; }
     .num { unicode-bidi: isolate; white-space: nowrap; }
     .ltr { direction: ltr; unicode-bidi: isolate; }

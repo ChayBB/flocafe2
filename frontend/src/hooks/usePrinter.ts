@@ -16,6 +16,7 @@ import {
 } from '@/lib/printer/receipt-encoder';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { useAuthStore } from '@/store/auth';
+import type { PaymentQrImage } from '@/lib/printer/web-print';
 import {
   ensurePrintLanguagesLoaded,
   resolveBillPrintLanguages,
@@ -52,10 +53,14 @@ const DOCUMENT_PRINTER_MARKER = 'Document printer';
 const DOCUMENT_PRINTER_TOAST = 'The selected printer saves documents — printing via system print';
 
 /** PromptPay QR for a bill total; a shop without a PromptPay account prints no QR. */
-async function loadBillPaymentQr(total: number): Promise<string | undefined> {
+async function loadBillPaymentQr(total: number): Promise<PaymentQrImage | undefined> {
   if (!(Number(total) > 0)) return undefined;
   const { data } = await api.get('/payment-methods/qr-code', { params: { amount: total } });
-  return typeof data?.data_url === 'string' ? data.data_url : undefined;
+  if (typeof data?.data_url !== 'string') return undefined;
+  return {
+    dataUrl: data.data_url,
+    accountName: typeof data.account_name === 'string' ? data.account_name : undefined,
+  };
 }
 
 type CoreBillTemplate = 'classic' | 'compact';

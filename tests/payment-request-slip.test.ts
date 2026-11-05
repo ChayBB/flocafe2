@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildQrRasterBytes, renderPaymentRequestSlip } from '../main/printers/payment-request-slip';
+import {
+  buildQrRasterBytes,
+  renderPaymentRequestSlip,
+} from '../main/printers/payment-request-slip';
 import { buildPromptPayPayload, parsePromptPayAccount } from '../main/lib/promptpay';
 
 const payload = buildPromptPayPayload(parsePromptPayAccount('0812345678')!, 802.5);
@@ -20,7 +23,10 @@ test('QR raster is GS v 0 bands no taller than the band limit and fits the paper
   assert.equal(widthBytes, 72);
   const firstBandHeight = bytes[6] + bytes[7] * 256;
   assert.ok(firstBandHeight > 0 && firstBandHeight <= 200);
-  assert.ok(bytes.slice(8).some((b) => b !== 0), 'the bitmap has black pixels');
+  assert.ok(
+    bytes.slice(8).some((b) => b !== 0),
+    'the bitmap has black pixels',
+  );
 });
 
 test('payment request slip carries the QR bitmap, the amount and a cut after the QR', () => {
@@ -71,4 +77,48 @@ test('payment request slip carries the QR bitmap, the amount and a cut after the
   const qrAt = indexOfSequence(data, [0x1d, 0x76, 0x30, 0x00]);
   const cutAt = indexOfSequence(data, [0x1d, 0x56]);
   assert.ok(qrAt > 0 && cutAt > qrAt, 'the cut comes after the QR');
+});
+
+test('payment request slip prints the account holder name under "scan to pay" only when set', () => {
+  const slip = {
+    businessName: 'Flo Cafe',
+    businessAddress: '',
+    businessPhone: '',
+    taxId: '',
+    orderNumber: 'ORD-2',
+    tableName: '',
+    createdAt: '',
+    amount: 100,
+    orderTotal: 100,
+    items: [],
+    qrPayload: payload,
+  };
+  const opts = {
+    columns: 32,
+    language: 'en',
+    locale: 'en-US',
+    currency: 'THB',
+    useUnicode: false,
+    arabicShaping: false,
+    cutMode: 'full' as const,
+    widthDots: 384,
+    maxBandHeight: 200,
+  };
+  const plain = renderPaymentRequestSlip(slip, opts);
+  const named = renderPaymentRequestSlip({ ...slip, accountName: 'Flo Cafe Co., Ltd.' }, opts);
+  const scanAt = named.lines.findIndex((line) => line.includes('Scan to pay'));
+  assert.equal(named.lines[scanAt + 1], '{CENTER}{BOLD}Flo Cafe Co., Ltd.{/BOLD}{/CENTER}');
+  assert.deepEqual(
+    named.lines.filter((line) => !line.includes('Flo Cafe Co., Ltd.')),
+    plain.lines,
+    'only the name line is added',
+  );
+  const longName = 'Somchai Jaidee Coffee and Bakery Company Limited';
+  const wrapped = renderPaymentRequestSlip({ ...slip, accountName: longName }, opts);
+  const nameLines = wrapped.lines.slice(scanAt + 1, -1);
+  assert.ok(nameLines.length > 1, 'a long name wraps to the paper width');
+  assert.equal(
+    nameLines.map((line) => line.replace(/\{\/?(CENTER|BOLD)\}/g, '')).join(' '),
+    longName,
+  );
 });

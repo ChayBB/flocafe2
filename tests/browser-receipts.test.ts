@@ -4,6 +4,7 @@
  * LTR isolation islands, translations, and non-Persian regressions (EN, ES, FR, PT).
  */
 
+import strictAssert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -353,6 +354,28 @@ async function run() {
         language: 'fa',
         paymentQrDataUrl: 'javascript:alert(1)',
       }).includes('payment-qr" src'),
+    );
+    const namedQrHtml = generateBillHtml(testIranBill, baseIranTenant, {
+      language: 'fa',
+      paymentQrDataUrl: 'data:image/png;base64,QUJD',
+      paymentQrAccountName: '  Flo <Cafe>  ',
+    });
+    strictAssert.ok(
+      namedQrHtml.includes(
+        '<p class="payment-qr-caption">Scan to pay</p><p class="payment-qr-account">Flo &lt;Cafe&gt;</p>',
+      ),
+      'the account holder name prints, escaped, on its own line under "scan to pay"',
+    );
+    strictAssert.ok(
+      !qrHtml.includes('<p class="payment-qr-account">'),
+      'no account holder line without a name',
+    );
+    strictAssert.ok(
+      !generateBillHtml(testIranBill, baseIranTenant, {
+        language: 'fa',
+        paymentQrAccountName: 'Flo Cafe',
+      }).includes('payment-qr-account">'),
+      'no account holder line without a QR',
     );
     assert('bill table headers have no grey background', !/th[^{]*\{[^}]*background/.test(html));
     assert(

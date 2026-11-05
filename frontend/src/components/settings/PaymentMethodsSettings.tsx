@@ -8,7 +8,11 @@ import { Button } from '@/components/ui/button';
 import { SettingsTabShell } from '@/components/settings/SettingsTabShell';
 import { useTranslations } from 'use-intl';
 import { useFormatDate } from '@/hooks/useFormatDate';
-import { isBankAccountMethod, isQrCodeMethod, type CustomPaymentMethod } from '@/lib/payment-methods';
+import {
+  isBankAccountMethod,
+  isQrCodeMethod,
+  type CustomPaymentMethod,
+} from '@/lib/payment-methods';
 
 interface MergeRecord {
   id: number;
@@ -37,11 +41,13 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
   const [splitChecksEnabled, setSplitChecksEnabled] = useState(false);
   const [qrAccount, setQrAccount] = useState('');
   const [qrAccountSaved, setQrAccountSaved] = useState('');
+  const [qrAccountName, setQrAccountName] = useState('');
+  const [qrAccountNameSaved, setQrAccountNameSaved] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [bankAccountSaved, setBankAccountSaved] = useState('');
 
   const load = async () => {
-    const [methodsRes, historyRes, splitRes, qrRes, bankRes] = await Promise.all([
+    const [methodsRes, historyRes, splitRes, qrRes, bankRes, qrNameRes] = await Promise.all([
       api.get('/payment-methods?include_inactive=true'),
       api.get('/payment-methods/merge-history'),
       api
@@ -49,7 +55,10 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
         .catch(() => ({ data: { setting: { value: 'false' } } })),
       api.get('/payment-methods/qr-account').catch(() => ({ data: { account: '' } })),
       api.get('/payment-methods/bank-qr-account').catch(() => ({ data: { account: '' } })),
+      api.get('/payment-methods/qr-account-name').catch(() => ({ data: { name: '' } })),
     ]);
+    setQrAccountName(qrNameRes.data?.name || '');
+    setQrAccountNameSaved(qrNameRes.data?.name || '');
     setQrAccount(qrRes.data?.account || '');
     setQrAccountSaved(qrRes.data?.account || '');
     setBankAccount(bankRes.data?.account || '');
@@ -94,6 +103,17 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
       toast.success(t('qrAccountSaved'));
     } catch {
       toast.error(t('qrAccountInvalid'));
+    }
+  };
+
+  const saveQrAccountName = async () => {
+    try {
+      const { data } = await api.put('/payment-methods/qr-account-name', { name: qrAccountName });
+      setQrAccountName(data.name);
+      setQrAccountNameSaved(data.name);
+      toast.success(t('qrAccountNameSaved'));
+    } catch {
+      toast.error(t('saveFailed'));
     }
   };
 
@@ -212,6 +232,30 @@ export function PaymentMethodsSettings({ isAdmin }: { isAdmin: boolean }) {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">{t('qrAccountHint')}</p>
+                  <label className="block pt-2 text-xs font-medium text-foreground">
+                    {t('qrAccountNameLabel')}
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      disabled={!isAdmin}
+                      maxLength={60}
+                      value={qrAccountName}
+                      onChange={(e) => setQrAccountName(e.target.value)}
+                      placeholder={t('qrAccountNamePlaceholder')}
+                      aria-label={t('qrAccountNameLabel')}
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={t('qrAccountNameLabel')}
+                      disabled={!isAdmin || qrAccountName === qrAccountNameSaved}
+                      onClick={saveQrAccountName}
+                    >
+                      <Save size={14} />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('qrAccountNameHint')}</p>
                 </div>
               )}
               {isBankAccountMethod(method.name) && (
