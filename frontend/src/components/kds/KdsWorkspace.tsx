@@ -6,7 +6,9 @@ import { KdsHeader } from '@/components/kds/KdsHeader';
 import { KdsKanbanBoard } from '@/components/kds/KdsKanbanBoard';
 import { KdsMessageBar } from '@/components/kds/KdsMessageBar';
 import { KdsSettingsDialog } from '@/components/kds/KdsSettingsDialog';
+import { KdsSearchBox } from '@/components/kds/KdsSearchBox';
 import { KdsTabsView } from '@/components/kds/KdsTabsView';
+import { kdsOrderMatches, normalizeKdsSearch } from '@/lib/kds-search';
 import { useKdsView } from '@/hooks/useKdsView';
 import { useKdsScreenMode } from '@/lib/kds-screen-mode';
 import type { KitchenStatus, UseKdsConnectionResult } from '@/hooks/useKdsConnection';
@@ -257,6 +259,14 @@ export function KdsWorkspace({
       .filter((order) => order.items.length > 0);
   }, [conn.orders, stationId]);
 
+  // Search only narrows what is drawn; read-outs and ready announcements still follow `orders`.
+  const [search, setSearch] = useState('');
+  const searchQuery = normalizeKdsSearch(search);
+  const visibleOrders = useMemo(
+    () => (searchQuery ? orders.filter((order) => kdsOrderMatches(order, searchQuery)) : orders),
+    [orders, searchQuery],
+  );
+
   // Items already in the kitchen when this display receives its orders are not announced, nor are items
   // already ready. Every station counts, so switching station never reads out what was already there.
   const knownItemIdsRef = useRef<Set<number> | null>(null);
@@ -428,17 +438,26 @@ export function KdsWorkspace({
         onOpenSettings={() => setSettingsOpen(true)}
         onLogout={conn.handleLogout}
       />
+      <KdsSearchBox value={search} onChange={setSearch} />
       <div className="flex-1 min-h-0 flex flex-col">
-        {viewMode === 'kanban' ? (
+        {searchQuery && visibleOrders.length === 0 ? (
+          <div
+            data-testid="kds-search-empty"
+            className="flex flex-col items-center justify-center py-16 text-gray-400"
+          >
+            <p className="text-lg">{t('searchNoResults', { query: search.trim() })}</p>
+            <p className="text-sm">{t('searchNoResultsHint')}</p>
+          </div>
+        ) : viewMode === 'kanban' ? (
           <KdsKanbanBoard
-            orders={orders}
+            orders={visibleOrders}
             updating={conn.updating}
             inactiveStatuses={inactiveStatuses}
             updateItemStatus={conn.updateItemStatus}
           />
         ) : (
           <KdsTabsView
-            orders={orders}
+            orders={visibleOrders}
             updating={conn.updating}
             inactiveStatuses={inactiveStatuses}
             updateItemStatus={conn.updateItemStatus}

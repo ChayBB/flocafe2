@@ -12,7 +12,8 @@ import {
   parseItemJson,
   attachEffectiveAddons,
   isKdsEnabled,
-  isVoidedItemKdsVisible, isCancelledNoticeKdsVisible,
+  isVoidedItemKdsVisible,
+  isCancelledNoticeKdsVisible,
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
@@ -621,9 +622,11 @@ function buildActiveOrdersSnapshot(
     throw new Error('Could not load station permissions');
 
   let query = `
-    SELECT o.*, t.number as table_name, t.kitchen_station_id
+    SELECT o.*, t.number as table_name, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name
     FROM orders o
     LEFT JOIN tables t ON o.table_id = t.id
+    LEFT JOIN users owner_u ON owner_u.id = o.table_owner_user_id
+    LEFT JOIN users creator_u ON creator_u.id = o.user_id
     WHERE ${activeOrdersCondition()}
   `;
 
@@ -676,7 +679,8 @@ function buildActiveOrdersSnapshot(
     .filter(
       (i: any) =>
         i.status !== 'void_adjustment' &&
-        (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i)) &&
+        (!['completed', 'cancelled', 'refunded'].includes(i.status) ||
+          isCancelledNoticeKdsVisible(i)) &&
         (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at)) &&
         isKdsStationItemAllowed(
           stationIds,
@@ -704,7 +708,8 @@ function buildActiveOrdersSnapshot(
         .filter(
           (i: any) =>
             i.status !== 'void_adjustment' &&
-            (!['completed', 'cancelled', 'refunded'].includes(i.status) || isCancelledNoticeKdsVisible(i)) &&
+            (!['completed', 'cancelled', 'refunded'].includes(i.status) ||
+              isCancelledNoticeKdsVisible(i)) &&
             (i.status !== 'voided' || isVoidedItemKdsVisible(i.voided_at)) &&
             isKdsStationItemAllowed(
               stationIds,

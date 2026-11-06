@@ -9441,6 +9441,7 @@ export function projectKdsOrder(order: any, restricted: boolean): any {
     'table_number',
     'floor',
     'section',
+    'server_name',
   ];
   return Object.fromEntries(
     allowedFields.filter((field) => field in order).map((field) => [field, order[field]]),

@@ -640,6 +640,10 @@
     "viewKanban": "คานบัน",
     "viewTabs": "แท็บ",
     "stationFilter": "สถานี",
+    "searchPlaceholder": "ค้นหาเมนู โต๊ะ พนักงานเสิร์ฟ หรือเลขออเดอร์",
+    "searchClear": "ล้างการค้นหา",
+    "searchNoResults": "ไม่พบออเดอร์ที่ตรงกับ “{query}”",
+    "searchNoResultsHint": "ลองคำอื่น หรือล้างการค้นหาเพื่อดูออเดอร์ทั้งหมด",
     "allStations": "ทุกสถานี",
     "noStations": "ยังไม่มีสถานี",
     "wsConnected": "เชื่อมต่อ WebSocket แล้ว"

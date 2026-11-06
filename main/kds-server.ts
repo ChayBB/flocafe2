@@ -412,9 +412,11 @@ export function startKdsServer(): Promise<void> {
           .replace(/\..*$/, '');
 
         let query = `
-          SELECT DISTINCT o.*, t.number as table_number, t.kitchen_station_id
+          SELECT DISTINCT o.*, t.number as table_number, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name
           FROM orders o
           LEFT JOIN tables t ON o.table_id = t.id
+          LEFT JOIN users owner_u ON owner_u.id = o.table_owner_user_id
+          LEFT JOIN users creator_u ON creator_u.id = o.user_id
           INNER JOIN order_items oi ON oi.order_id = o.id
           WHERE o.id IN (
             SELECT id FROM orders WHERE status IN ('pending', 'preparing', 'ready', 'served')

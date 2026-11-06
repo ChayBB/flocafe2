@@ -640,6 +640,10 @@
     "viewKanban": "Kanban",
     "viewTabs": "Tabs",
     "stationFilter": "Station",
+    "searchPlaceholder": "Search menu, table, server or order number",
+    "searchClear": "Clear search",
+    "searchNoResults": "No tickets match “{query}”",
+    "searchNoResultsHint": "Try another word or clear the search to see every ticket",
     "allStations": "All stations",
     "noStations": "No stations",
     "wsConnected": "WebSocket connected"
