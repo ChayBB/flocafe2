@@ -220,6 +220,7 @@
     "atLeastOneStatus": "Select at least one status",
     "pairedTitle": "Paired displays",
     "profanityFilter": "Profanity filter",
+    "profanityFilterRowHint": "Words to hide on paired displays",
     "configLoadFailed": "Could not load the profanity filter.",
     "profanityFilterLimit": "Enter up to 200 words, with up to 50 characters per word.",
     "profanityFilterHint": "Separate words with commas, spaces or new lines. Whole words in the store name and order numbers are replaced with *** on paired displays, so a longer word such as a dish name is not masked.",

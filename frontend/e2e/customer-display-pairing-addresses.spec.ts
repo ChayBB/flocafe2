@@ -78,14 +78,16 @@ test('the profanity textbox uses one button to edit and save the list', async ({
   }
 
   await openSettings();
-  const summary = page.getByText('Profanity filter', { exact: true });
-  const filter = page.locator('details').filter({ has: summary });
+  const row = page.getByTestId('customer-display-profanity-row');
+  const filter = page.getByTestId('customer-display-profanity-panel');
   const textbox = filter.getByRole('textbox');
   const saveButton = filter.getByRole('button', { name: 'Save', exact: true });
-  await expect(summary).toBeVisible();
-  await expect(textbox).toBeHidden();
+  await expect(row).toContainText('Profanity filter');
+  await expect(row).toContainText('Words to hide on paired displays');
+  await expect(filter).toBeHidden();
   expect(reads).toBe(0);
-  await summary.click();
+  await row.click();
+  await expect(row).toBeHidden();
   await expect(filter.getByRole('alert')).toBeVisible();
   await expect(textbox).toBeEditable();
   await expect(saveButton).toBeDisabled();
@@ -105,9 +107,13 @@ test('the profanity textbox uses one button to edit and save the list', async ({
   expect(reads).toBe(1);
   expect(words).toEqual(['first', 'second', 'third', 'fourth']);
 
+  await filter.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(filter).toBeHidden();
+  await expect(row).toBeVisible();
+
   await openSettings();
-  await expect(textbox).toBeHidden();
-  await summary.click();
+  await expect(filter).toBeHidden();
+  await row.click();
   await expect(textbox).toHaveValue('first\nsecond\nthird\nfourth');
   await expect(textbox).toBeEditable();
 });

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'use-intl';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
 
 const FILTER_PATH = '/settings/customer-display/profanity-filter';
@@ -69,18 +70,45 @@ export function CustomerDisplayProfanityFilter() {
     }
   }
 
+  function show() {
+    setOpen(true);
+    setEditing(true);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        data-testid="customer-display-profanity-row"
+        onClick={show}
+        className="mb-4 flex w-full items-center gap-3 rounded-lg border border-border px-4 py-3 text-start transition-colors hover:bg-muted/60"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium text-foreground">{t('profanityFilter')}</span>
+          <span className="block text-sm text-muted-foreground">{t('profanityFilterRowHint')}</span>
+        </span>
+        <ChevronRight size={18} className="shrink-0 text-muted-foreground rtl-flip" />
+      </button>
+    );
+  }
+
   return (
-    <details
-      className="mb-4 rounded-lg border border-border px-3 py-2"
-      onToggle={(event) => {
-        const expanded = event.currentTarget.open;
-        setOpen(expanded);
-        if (expanded) setEditing(true);
-      }}
+    <section
+      data-testid="customer-display-profanity-panel"
+      aria-labelledby="customer-display-profanity-title"
+      className="mb-4 rounded-lg border border-border px-4 py-3"
     >
-      <summary className="cursor-pointer text-sm font-medium text-foreground">
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft size={16} className="rtl-flip" />
+        {tCommon('back')}
+      </button>
+      <h4 id="customer-display-profanity-title" className="font-medium text-foreground">
         {t('profanityFilter')}
-      </summary>
+      </h4>
       {loadFailed ? (
         <p role="alert" className="mt-3 text-sm text-destructive">
           {t('configLoadFailed')}{' '}
@@ -131,6 +159,6 @@ export function CustomerDisplayProfanityFilter() {
       >
         {editing ? tCommon('save') : tCommon('edit')}
       </button>
-    </details>
+    </section>
   );
 }
