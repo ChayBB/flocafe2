@@ -180,9 +180,14 @@ refund can be paid back in a different method than the customer used, or issued 
    uses, so it is immediately spendable. It does not double-count as cashback on respend, because
    `calculateCashback()` in `main/routes/bills.ts` already excludes wallet-funded spend from the
    cashback base.
-7. **Accepted limitation.** A refund does not claw back cashback already credited on that sale at
-   payment time. Proportional cashback clawback was judged not worth the complexity at the product's
-   install-base scale.
+7. **Cashback is kept; points are taken back.** A refund does not claw back cashback already
+   credited on that sale at payment time. Proportional cashback clawback was judged not worth the
+   complexity at the product's install-base scale. Points earned on the bill are different:
+   `reverseRefundedPoints()` in `main/lib/loyalty-points.ts` writes a `reverse_earn` row for the
+   share of the bill now refunded, measured on the cumulative refunded total, so a full refund
+   reverses exactly what was earned. The same share comes off the customer's tier qualification,
+   which can start the tier grace period. The points balance may go negative when the points were
+   already spent; a negative balance blocks redemption.
 8. **Refund initiation is configurable; approval eligibility is not.** `refunds.initiate` (shipped
    owner/manager) controls who may start the workflow and is owner-editable per role or per user,
    see [role templates and user permissions](#role-templates-and-user-permissions-are-owner-configurable).

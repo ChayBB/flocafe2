@@ -11,6 +11,7 @@ import {
   recordOrderAudit,
 } from '../db';
 import { invertTaxBreakdown, invertTaxSnapshot } from './tax';
+import { reverseRefundedPoints } from '../lib/loyalty-points';
 import {
   getOpenSession,
   NO_CASH_SESSION_ID,
@@ -459,6 +460,14 @@ export function createRefund(db: Database, req: RefundRequest): RefundResult {
     timestamp,
     req.billId,
   );
+
+  reverseRefundedPoints(db, {
+    billId: Number(req.billId),
+    refundedCents: newRefundedCents,
+    paidCents,
+    refundId: Number(insertResult.lastInsertRowid),
+    at: timestamp,
+  });
 
   if (isStoreCreditRefund) {
     // A plain 'credit' row — wallet-funded spend is already excluded from the cashback base.

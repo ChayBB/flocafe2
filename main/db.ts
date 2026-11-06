@@ -8116,6 +8116,93 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 137,
+    name: 'add_loyalty_points_and_member_tiers',
+    up: () => {
+      // Points live in their own append-only ledger; loyalty_ledger stays the cashback/store-credit wallet.
+      insertSettingIfMissing('loyalty_mode', 'cashback');
+      insertSettingIfMissing('points_spend_per_point', '20');
+      insertSettingIfMissing('points_redeem_points', '100');
+      insertSettingIfMissing('points_redeem_value', '20');
+      insertSettingIfMissing('points_min_redemption', '100');
+      insertSettingIfMissing('points_expiry_days', '365');
+      insertSettingIfMissing('tier_grace_days', '30');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS points_ledger (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id TEXT NOT NULL REFERENCES customers(id),
+          bill_id INTEGER,
+          kind TEXT NOT NULL CHECK (kind IN (
+            'earn', 'redeem', 'reverse_earn', 'reverse_redeem', 'expire', 'adjust'
+          )),
+          points INTEGER NOT NULL,
+          eligible_cents INTEGER,
+          multiplier REAL,
+          tier_code TEXT,
+          expires_at TEXT,
+          actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          reason TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_points_ledger_customer ON points_ledger(customer_id, created_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_points_ledger_bill_earn
+          ON points_ledger(bill_id) WHERE kind = 'earn';
+        CREATE TRIGGER IF NOT EXISTS points_ledger_no_update BEFORE UPDATE ON points_ledger
+        BEGIN SELECT RAISE(ABORT, 'points_ledger is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS points_ledger_no_delete BEFORE DELETE ON points_ledger
+        BEGIN SELECT RAISE(ABORT, 'points_ledger is append-only'); END;
+
+        CREATE TABLE IF NOT EXISTS member_tiers (
+          code TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          min_qualifying_cents INTEGER NOT NULL CHECK (min_qualifying_cents >= 0),
+          multiplier REAL NOT NULL CHECK (multiplier >= 1),
+          benefits TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS member_tier_audit (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id TEXT NOT NULL REFERENCES customers(id),
+          from_tier TEXT,
+          to_tier TEXT,
+          reason TEXT NOT NULL CHECK (reason IN (
+            'promoted', 'demoted', 'grace_started', 'grace_cleared',
+            'override_set', 'override_cleared', 'override_expired'
+          )),
+          override_until TEXT,
+          note TEXT,
+          actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_member_tier_audit_customer
+          ON member_tier_audit(customer_id, created_at);
+      `);
+      const seedTier = db.prepare(
+        `INSERT OR IGNORE INTO member_tiers (code, name, min_qualifying_cents, multiplier, sort_order)
+         VALUES (?, ?, ?, ?, ?)`,
+      );
+      seedTier.run('silver', 'Silver', 0, 1, 1);
+      seedTier.run('gold', 'Gold', 500_000, 1.25, 2);
+      seedTier.run('platinum', 'Platinum', 2_000_000, 1.5, 3);
+
+      const customerColumns = getColumns(db, 'customers');
+      const customerAdds: [string, string][] = [
+        ['qualifying_cents', 'INTEGER NOT NULL DEFAULT 0'],
+        ['tier_code', 'TEXT DEFAULT NULL'],
+        ['tier_grace_until', 'TEXT DEFAULT NULL'],
+        ['tier_override_code', 'TEXT DEFAULT NULL'],
+        ['tier_override_until', 'TEXT DEFAULT NULL'],
+      ];
+      for (const [column, definition] of customerAdds) {
+        if (!customerColumns.includes(column))
+          db.exec(`ALTER TABLE customers ADD COLUMN ${column} ${definition}`);
+      }
+      if (!getColumns(db, 'products').includes('points_eligible'))
+        db.exec(`ALTER TABLE products ADD COLUMN points_eligible INTEGER NOT NULL DEFAULT 1`);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

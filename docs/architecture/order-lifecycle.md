@@ -210,6 +210,15 @@ zero collected payments leave the bill `unpaid` until explicitly settled.
 Wallet lines debit the customer's loyalty ledger. A paid bill credits cashback when loyalty is
 enabled, excluding the share funded by wallet points.
 
+When the `loyalty_mode` setting is `points`, a paid bill credits points instead of cashback, once per
+bill, through `awardBillPoints()` in `main/lib/loyalty-points.ts`. The earning base is the
+net eligible amount: item subtotals after their discount share, for products with
+`points_eligible = 1`, scaled to a split bill and less the wallet-funded share, with no tax or
+charges. Points are `floor(floor(amount / points_spend_per_point) × tier multiplier)`, and the same
+amount is added to the customer's `qualifying_cents`, which only drives the member tier and is
+never reduced by redemption. `points_ledger` is append-only: database triggers reject any update
+or delete.
+
 ## Order status
 
 `PATCH /api/orders/:id/status` advances the order through preparation, service, and terminal

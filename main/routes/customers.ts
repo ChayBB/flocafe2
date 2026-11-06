@@ -8,6 +8,12 @@ import { serializeOperationFailure } from '../lib/operation-failure';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 import { validateCustomerAddress } from './orders-validation';
 import { TERMINAL_ITEM_STATUSES } from '../../shared/order-item-status';
+import {
+  LoyaltyPointsError,
+  listTiers,
+  refreshCustomerLoyalty,
+  setTierOverride,
+} from '../lib/loyalty-points';
 
 export function parseCustomer(c: any): any {
   if (!c) return c;
@@ -452,6 +458,71 @@ router.get(
     } catch (error: any) {
       console.error('[API] Internal error:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.get(
+  '/:id/points',
+  customerReadRateLimit,
+  requirePermission('customers.view'),
+  (req: Request, res: Response) => {
+    try {
+      const db = getDatabase();
+      const customerId = req.params.id as string;
+      if (!db.prepare('SELECT 1 FROM customers WHERE id = ?').get(customerId))
+        return res.status(404).json({ error: 'Customer not found' });
+      const at = now();
+      const standing = db.transaction(() => refreshCustomerLoyalty(db, customerId, at))();
+      const override = db
+        .prepare(
+          'SELECT tier_override_code, tier_override_until, tier_grace_until FROM customers WHERE id = ?',
+        )
+        .get(customerId);
+      const ledger = db
+        .prepare(
+          'SELECT * FROM points_ledger WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 100',
+        )
+        .all(customerId);
+      const tierHistory = db
+        .prepare(
+          'SELECT * FROM member_tier_audit WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 50',
+        )
+        .all(customerId);
+      res.json({ ...standing, ...(override as object), tiers: listTiers(db), ledger, tierHistory });
+    } catch (error: unknown) {
+      res.status(500).json({ error: 'Failed to load points' });
+    }
+  },
+);
+
+router.put(
+  '/:id/tier-override',
+  customerWriteRateLimit,
+  requirePermission('customers.maintenance'),
+  (req: Request, res: Response) => {
+    try {
+      const db = getDatabase();
+      const customerId = req.params.id as string;
+      const tierCode = req.body?.tier_code ?? null;
+      const until = req.body?.until ?? null;
+      db.transaction(() =>
+        setTierOverride(db, {
+          customerId,
+          tierCode: typeof tierCode === 'string' && tierCode ? tierCode : null,
+          until: typeof until === 'string' && until ? until : null,
+          note: typeof req.body?.note === 'string' ? req.body.note : '',
+          actorUserId: (req as any).user?.userId ? String((req as any).user.userId) : null,
+          at: now(),
+        }),
+      )();
+      res.json(db.transaction(() => refreshCustomerLoyalty(db, customerId, now()))());
+    } catch (error: unknown) {
+      if (error instanceof LoyaltyPointsError) {
+        const status = error.code === 'customer_not_found' ? 404 : 400;
+        return res.status(status).json({ error: error.message, code: error.code });
+      }
+      res.status(500).json({ error: 'Failed to update tier override' });
     }
   },
 );

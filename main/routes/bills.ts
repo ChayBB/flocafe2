@@ -17,6 +17,7 @@ import {
   withTxn,
 } from '../db';
 import { asyncHandler } from '../middleware/async-handler';
+import { awardBillPoints, pointsModeActive } from '../lib/loyalty-points';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { printReceipt } from '../services/receipt';
 import { cloudSync } from '../services/cloud-sync';
@@ -3142,6 +3143,63 @@ function preparePaymentBatch(
   return { bill, prepared, existingPayments, effectiveCustomerId };
 }
 
+/** Net points-eligible spend on a bill in minor units: item subtotals after their discount share,
+ * eligible products only, scaled to a split bill, less the share paid from the wallet. */
+function billPointsEligibleMinor(
+  db: ReturnType<typeof getDatabase>,
+  bill: any,
+  payments: any[],
+  totalMinor: number,
+  minorFactor: number,
+): number {
+  const order = db
+    .prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?')
+    .get(bill.order_id) as any;
+  const items = db
+    .prepare(
+      `SELECT oi.subtotal FROM order_items oi JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = ? AND COALESCE(p.points_eligible, 1) = 1
+         AND oi.status NOT IN ('cancelled', 'voided', 'void_adjustment', 'refunded')`,
+    )
+    .all(bill.order_id) as { subtotal: number }[];
+  const eligible = items.reduce((sum, item) => {
+    const discountShare =
+      order?.discount_amount > 0 && order?.subtotal > 0
+        ? (order.discount_amount * item.subtotal) / order.subtotal
+        : 0;
+    return sum + Math.max(0, item.subtotal - discountShare);
+  }, 0);
+  const splitRatio =
+    Number(order?.subtotal || 0) > 0 && bill.split_group_id
+      ? Math.min(1, Number(bill.subtotal || 0) / Number(order.subtotal))
+      : 1;
+  const walletMinor = payments
+    .filter((p: any) => p.method === 'wallet')
+    .reduce((sum: number, p: any) => sum + Math.round(Number(p.amount || 0) * minorFactor), 0);
+  const paidShare = 1 - Math.min(1, walletMinor / Math.max(1, totalMinor));
+  return Math.floor(eligible * splitRatio * minorFactor * paidShare);
+}
+
+function awardPointsForPaidBill(
+  db: ReturnType<typeof getDatabase>,
+  bill: any,
+  customerId: string | null | undefined,
+  payments: any[],
+  totalMinor: number,
+  minorFactor: number,
+  at: string,
+): number {
+  if (!customerId || !pointsModeActive(db)) return 0;
+  return awardBillPoints(db, {
+    billId: Number(bill.id),
+    customerId,
+    eligibleMinor: billPointsEligibleMinor(db, bill, payments, totalMinor, minorFactor),
+    minorFactor,
+    at,
+    description: `Points on bill ${bill.bill_number}`,
+  });
+}
+
 function calculateCashback(
   db: ReturnType<typeof getDatabase>,
   bill: any,
@@ -3152,6 +3210,7 @@ function calculateCashback(
     db.prepare(`SELECT value FROM settings WHERE key = 'loyalty_enabled'`).get() as any
   )?.value;
   if (enabled !== 'true' && enabled !== '1') return 0;
+  if (pointsModeActive(db)) return 0;
   const globalRate = parseFloat(
     (db.prepare(`SELECT value FROM settings WHERE key = 'global_cashback_percent'`).get() as any)
       ?.value || '0',
@@ -3277,6 +3336,24 @@ export function completeExactBalanceSettlement(
       );
     }
   }
+  {
+    let paidList: any[] = [];
+    try {
+      paidList = JSON.parse(bill.payment_details || '[]');
+    } catch {
+      paidList = [];
+    }
+    const minorFactor = getCurrencyMinorUnitFactor(currency);
+    awardPointsForPaidBill(
+      db,
+      bill,
+      effectiveCustomerId,
+      paidList,
+      Math.round(Number(newTotal) * minorFactor),
+      minorFactor,
+      changedAt,
+    );
+  }
 
   return parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(billId));
 }
@@ -3298,6 +3375,7 @@ function applyPaymentBatch(
   bill: any;
   walletDebited: boolean;
   loyaltyPointsEarned: number;
+  pointsEarned?: number;
   kitchenDeliveryOverridden?: boolean;
 } {
   if (idempotencyKey && idempotencyUserId) {
@@ -3464,10 +3542,27 @@ function applyPaymentBatch(
         loyaltyPointsEarned = finalCashback;
       }
     }
+    let paidPoints: any[] = [];
+    try {
+      paidPoints = JSON.parse(freshBill.payment_details || '[]');
+    } catch {
+      paidPoints = [];
+    }
+    const pointsMinorFactor = getCurrencyMinorUnitFactor(getTenantCurrency());
+    const pointsEarned = awardPointsForPaidBill(
+      db,
+      freshBill,
+      effectiveCustId,
+      paidPoints,
+      Math.round(Number(freshBill.total || 0) * pointsMinorFactor),
+      pointsMinorFactor,
+      changedAt,
+    );
     const result = {
       bill: parseRowJson(freshBill),
       walletDebited: false,
       loyaltyPointsEarned,
+      pointsEarned,
       ...(kitchenStatus.overridden ? { kitchenDeliveryOverridden: true } : {}),
     };
     if (idempotencyKey && requestHash && idempotencyUserId) {
@@ -3568,6 +3663,7 @@ function applyPaymentBatch(
     billId,
   );
   let loyaltyPointsEarned = 0;
+  let pointsEarned = 0;
   if (paymentStatus === 'paid') {
     const unpaidSibling = db
       .prepare(
@@ -3617,11 +3713,21 @@ function applyPaymentBatch(
         loyaltyPointsEarned = finalCashback;
       }
     }
+    pointsEarned = awardPointsForPaidBill(
+      db,
+      bill,
+      effectiveCustomerId,
+      allPayments,
+      totalCents,
+      minorFactor,
+      changedAt,
+    );
   }
   const result = {
     bill: parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(billId)),
     walletDebited,
     loyaltyPointsEarned,
+    pointsEarned,
     ...(kitchenStatus.overridden ? { kitchenDeliveryOverridden: true } : {}),
   };
   if (idempotencyKey && requestHash && idempotencyUserId) {
