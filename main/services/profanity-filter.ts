@@ -1,3 +1,5 @@
+import { getBadWords } from '@sit-sandbox/thai-bad-words';
+
 export const PROFANITY_WORDS_KEY = 'customer_display_profanity_words';
 export const PROFANITY_MAX_WORDS = 200;
 export const PROFANITY_MAX_WORD_LENGTH = 50;
@@ -67,4 +69,25 @@ export function maskProfanity(text: string, words: readonly string[]): string {
     }
   }
   return result;
+}
+
+// The library lists every prefix + root pairing; keep only the roots, since whole-word matching
+// already catches a root after a separate prefix word such as ไอ้.
+export function suggestedProfanityWords(): string[] {
+  const words = [...new Set(getBadWords().map(normalize).filter(Boolean))];
+  const known = new Set(words);
+  const prefixCounts = new Map<string, number>();
+  for (const word of words) {
+    for (const other of words) {
+      if (other !== word && word.endsWith(other)) {
+        const prefix = word.slice(0, word.length - other.length);
+        prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+      }
+    }
+  }
+  const prefixes = [...prefixCounts].filter(([, count]) => count >= 10).map(([prefix]) => prefix);
+  return words.filter(
+    (word) =>
+      !prefixes.some((prefix) => word.startsWith(prefix) && known.has(word.slice(prefix.length))),
+  );
 }

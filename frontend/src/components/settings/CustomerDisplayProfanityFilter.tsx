@@ -70,6 +70,25 @@ export function CustomerDisplayProfanityFilter() {
     }
   }
 
+  const [adding, setAdding] = useState(false);
+
+  async function addSuggested() {
+    setAdding(true);
+    try {
+      const { data } = await api.get(`${FILTER_PATH}/suggestions`);
+      const suggested = readWords(data).split(', ').filter(Boolean);
+      const known = new Set(words.map((word) => word.toLocaleLowerCase()));
+      const added = suggested.filter((word) => !known.has(word.toLocaleLowerCase()));
+      setDraft([...words, ...added].join(', '));
+      setEditing(true);
+      toast.success(t('profanitySuggestedAdded', { count: added.length }));
+    } catch {
+      toast.error(t('profanitySuggestionsFailed'));
+    } finally {
+      setAdding(false);
+    }
+  }
+
   function show() {
     setOpen(true);
     setEditing(true);
@@ -158,6 +177,14 @@ export function CustomerDisplayProfanityFilter() {
         }`}
       >
         {editing ? tCommon('save') : tCommon('edit')}
+      </button>
+      <button
+        type="button"
+        onClick={addSuggested}
+        disabled={adding || saving || saved === null}
+        className="ms-2 mt-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+      >
+        {t('profanityAddSuggested')}
       </button>
     </section>
   );

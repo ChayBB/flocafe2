@@ -27,6 +27,7 @@ const {
   maskProfanity,
   parseProfanityWords,
   readStoredProfanityWords,
+  suggestedProfanityWords,
   PROFANITY_WORDS_KEY,
 } = require('../main/services/profanity-filter');
 const { assertOrThrow, assertEqualOrThrow } = require('./helpers/test-setup');
@@ -87,6 +88,14 @@ function checkHelpers() {
     'regex characters match literally',
   );
   assertEqualOrThrow(maskProfanity('Cafe', []), 'Cafe', 'an empty list leaves text unchanged');
+  const suggested = suggestedProfanityWords();
+  assertOrThrow(suggested.includes('ควาย'), 'thai-bad-words roots are suggested');
+  assertOrThrow(suggested.includes('มึงตาย'), 'a root that starts like a prefix is kept');
+  assertOrThrow(!suggested.includes('ไอ้ควาย'), 'prefix + root pairings are left out');
+  assertOrThrow(
+    parseProfanityWords(suggested)?.length === suggested.length,
+    'every suggestion fits the saved word-list bounds',
+  );
 }
 
 function main() {

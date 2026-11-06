@@ -248,6 +248,10 @@ async function main(): Promise<void> {
   assert.equal(filtered.body.business_name, 'Cafe ***');
   assert.equal(filtered.body.orders[0].number, '***131');
   assert.equal(filtered.body.config.words, undefined);
+  const suggestions = await request(app).get(`${filterPath}/suggestions`).set(owner);
+  assert.equal(suggestions.status, 200);
+  assert.ok(suggestions.body.words.includes('ควาย'), 'suggestions include thai-bad-words roots');
+  assert.equal((await request(app).get(`${filterPath}/suggestions`).set(cashier)).status, 403);
   const cleared = await request(app).put(filterPath).set(owner).send({ words: [] });
   assert.equal(cleared.status, 200);
   const unfiltered = await request(app).get(FEED).set(display);

@@ -118,6 +118,30 @@ test('the profanity textbox uses one button to edit and save the list', async ({
   await expect(textbox).toBeEditable();
 });
 
+test('the profanity filter merges thai-bad-words suggestions before saving', async ({ page }) => {
+  await startSettingsSession(page);
+  let saved: string[] = ['mine', 'shared'];
+  await page.route('**/api/settings/customer-display/profanity-filter', async (route) => {
+    if (route.request().method() === 'PUT') saved = route.request().postDataJSON().words;
+    await route.fulfill({ json: { words: saved } });
+  });
+  await page.route('**/api/settings/customer-display/profanity-filter/suggestions', (route) =>
+    route.fulfill({ json: { words: ['Shared', 'library'] } }),
+  );
+  await page.goto(`${BASE}/settings?tab=pos`);
+  await page.getByRole('button', { name: 'Kitchen Display', exact: true }).click();
+  await page.getByTestId('customer-display-profanity-row').click();
+  const filter = page.getByTestId('customer-display-profanity-panel');
+  const textbox = filter.getByRole('textbox');
+  await expect(textbox).toHaveValue('mine, shared');
+  await filter.getByRole('button', { name: 'Add words from thai-bad-words' }).click();
+  await expect(page.getByText('Added 1 word.', { exact: false })).toBeVisible();
+  await expect(textbox).toHaveValue('mine, shared, library');
+  await filter.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(filter.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  expect(saved).toEqual(['mine', 'shared', 'library']);
+});
+
 test('customer display pairing uses the selected POS address and reuses its token when switched', async ({
   page,
   browser,

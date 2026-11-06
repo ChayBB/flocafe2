@@ -409,6 +409,7 @@
   "dependencies": {
     "@googleapis/drive": "^26.0.2",
     "@point-of-sale/codepage-encoder": "3.0.2",
+    "@sit-sandbox/thai-bad-words": "1.1.9",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",

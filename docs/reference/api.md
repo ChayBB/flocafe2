@@ -848,6 +848,9 @@ word does not mask a longer word that contains it. Managers can read or replace 
 `/api/settings/customer-display/profanity-filter`. Both methods require `settings.manage` and
 use the settings rate limits. The response is `{ words }`. The PUT body takes the same shape,
 with at most 200 entries of up to 50 characters each. An empty array clears the list.
+`GET /api/settings/customer-display/profanity-filter/suggestions` (`settings.manage`) returns
+`{ words }` with the root words from the bundled `@sit-sandbox/thai-bad-words` list, without its
+prefix pairings. The settings screen merges them into the editable list; nothing is saved until PUT.
 
 A display token is not a JWT, so it cannot authorize any other endpoint. Only its SHA-256 hash is stored in `customer_display_tokens`; the table is excluded from database export and cleared on restore.
 

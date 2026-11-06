@@ -48,6 +48,7 @@ import {
   PROFANITY_MAX_WORDS,
   PROFANITY_WORDS_KEY,
   readStoredProfanityWords,
+  suggestedProfanityWords,
 } from '../services/profanity-filter';
 import { resolveTaxIdFormat, validateTaxRegistrationNumber } from '../services/tax';
 import { sendEvent } from '../services/telemetry';
@@ -970,6 +971,20 @@ router.get(
       res.json({
         words: readStoredProfanityWords(getAllSettings(getDatabase())[PROFANITY_WORDS_KEY]),
       });
+    } catch (error) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.get(
+  '/customer-display/profanity-filter/suggestions',
+  settingsReadRateLimit,
+  requirePermission('settings.manage'),
+  (_req: Request, res: Response) => {
+    try {
+      res.json({ words: suggestedProfanityWords() });
     } catch (error) {
       console.error('[API] Internal error:', error);
       res.status(500).json({ error: 'Internal server error' });
