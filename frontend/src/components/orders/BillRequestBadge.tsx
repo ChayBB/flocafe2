@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ReceiptText } from 'lucide-react';
+import { CheckCheck, CheckCircle2, ReceiptText } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { parseDbTimestamp } from '@/lib/utils';
-import type { Order } from '@/lib/types';
+import type { Order, OrderItem } from '@/lib/types';
 import { isAwaitingBillPayment } from '@/lib/bill-print-flow';
 
 export { isAwaitingBillPayment };
@@ -53,8 +53,22 @@ export function formatWait(fromStamp: string, toMs: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+const KITCHEN_STAGES = ['pending', 'preparing', 'ready', 'served'];
+
+/** Every live item has been served and confirmed at the table. */
+export function allServedConfirmed(
+  items: Pick<OrderItem, 'status' | 'served_confirmed_at'>[],
+): boolean {
+  const live = items.filter((item) => KITCHEN_STAGES.includes(item.status));
+  return (
+    live.length > 0 && live.every((item) => item.status === 'served' && item.served_confirmed_at)
+  );
+}
+
 type BadgeOrder = BillRequestFields &
-  Pick<Order, 'status' | 'bill' | 'bills'> & { bill_requested_at?: string | null };
+  Pick<Order, 'status' | 'bill' | 'bills'> & {
+    items?: Pick<OrderItem, 'status' | 'served_confirmed_at'>[];
+  } & { bill_requested_at?: string | null };
 
 const BADGE = 'inline-flex items-center gap-1 rounded-full font-medium';
 
@@ -75,6 +89,7 @@ export function OrderStatusBadge({
   hideInService?: boolean;
 }) {
   const t = useTranslations('orders');
+  const tKds = useTranslations('kds');
   const { formatTime } = useFormatDate();
   const waiting =
     !['completed', 'cancelled'].includes(order.status) && isAwaitingBillPayment(order);
@@ -159,6 +174,15 @@ export function OrderStatusBadge({
       }`}
     >
       {t(partial ? 'partiallyPaid' : 'pending')}
+      {allServedConfirmed(order.items ?? []) && (
+        <CheckCheck
+          data-testid="order-status-served-confirmed"
+          size={13}
+          strokeWidth={2.5}
+          className="text-green-600 dark:text-green-400"
+          aria-label={tKds('servedConfirmedMark')}
+        />
+      )}
     </span>
   );
 }

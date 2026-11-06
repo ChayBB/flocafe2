@@ -95,4 +95,11 @@ test('the order header shows how far its food has got, stage by stage, and each 
   await expect(
     page.getByTestId('order-food-status-served').getByTestId('order-food-served-confirmed'),
   ).toBeVisible();
+  // The order list keeps the in-service badge and adds the same check after it.
+  const row = page
+    .getByRole('button')
+    .filter({ hasText: `#${created.order_number}` })
+    .first();
+  await expect(row.getByTestId('order-status-badge')).toContainText('Pending');
+  await expect(row.getByTestId('order-status-served-confirmed')).toBeVisible();
 });

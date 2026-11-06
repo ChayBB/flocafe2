@@ -4,20 +4,13 @@ import { CheckCheck } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { OrderItem } from '@/lib/types';
 import { itemStatusDot } from '@/components/orders/OrderCard';
+import { allServedConfirmed } from '@/components/orders/BillRequestBadge';
 
 const STAGES = ['pending', 'preparing', 'ready', 'served'] as const;
 export type FoodStage = (typeof STAGES)[number];
 
 function stageCounts(items: OrderItem[]): number[] {
   return STAGES.map((stage) => items.filter((item) => item.status === stage).length);
-}
-
-/** Every live item has been served and confirmed at the table. */
-function allServedConfirmed(items: OrderItem[]): boolean {
-  const live = items.filter((item) => STAGES.includes(item.status as FoodStage));
-  return (
-    live.length > 0 && live.every((item) => item.status === 'served' && item.served_confirmed_at)
-  );
 }
 
 /** A compact dot and count per food stage; tapping one filters the item list. */
