@@ -4,7 +4,7 @@
 //   POS_URL=https://demo.order.example.com POS_TOKEN=<connector token> \
 //   FLO_URL=http://127.0.0.1:3003 FLO_EMAIL=server@shop FLO_PASSWORD=... bun run connector/flocafe.ts
 //
-// FloCafe: ใช้บัญชีบทบาท server (สิทธิ์ server-app.use) — เรียกได้เฉพาะ GET /api/orders, POST /api/orders, POST /api/orders/:id/items
+// FloCafe: ใช้บัญชีบทบาท server (สิทธิ์ server-app.use) — ใช้ POST /api/orders, POST /api/orders/:id/items, GET /api/orders/:id
 export interface Cfg {
   posUrl: string;
   posToken: string;
@@ -49,18 +49,42 @@ class Http {
   }
 }
 
-/** ออเดอร์ FloCafe → สถานะฝั่งลูกค้า (pending = พนักงานรับแล้ว) */
-const STATUS: Record<string, string> = { pending: "accepted", preparing: "preparing", ready: "ready", served: "served", completed: "served", cancelled: "cancelled" };
+const TERMINAL_ITEM = new Set(["cancelled", "voided", "void_adjustment", "refunded"]);
+const RANK: Record<string, number> = { pending_confirm: 0, accepted: 1, preparing: 2, ready: 3, served: 4 };
 
-/** ชำระเงินแล้วหรือไม่ — ตรวจจากสถานะบิลที่ FloCafe แนบมากับออเดอร์ (ต้องยืนยันกับเครื่องจริง) */
+/** ชำระเงินแล้วหรือไม่ — FloCafe แนบ bills[] มากับออเดอร์ทุกใบ */
 export function isPaid(o: any): boolean {
   if (o?.bill_payment_status === "paid") return true;
   return Array.isArray(o?.bills) && o.bills.length > 0 && o.bills.every((b: any) => b.payment_status === "paid");
 }
 
-export async function runOnce(cfg: Cfg): Promise<{ sent: number; failed: number; synced: number; closed: number }> {
+/** สถานะฝั่งลูกค้าของออเดอร์ QR หนึ่งใบ จากรายการใน FloCafe ที่ออเดอร์นั้นสร้าง:
+ *  เริ่มทำสักรายการ = preparing · พร้อม/เสิร์ฟ ต้องครบทุกรายการ · ยกเลิกหมด = cancelled */
+export function guestStatus(floItems: any[], posItemIds: string[]): string | null {
+  const ids = new Set(posItemIds.map(String));
+  const mine = floItems.filter((i) => ids.has(String(i.id)));
+  if (!mine.length) return null;
+  const live = mine.filter((i) => !TERMINAL_ITEM.has(i.status));
+  if (!live.length) return "cancelled";
+  const rank = (s: string) => (s === "served" || s === "completed" ? 4 : s === "ready" ? 3 : s === "preparing" ? 2 : 1);
+  const ranks = live.map((i) => rank(i.status));
+  const slowest = Math.min(...ranks);
+  if (slowest >= 3) return slowest === 4 ? "served" : "ready";
+  return Math.max(...ranks) >= 2 ? "preparing" : "accepted";
+}
+
+/** รายการใน FloCafe ที่งานนี้เพิ่งสร้าง: ยังไม่เป็นของบิลนี้ และเป็นสินค้าที่สั่งมา */
+export function newItemIds(floItems: any[], knownIds: string[], productIds: string[]): string[] {
+  const known = new Set(knownIds.map(String));
+  const products = new Set(productIds.map(String));
+  return floItems.filter((i) => !known.has(String(i.id)) && products.has(String(i.product_id))).map((i) => String(i.id));
+}
+
+export async function runOnce(
+  cfg: Cfg,
+): Promise<{ sent: number; failed: number; synced: number; closed: number; cancelled: number; statuses: number }> {
   const http = new Http(cfg);
-  const out = { sent: 0, failed: 0, synced: 0, closed: 0 };
+  const out = { sent: 0, failed: 0, synced: 0, closed: 0, cancelled: 0, statuses: 0 };
 
   // 1) ออเดอร์ใหม่ → FloCafe
   const { jobs } = await http.pos("GET", "/jobs");
@@ -79,9 +103,11 @@ export async function runOnce(cfg: Cfg): Promise<{ sent: number; failed: number;
         ? await http.flo("POST", `/api/orders/${encodeURIComponent(j.posOrderId)}/items`, { items }, { "idempotency-key": key })
         : await http.flo("POST", "/api/orders", { type: "dine_in", table_id: num(j.table.posTableId), items, ...(j.note ? { special_instructions: j.note } : {}) }, { "idempotency-key": key });
       if (r.status >= 200 && r.status < 300) {
-        const id = j.posOrderId ?? r.json?.id ?? r.json?.order?.id;
+        const order = r.json?.order ?? r.json;
+        const id = j.posOrderId ?? order?.id;
         if (id === undefined || id === null) throw new Error("flocafe response has no order id");
-        await http.pos("POST", `/jobs/${j.jobId}/result`, { ok: true, posOrderId: String(id) });
+        const posItemIds = newItemIds(order?.items ?? [], j.knownPosItemIds ?? [], j.items.map((i: any) => i.posProductId));
+        await http.pos("POST", `/jobs/${j.jobId}/result`, { ok: true, posOrderId: String(id), posItemIds });
         out.sent++;
       } else {
         // 4xx = ข้อมูลไม่ถูกต้อง/โต๊ะไม่ว่าง ลองซ้ำไม่ช่วย (ยกเว้น 408/429) ; 5xx ลองใหม่
@@ -95,20 +121,27 @@ export async function runOnce(cfg: Cfg): Promise<{ sent: number; failed: number;
     }
   }
 
-  // 2) ความคืบหน้า/ชำระเงินใน FloCafe → POS-Server
+  // 2) ความคืบหน้า/ชำระเงิน/ยกเลิกใน FloCafe → POS-Server (อ่านทีละออเดอร์ ไม่พึ่งรายการล่าสุด)
   const { bills } = await http.pos("GET", "/open-bills");
-  if (bills.length) {
-    const list = await http.flo("GET", "/api/orders?view=all&per_page=200");
-    const orders: any[] = list.json?.orders ?? [];
-    const byId = new Map(orders.map((o) => [String(o.id), o]));
-    for (const b of bills as any[]) {
-      const o = byId.get(String(b.pos_order_id));
-      if (!o) continue;
-      out.synced++;
-      if (isPaid(o)) {
-        const r = await http.pos("POST", `/bills/${b.id}/paid`);
-        if (!r.alreadyClosed) out.closed++;
-      }
+  for (const b of bills as any[]) {
+    const r = await http.flo("GET", `/api/orders/${encodeURIComponent(b.pos_order_id)}`);
+    if (r.status < 200 || r.status >= 300) continue;
+    const o = r.json?.order ?? r.json;
+    out.synced++;
+    for (const g of (b.orders ?? []) as any[]) {
+      const next = guestStatus(o?.items ?? [], g.posItemIds ?? []);
+      if (!next || next === g.status || g.status === "served" || g.status === "cancelled") continue;
+      if (next !== "cancelled" && (RANK[next] ?? 0) <= (RANK[g.status] ?? 0)) continue;
+      await http.pos("POST", `/orders/${g.id}/status`, { status: next });
+      out.statuses++;
+    }
+    if (isPaid(o)) {
+      const res = await http.pos("POST", `/bills/${b.id}/paid`);
+      if (!res.alreadyClosed) out.closed++;
+    } else if (o?.status === "cancelled" && !/^Merged into /.test(String(o.cancellation_reason ?? ""))) {
+      // รวมโต๊ะใน FloCafe ก็ยกเลิกออเดอร์ต้นทาง แต่ลูกค้ายังนั่งกินอยู่ จึงไม่ปิดบิล
+      const res = await http.pos("POST", `/bills/${b.id}/cancelled`);
+      if (!res.alreadyClosed) out.cancelled++;
     }
   }
   return out;
@@ -127,7 +160,7 @@ if (import.meta.main) {
   while (!stop) {
     try {
       const r = await runOnce(cfg);
-      if (r.sent || r.failed || r.closed) console.log(JSON.stringify({ level: "info", ...r }));
+      if (r.sent || r.failed || r.closed || r.cancelled || r.statuses) console.log(JSON.stringify({ level: "info", ...r }));
       backoff = 1000;
       await Bun.sleep(1500);
     } catch (e) {

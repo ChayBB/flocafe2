@@ -93,8 +93,14 @@ FLO_URL=http://127.0.0.1:3003 FLO_EMAIL=server@shop FLO_PASSWORD=... bun run con
 ```
 
 - ออเดอร์แรกของบิล → `POST /api/orders` (`dine_in` + `table_id`) แล้วเก็บ id; ออเดอร์ถัดไป → `POST /api/orders/:id/items` (ส่งทีละรายการตามลำดับต่อบิล) · ใช้ `Idempotency-Key` = id ออเดอร์ ส่งซ้ำไม่เกิดออเดอร์ซ้ำ
+- เก็บ id รายการใน FloCafe ที่ออเดอร์ QR แต่ละใบสร้าง (`pos_forward.pos_item_ids`)
+- ทุกบิลที่เปิดอยู่ connector อ่าน `GET /api/orders/:id` ทีละออเดอร์ (ไม่พึ่งรายการล่าสุด จึงไม่หลุดเมื่อร้านมีออเดอร์เยอะ):
+  - **สถานะครัว → ลูกค้า:** เริ่มทำสักรายการ = `preparing` · พร้อม/เสิร์ฟ ต้องครบทุกรายการ = `ready`/`served` · รายการถูกยกเลิกหมด = `cancelled` · ไม่ถอยสถานะกลับ
+  - **ชำระแล้ว** (ทุกใบใน `bills[]` เป็น `paid`) → `POST /api/connector/bills/:id/paid` ปิดบิล
+  - **ออเดอร์ถูกยกเลิกใน FloCafe** → `POST /api/connector/bills/:id/cancelled` ยกเลิกออเดอร์ที่ยังไม่เสิร์ฟและปิดบิล · ยกเว้นการรวมโต๊ะ (`cancellation_reason` = `Merged into …`) ซึ่งไม่ปิดบิลลูกค้า
 - โต๊ะ/เมนูที่ยังไม่ผูก id → งานล้มเหลวถาวรพร้อมเหตุผล (`pos_forward.last_error`); FloCafe ล่ม/5xx → ลองใหม่แบบ backoff
-- **ต้องยืนยันกับ FloCafe เครื่องจริง:** รูปแบบตรวจ "ชำระแล้ว" (`isPaid` ใน `connector/flocafe.ts` อ่าน `bill_payment_status`/`bills[]` จากรายการออเดอร์) — เทสต์ใช้ FloCafe จำลองตามเอกสาร API
+- ต้องใช้ FloCafe ที่มี `GET /api/orders/:id` ใน Server App (:3003)
+- **ข้อจำกัด:** หลังรวมโต๊ะใน FloCafe บิล QR ยังผูกกับออเดอร์ต้นทาง สถานะครัวของรายการที่ย้ายไปจะไม่อัปเดต และต้องปิดบิลจากหน้าพนักงาน
 
 ## ความปลอดภัยที่ใช้
 
@@ -108,7 +114,7 @@ FLO_URL=http://127.0.0.1:3003 FLO_EMAIL=server@shop FLO_PASSWORD=... bun run con
 
 ```bash
 bun run typecheck
-bun run test            # smoke 136 เคส + connector 24 เคส ต้องมี DB (ดู .env.example)
+bun run test            # smoke + connector ต้องมี DB (ดู .env.example)
 BENCH_URLS=http://127.0.0.1:3001,http://127.0.0.1:3002 bun run bench
 ```
 

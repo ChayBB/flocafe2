@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { enqueue, notify, withTenant } from "../db.ts";
 import { HttpError, reqCtx } from "../http.ts";
 import { anyStaffAuth } from "./staff.ts";
-import { closeBill } from "../sessions.ts";
+import { cancelUnservedOrders, closeBill } from "../sessions.ts";
 
 const LEASE_SEC = 60;
 const MAX_ATTEMPTS = 8;
@@ -20,7 +20,7 @@ async function connectorAuth(request: Request) {
  * Connector ในร้านดึงงานออกไปทำ (HTTPS ขาออกอย่างเดียว) แล้วรายงานผลกลับ
  * 1) GET jobs → ออเดอร์ที่ต้องส่งเข้า POS ในร้าน (lease 60 วินาที กันหลาย connector แย่งกัน)
  * 2) POST jobs/:id/result → สำเร็จ(เก็บ pos_order_id ของบิล) หรือล้มเหลว(ลองใหม่แบบ backoff)
- * 3) POST orders/:id/status / bills/:id/paid → POS ในร้านแจ้งความคืบหน้า/ชำระเงินแล้ว
+ * 3) POST orders/:id/status / bills/:id/paid / bills/:id/cancelled → POS ในร้านแจ้งความคืบหน้า/ชำระเงิน/ยกเลิก
  */
 export const connector = new Elysia({ prefix: "/api/connector" })
   .get("/jobs", async ({ request }) => {
@@ -45,6 +45,9 @@ export const connector = new Elysia({ prefix: "/api/connector" })
           select i.qty, i.note, i.name_snapshot, m.pos_product_id
           from order_item i left join menu_item m on m.id = i.menu_item_id
           where i.order_id = ${r.order_id} order by i.id`;
+        const [known] = await tx`
+          select coalesce(array_agg(x), '{}') as ids from pos_forward p, unnest(p.pos_item_ids) x
+          where p.bill_id = ${r.bill_id} and p.status = 'sent'`;
         out.push({
           jobId: String(r.id),
           orderId: r.order_id,
@@ -52,6 +55,7 @@ export const connector = new Elysia({ prefix: "/api/connector" })
           posOrderId: o?.pos_order_id ?? null, // มีค่า = เพิ่มรายการเข้าออเดอร์เดิม ไม่มี = สร้างออเดอร์ใหม่
           table: { label: o?.table_label, posTableId: o?.pos_table_id ?? null },
           note: o?.note ?? null,
+          knownPosItemIds: known?.ids ?? [], // รายการของบิลนี้ที่มีใน FloCafe แล้ว — รายการใหม่คือที่ไม่อยู่ในนี้
           items: items.map((i) => ({ name: i.name_snapshot, qty: i.qty, note: i.note, posProductId: i.pos_product_id ?? null })),
         });
       }
@@ -73,7 +77,8 @@ export const connector = new Elysia({ prefix: "/api/connector" })
           if (!body.posOrderId) throw new HttpError(422, "pos_order_id_required");
           // บิลหนึ่งใบผูกกับออเดอร์ POS ใบเดียว: ตั้งครั้งแรกเท่านั้น
           await tx`update bill set pos_order_id = coalesce(pos_order_id, ${body.posOrderId}) where id = ${j.bill_id}`;
-          await tx`update pos_forward set status = 'sent', sent_at = now(), last_error = null, lease_until = null where id = ${j.id}`;
+          await tx`update pos_forward set status = 'sent', sent_at = now(), last_error = null, lease_until = null,
+                     pos_item_ids = ${body.posItemIds ?? []} where id = ${j.id}`;
         } else {
           const dead = j.attempts >= MAX_ATTEMPTS || body.permanent === true;
           await tx`
@@ -88,6 +93,7 @@ export const connector = new Elysia({ prefix: "/api/connector" })
       body: t.Object({
         ok: t.Boolean(),
         posOrderId: t.Optional(t.String({ maxLength: 64 })),
+        posItemIds: t.Optional(t.Array(t.String({ maxLength: 64 }), { maxItems: 200 })),
         error: t.Optional(t.String({ maxLength: 300 })),
         permanent: t.Optional(t.Boolean()),
       }),
@@ -99,8 +105,13 @@ export const connector = new Elysia({ prefix: "/api/connector" })
     const { tenant } = await connectorAuth(request);
     const bills = await withTenant(
       tenant.id,
-      (tx) => tx`select b.id, b.pos_order_id, t.pos_table_id from bill b join dining_table t on t.id = b.table_id
-                 where b.status = 'open' and b.pos_order_id is not null`,
+      (tx) => tx`
+        select b.id, b.pos_order_id, t.pos_table_id,
+          coalesce((select json_agg(json_build_object('id', o.id, 'status', o.status, 'posItemIds', f.pos_item_ids) order by f.id)
+                    from pos_forward f join orders o on o.id = f.order_id
+                    where f.bill_id = b.id and f.status = 'sent'), '[]') as orders
+        from bill b join dining_table t on t.id = b.table_id
+        where b.status = 'open' and b.pos_order_id is not null`,
     );
     return { bills };
   })
@@ -123,6 +134,20 @@ export const connector = new Elysia({ prefix: "/api/connector" })
     },
     { body: t.Object({ status: t.String({ maxLength: 20 }) }) },
   )
+
+  // ออเดอร์ถูกยกเลิกใน POS ในร้าน → ยกเลิกออเดอร์ที่ยังไม่เสิร์ฟ แล้วปิดบิล (ตัดทุก device + หมุนรหัสโต๊ะ)
+  .post("/bills/:id/cancelled", async ({ request, params }) => {
+    const { tenant, me } = await connectorAuth(request);
+    if (!UUID.test(params.id)) throw new HttpError(404, "not_found");
+    return withTenant(tenant.id, async (tx) => {
+      const [b] = await tx`select id from bill where id = ${params.id} and status = 'open' for update`;
+      if (!b) return { id: params.id, alreadyClosed: true };
+      const cancelled = await cancelUnservedOrders(tx, tenant.id, b.id);
+      await closeBill(tx, tenant.id, b.id, "cancelled", null, me.id);
+      await enqueue(tx, tenant.id, "bill.cancelled", { billId: b.id, cancelledOrderIds: cancelled, reason: "pos_cancelled", by: me.id });
+      return { id: b.id, alreadyClosed: false };
+    });
+  })
 
   // POS ในร้านรับชำระเงินแล้ว → ปิดบิล (ตัดทุก device + หมุนรหัสโต๊ะ)
   .post("/bills/:id/paid", async ({ request, params }) => {

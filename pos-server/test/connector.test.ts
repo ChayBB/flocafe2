@@ -12,6 +12,8 @@ let checks = 0, fails = 0;
 const ok = (c: unknown, n: string, x?: unknown) => { checks++; if (!c) { fails++; console.log("  FAIL", n, x !== undefined ? JSON.stringify(x) : ""); } else console.log("  ok  ", n); };
 
 // ---- FloCafe จำลอง (Server App :3003) ----
+let floItemSeq = 9000;
+const floItem = (i: any) => ({ id: ++floItemSeq, status: "pending", ...i });
 const flo = { logins: 0, validJwt: "jwt-1", orders: [] as any[], calls: [] as string[], idem: new Map<string, any>(), down: false };
 const floSrv = Bun.serve({
   port: 0,
@@ -29,19 +31,23 @@ const floSrv = Bun.serve({
     if (u.pathname === "/api/orders" && req.method === "POST") {
       flo.calls.push("create");
       if (body.table_id === 999) return Response.json({ error: "Table has an active order" }, { status: 409 });
-      const o = { id: 500 + flo.orders.length + 1, type: body.type, table_id: body.table_id, items: body.items, status: "pending", bill_payment_status: "unpaid" };
-      flo.orders.push(o); if (key) flo.idem.set(key, o);
-      return Response.json(o, { status: 201 });
+      const o = { id: 500 + flo.orders.length + 1, type: body.type, table_id: body.table_id, items: body.items.map(floItem), status: "pending", bills: [{ payment_status: "unpaid" }] };
+      flo.orders.push(o); const r = { order: o }; if (key) flo.idem.set(key, r);
+      return Response.json(r, { status: 201 });
     }
     const m = u.pathname.match(/^\/api\/orders\/(\d+)\/items$/);
     if (m && req.method === "POST") {
       flo.calls.push("append");
       const o = flo.orders.find((x) => x.id === Number(m[1]));
       if (!o) return Response.json({ error: "not found" }, { status: 404 });
-      o.items.push(...body.items); const r = { ...o }; if (key) flo.idem.set(key, r);
-      return Response.json(r, { status: 201 });
+      o.items.push(...body.items.map(floItem)); const r = { order: o }; if (key) flo.idem.set(key, r);
+      return Response.json(r, { status: 200 });
     }
-    if (u.pathname === "/api/orders" && req.method === "GET") return Response.json({ orders: flo.orders });
+    const g = u.pathname.match(/^\/api\/orders\/(\d+)$/);
+    if (g && req.method === "GET") {
+      const o = flo.orders.find((x) => x.id === Number(g[1]));
+      return o ? Response.json({ order: o }) : Response.json({ error: "Order not found" }, { status: 404 });
+    }
     return Response.json({ error: "nf" }, { status: 404 });
   },
 });
@@ -97,6 +103,9 @@ const o2 = await order(s8.dev, [{ menuItemId: soup, qty: 1 }]);
   const n = (await admin`select count(*)::int as n from pos_forward where tenant_id = ${tid} and status = 'sent'`)[0]!.n;
   ok(n === 2, "ทั้งสองงานเป็น sent");
   ok((await runOnce(cfg())).sent === 0, "ไม่มีงานค้าง");
+  const ids = await admin`select order_id, pos_item_ids from pos_forward where bill_id = ${s8.billId} order by id`;
+  ok(ids[0]?.pos_item_ids.length === 2 && ids[1]?.pos_item_ids.length === 1, "เก็บ id รายการ FloCafe ของแต่ละออเดอร์", ids);
+  ok(!ids[1]!.pos_item_ids.some((x: string) => ids[0]!.pos_item_ids.includes(x)), "ออเดอร์รอบสองได้เฉพาะรายการที่เพิ่งเพิ่ม");
 }
 
 console.log("# ข้อมูลไม่ครบ / ปัญหาชั่วคราว");
@@ -142,11 +151,35 @@ console.log("# ข้อมูลไม่ครบ / ปัญหาชั่�
   ok(flo.orders.length === count, "ส่งซ้ำด้วย key เดิม FloCafe คืนผลเดิม ไม่สร้างออเดอร์ซ้ำ");
 }
 
+console.log("# สถานะจากครัว FloCafe → ลูกค้า");
+{
+  const bad = await pos("POST", `/api/connector/orders/${o1.order.id}/status`, { token: connTok, body: { status: "bogus" } });
+  ok(bad.status === 422, "สถานะแปลก → 422");
+  const status = async (id: string) => (await admin`select status from orders where id = ${id}`)[0]!.status;
+  const fo = flo.orders[0];
+  fo.items[0].status = "preparing";
+  const r1 = await runOnce(cfg());
+  ok(r1.statuses === 1 && (await status(o1.order.id)) === "preparing", "ครัวเริ่มทำ → ออเดอร์แรกเป็น preparing", r1);
+  ok((await status(o2.order.id)) === "accepted", "ออเดอร์ที่สองยังไม่เริ่ม");
+  fo.items[1].status = "ready";
+  ok((await runOnce(cfg())).statuses === 0, "ยังเหลือรายการที่ทำอยู่ → ยังไม่ ready");
+  fo.items[0].status = "served"; fo.items[1].status = "served";
+  await runOnce(cfg());
+  ok((await status(o1.order.id)) === "served", "เสิร์ฟครบ → served");
+  fo.items[0].status = "preparing";
+  await runOnce(cfg());
+  ok((await status(o1.order.id)) === "served", "ไม่ถอยสถานะกลับ");
+  fo.items[2].status = "cancelled";
+  await runOnce(cfg());
+  ok((await status(o2.order.id)) === "cancelled", "รายการถูกยกเลิกใน FloCafe → ออเดอร์ QR ยกเลิก");
+}
+
+
 console.log("# ชำระเงินใน FloCafe → ปิดบิล");
 {
   const r0 = await runOnce(cfg());
   ok(r0.closed === 0, "ยังไม่ชำระ: ไม่ปิดบิล", r0);
-  flo.orders[0].bill_payment_status = "paid";
+  flo.orders[0].bills[0].payment_status = "paid";
   const r1 = await runOnce(cfg());
   ok(r1.closed >= 1, "FloCafe ชำระแล้ว → ปิดบิลฝั่งเรา", r1);
   const [b] = await admin`select status, closed_reason from bill where id = ${s8.billId}`;
@@ -157,13 +190,25 @@ console.log("# ชำระเงินใน FloCafe → ปิดบิล");
   ok(rep.status === 200 && rep.json.alreadyClosed === true, "แจ้งซ้ำได้ (idempotent)");
 }
 
-console.log("# สถานะจากครัว");
+console.log("# ยกเลิกใน FloCafe → ปิดบิล");
 {
-  const st = await pos("POST", `/api/connector/orders/${o1.order.id}/status`, { token: connTok, body: { status: "preparing" } });
-  ok(st.status === 200 && st.json.status === "preparing", "connector อัปเดตสถานะ");
-  ok((await pos("POST", `/api/connector/orders/${o1.order.id}/status`, { token: connTok, body: { status: "bogus" } })).status === 422, "สถานะแปลก → 422");
-  void o2;
+  const s20 = await seat(await mkTable("T20", "20"));
+  const oc = await order(s20.dev, [{ menuItemId: rice, qty: 1 }]);
+  await runOnce(cfg());
+  const fo = flo.orders[flo.orders.length - 1];
+  fo.status = "cancelled"; fo.cancellation_reason = "Merged into ORD-9";
+  await runOnce(cfg());
+  ok((await admin`select status from bill where id = ${s20.billId}`)[0]!.status === "open", "รวมโต๊ะ (ยกเลิกออเดอร์ต้นทาง) ไม่ปิดบิลลูกค้า");
+  fo.cancellation_reason = "Customer left";
+  const r = await runOnce(cfg());
+  ok(r.cancelled === 1, "ออเดอร์ถูกยกเลิก → ยกเลิกบิล", r);
+  const [b] = await admin`select status, closed_reason from bill where id = ${s20.billId}`;
+  ok(b?.status === "closed" && b.closed_reason === "cancelled", "closed (cancelled)", b);
+  ok((await admin`select status from orders where id = ${oc.order.id}`)[0]!.status === "cancelled", "ออเดอร์ที่ยังไม่เสิร์ฟถูกยกเลิก");
+  const rep = await pos("POST", `/api/connector/bills/${s20.billId}/cancelled`, { token: connTok });
+  ok(rep.status === 200 && rep.json.alreadyClosed === true, "แจ้งซ้ำได้ (idempotent)");
 }
+
 
 console.log(`\n${checks - fails}/${checks} passed`);
 await app.stop(); floSrv.stop(true); await admin.end(); await appSql.end({ timeout: 2 });

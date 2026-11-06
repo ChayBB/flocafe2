@@ -194,6 +194,18 @@ async function main() {
       assert.equal(me.body.user.role, role, `/api/auth/me returns ${role} role`);
     }
 
+    const missingOrder = await getJson(baseUrl, '/api/orders/999999', roleTokens.server);
+    assert.equal(missingOrder.status, 404, 'Server App forwards a single-order read for a server');
+    db.prepare(
+      "INSERT INTO orders (order_number, type, status, created_at, updated_at) VALUES ('SA-READ-1', 'takeaway', 'pending', ?, ?)",
+    ).run(now(), now());
+    const readOrderId = (
+      db.prepare("SELECT id FROM orders WHERE order_number = 'SA-READ-1'").get() as { id: number }
+    ).id;
+    const singleOrder = await getJson(baseUrl, `/api/orders/${readOrderId}`, roleTokens.server);
+    assert.equal(singleOrder.status, 200, 'a server reads one order through Server App');
+    assert.ok(Array.isArray(singleOrder.body.order?.bills), 'the order carries its bills');
+
     const liveServerLogin = await postJson(baseUrl, '/api/auth/login', {
       email: 'server@server-app.test',
       password: 'ServerPass123!',
