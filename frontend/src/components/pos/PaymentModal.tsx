@@ -1771,8 +1771,8 @@ export default function PaymentModal({
                         </button>
                       )}
                     </div>
-                    <div className="relative">
-                      <span className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    <div className="flex min-h-11 items-center rounded-lg border border-purple-200 bg-card focus-within:ring-2 focus-within:ring-purple-400 dark:border-purple-800/40">
+                      <span className="shrink-0 ps-3 text-sm text-muted-foreground">
                         {discountType === 'percentage' ? '%' : inputCurrencyLabel}
                       </span>
                       <input
@@ -1788,7 +1788,7 @@ export default function PaymentModal({
                         }
                         step={getDiscountInputStep(unitAdapter.maxDecimals, discountType)}
                         inputMode={discountType === 'percentage' ? 'numeric' : 'decimal'}
-                        className="w-full min-h-11 ps-8 pe-3 py-2 text-sm border border-purple-200 dark:border-purple-800/40 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-card"
+                        className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-2 text-sm outline-none"
                       />
                     </div>
                     <input

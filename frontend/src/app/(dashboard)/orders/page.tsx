@@ -2396,8 +2396,8 @@ export default function OrdersPage() {
                     ? tOrders('discountPercentageLabel')
                     : tOrders('discountAmountLabel')}
                 </label>
-                <div className="relative">
-                  <span className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                <div className="flex items-center rounded-lg border border-gray-300 focus-within:border-transparent focus-within:ring-2 focus-within:ring-purple-500">
+                  <span className="shrink-0 ps-3 text-sm text-gray-400">
                     {discountModal.type === 'percentage' ? '%' : currency}
                   </span>
                   <input
@@ -2412,7 +2412,7 @@ export default function OrdersPage() {
                     placeholder={
                       discountModal.type === 'percentage' ? '0' : unitAdapter.formatInput(0)
                     }
-                    className="w-full ps-8 pe-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-2 text-sm focus:outline-none"
                   />
                 </div>
               </div>
