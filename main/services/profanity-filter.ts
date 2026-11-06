@@ -1,3 +1,4 @@
+import type BetterSqlite3 from 'better-sqlite3';
 import { getBadWords } from '@sit-sandbox/thai-bad-words';
 
 export const PROFANITY_WORDS_KEY = 'customer_display_profanity_words';
@@ -90,4 +91,19 @@ export function suggestedProfanityWords(): string[] {
     (word) =>
       !prefixes.some((prefix) => word.startsWith(prefix) && known.has(word.slice(prefix.length))),
   );
+}
+
+export function readProfanityWords(db: BetterSqlite3.Database): string[] {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(PROFANITY_WORDS_KEY) as
+    | { value?: string }
+    | undefined;
+  return readStoredProfanityWords(row?.value);
+}
+
+/** Masks free text before it is stored, so every screen and printout shows the same note. */
+export function maskNote<T extends string | null | undefined>(
+  text: T,
+  words: readonly string[],
+): T {
+  return (typeof text === 'string' ? maskProfanity(text, words) : text) as T;
 }

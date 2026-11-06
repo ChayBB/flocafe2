@@ -852,6 +852,10 @@ with at most 200 entries of up to 50 characters each. An empty array clears the 
 `{ words }` with the root words from the bundled `@sit-sandbox/thai-bad-words` list, without its
 prefix pairings. The settings screen merges them into the editable list; nothing is saved until PUT.
 
+The same word list masks order notes, item notes, and delivery notes when `POST /api/orders` or
+`POST /api/orders/:id/items` stores them, so every screen and printout shows the masked text. Notes
+saved before a word was added stay as they were.
+
 A display token is not a JWT, so it cannot authorize any other endpoint. Only its SHA-256 hash is stored in `customer_display_tokens`; the table is excluded from database export and cleared on restore.
 
 ### POS info

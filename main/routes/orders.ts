@@ -40,6 +40,7 @@ import {
   type Customer,
 } from '../services/tax';
 import { applyPayableRounding } from '../services/tax-engine';
+import { maskNote, readProfanityWords } from '../services/profanity-filter';
 import { calculateOrderTotals, recomputeOrderTotals } from '../services/orders';
 import {
   PROMOTION_APPLIED_MESSAGE,
@@ -903,6 +904,7 @@ function insertOrderItems(
 ): (number | bigint)[] {
   const { tenantInfo, customer, isOnlineOrder, actorUserId } = context;
   const initialStatus = context.initialStatus ?? 'pending';
+  const profanityWords = readProfanityWords(db);
   const insertItem = db.prepare(`
   INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, inventory_product_id, inventory_variant_id,
     subtotal, tax_amount, tax_breakdown, tax_snapshot, tax_type, discount_amount, total, variant_selection,
@@ -1036,8 +1038,8 @@ function insertOrderItems(
           : JSON.stringify(item.variant_selection || null),
       JSON.stringify(item.modifier_selection || null),
       pendingMode && weight === null
-        ? withPendingPriceNote(item.special_instructions, pendingMode)
-        : item.special_instructions || null,
+        ? withPendingPriceNote(maskNote(item.special_instructions, profanityWords), pendingMode)
+        : maskNote(item.special_instructions, profanityWords) || null,
       recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
       initialStatus,
       weightPending ? 1 : 0,
@@ -1576,6 +1578,7 @@ router.post(
       const isOnlineOrder = Boolean(onlinePlatform);
 
       const db = getDatabase();
+      const profanityWords = readProfanityWords(db);
 
       if (idempotencyKey && requestHash) {
         const replayed = getStoredOrderReplay(
@@ -1764,9 +1767,9 @@ router.post(
             deliveryAddress,
             expectedPaymentMethod,
             expectedPaymentMethodId,
-            deliveryNote,
+            maskNote(deliveryNote, profanityWords),
             guest_count || null,
-            special_instructions || null,
+            maskNote(special_instructions, profanityWords) || null,
             pkgCharge,
             delCharge,
             chargeContext.packaging_tax_category_id,
@@ -1967,8 +1970,11 @@ router.post(
               : JSON.stringify(item.variant_selection || null),
             JSON.stringify(item.modifier_selection || null),
             pendingLineMode
-              ? withPendingPriceNote(item.special_instructions, pendingLineMode)
-              : item.special_instructions || null,
+              ? withPendingPriceNote(
+                  maskNote(item.special_instructions, profanityWords),
+                  pendingLineMode,
+                )
+              : maskNote(item.special_instructions, profanityWords) || null,
             recipeSnapshot ? JSON.stringify(recipeSnapshot) : null,
             pendingLineMode ? 1 : 0,
             pendingLineMode,
@@ -2322,7 +2328,7 @@ router.post(
             syncedPackagingCharge,
             syncedChargesJson,
             roundOff,
-            special_instructions || null,
+            maskNote(special_instructions, readProfanityWords(db)) || null,
             now(),
             req.params.id,
           );
