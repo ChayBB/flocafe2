@@ -114,7 +114,7 @@ test('the profanity textbox uses one button to edit and save the list', async ({
   await openSettings();
   await expect(filter).toBeHidden();
   await row.click();
-  await expect(textbox).toHaveValue('first\nsecond\nthird\nfourth');
+  await expect(textbox).toHaveValue('first, second, third, fourth');
   await expect(textbox).toBeEditable();
 });
 

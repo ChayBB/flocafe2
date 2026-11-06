@@ -13,7 +13,7 @@ function readWords(data: { words?: unknown }): string {
   if (!Array.isArray(data?.words) || !data.words.every((word) => typeof word === 'string')) {
     throw new Error('Invalid profanity filter response');
   }
-  return data.words.join('\n');
+  return data.words.join(', ');
 }
 
 export function CustomerDisplayProfanityFilter() {
