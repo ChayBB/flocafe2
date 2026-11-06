@@ -842,8 +842,9 @@ Router: `main/routes/customer-display-feed.ts`. Full path: `/api/customer-displa
 | ------ | ------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `/feed` | a customer display token (`Authorization: Bearer cdt_...`); exempt from the JWT middleware by exact path and method | query: ?cursor            | `{ business_name, config, orders, next_cursor, has_more }` where `orders` is `{ id, number, status }` for up to 100 active orders per page, sorted oldest first within the page, filtered by the configured statuses, with `next_cursor` paging older eligible orders. Carries no customer, staff, or item data. `400` for an invalid cursor; `401` for an unauthenticated token. Rate limited to 120 requests per minute. |
 
-The feed replaces case-insensitive matches in the business name and displayed order number with
-`***`. Managers can read or replace the word list with `GET` or `PUT` on
+The feed replaces case-insensitive whole-word matches in the business name and displayed order
+number with `***`. Word boundaries come from `Intl.Segmenter` Thai word segmentation, so a listed
+word does not mask a longer word that contains it. Managers can read or replace the word list with `GET` or `PUT` on
 `/api/settings/customer-display/profanity-filter`. Both methods require `settings.manage` and
 use the settings rate limits. The response is `{ words }`. The PUT body takes the same shape,
 with at most 200 entries of up to 50 characters each. An empty array clears the list.

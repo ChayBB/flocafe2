@@ -198,9 +198,9 @@ function PairedDisplays({
 
   return (
     <div className="mt-6 border-t border-border pt-5">
+      <CustomerDisplayProfanityFilter />
       <h3 className="font-semibold text-foreground">{t('pairedTitle')}</h3>
       <p className="text-sm text-muted-foreground mb-4">{t('pairedHint')}</p>
-      <CustomerDisplayProfanityFilter />
 
       <div className="mb-4">
         <div>

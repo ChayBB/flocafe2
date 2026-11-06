@@ -62,6 +62,19 @@ function checkHelpers() {
     '[]',
     'a corrupt stored value reads as an empty list',
   );
+  for (const [text, word] of [
+    ['เค้กชีส', 'ชี'],
+    ['หมากฝรั่ง', 'หมา'],
+    ['Pancake', 'cake'],
+  ]) {
+    assertEqualOrThrow(maskProfanity(text, [word]), text, `"${word}" leaves "${text}" alone`);
+  }
+  assertEqualOrThrow(
+    maskProfanity('ข้าวผัดหมาแมว', ['หมา']),
+    'ข้าวผัด***แมว',
+    'a whole Thai word inside running text is masked',
+  );
+  assertEqualOrThrow(maskProfanity('เย็ดแม่', ['เย็ดแม่']), '***', 'a multi-word entry is masked');
   assertEqualOrThrow(
     maskProfanity('ร้านคำหยาบมาก', ['คำหยาบ']),
     'ร้าน***มาก',

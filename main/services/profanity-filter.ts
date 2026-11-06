@@ -32,17 +32,39 @@ export function readStoredProfanityWords(raw: string | undefined): string[] {
   }
 }
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
 
-// Substring match, since Thai text has no spaces between words.
+// Thai has no spaces, so word boundaries come from dictionary segmentation; a listed word only
+// matches whole words, keeping e.g. "ชี" from masking "ชีส".
 export function maskProfanity(text: string, words: readonly string[]): string {
   if (!text || words.length === 0) return text;
-  const pattern = [...words]
-    .map(normalize)
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
-    .map(escapeRegExp)
-    .join('|');
-  if (!pattern) return text;
-  return text.normalize('NFC').replace(new RegExp(pattern, 'giu'), PROFANITY_MASK);
+  const candidates = [
+    ...new Set(words.map((word) => normalize(word).toLocaleLowerCase()).filter(Boolean)),
+  ].sort((a, b) => b.length - a.length);
+  if (candidates.length === 0) return text;
+  const source = text.normalize('NFC');
+  const boundaries = new Set<number>([source.length]);
+  for (const { index } of segmenter.segment(source)) boundaries.add(index);
+
+  let result = '';
+  let position = 0;
+  while (position < source.length) {
+    const end = boundaries.has(position)
+      ? candidates
+          .map((word) => position + word.length)
+          .find(
+            (stop, i) =>
+              boundaries.has(stop) &&
+              source.slice(position, stop).toLocaleLowerCase() === candidates[i],
+          )
+      : undefined;
+    if (end !== undefined) {
+      result += PROFANITY_MASK;
+      position = end;
+    } else {
+      result += source[position];
+      position += 1;
+    }
+  }
+  return result;
 }

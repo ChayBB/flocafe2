@@ -7,6 +7,10 @@ async function startSettingsSession(page: Page): Promise<void> {
   });
   await page.route('**/api/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/settings/customer-display/profanity-filter') {
+      await route.fulfill({ json: { words: [] } });
+      return;
+    }
     if (pathname === '/api/auth/me') {
       await route.fulfill({
         status: 200,
@@ -48,6 +52,65 @@ const posInfo = {
     { ip: '192.168.1.25', url: 'http://192.168.1.25:4321', qr_data: null },
   ],
 };
+
+test('the profanity textbox uses one button to edit and save the list', async ({ page }) => {
+  await startSettingsSession(page);
+  let words = ['first phrase'];
+  let writes = 0;
+  let reads = 0;
+  await page.route('**/api/settings/customer-display/profanity-filter', async (route) => {
+    if (route.request().method() === 'PUT') {
+      words = route.request().postDataJSON().words;
+      writes += 1;
+    } else {
+      reads += 1;
+      if (reads === 1) {
+        await route.fulfill({ status: 503 });
+        return;
+      }
+    }
+    await route.fulfill({ json: { words } });
+  });
+
+  async function openSettings() {
+    await page.goto(`${BASE}/settings?tab=pos`);
+    await page.getByRole('button', { name: 'Kitchen Display', exact: true }).click();
+  }
+
+  await openSettings();
+  const summary = page.getByText('Profanity filter', { exact: true });
+  const filter = page.locator('details').filter({ has: summary });
+  const textbox = filter.getByRole('textbox');
+  const saveButton = filter.getByRole('button', { name: 'Save', exact: true });
+  await expect(summary).toBeVisible();
+  await expect(textbox).toBeHidden();
+  expect(reads).toBe(0);
+  await summary.click();
+  await expect(filter.getByRole('alert')).toBeVisible();
+  await expect(textbox).toBeEditable();
+  await expect(saveButton).toBeDisabled();
+  await textbox.fill('first, second\nthird  fourth,second');
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+  const editButton = filter.getByRole('button', { name: 'Edit', exact: true });
+  await expect(editButton).toBeVisible();
+  await expect(filter.getByRole('alert')).toHaveCount(0);
+  await expect(textbox).not.toBeEditable();
+  const editColor = await editButton.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await editButton.click();
+  await expect(saveButton).not.toHaveCSS('background-color', editColor);
+  expect(writes).toBe(1);
+  expect(reads).toBe(1);
+  expect(words).toEqual(['first', 'second', 'third', 'fourth']);
+
+  await openSettings();
+  await expect(textbox).toBeHidden();
+  await summary.click();
+  await expect(textbox).toHaveValue('first\nsecond\nthird\nfourth');
+  await expect(textbox).toBeEditable();
+});
 
 test('customer display pairing uses the selected POS address and reuses its token when switched', async ({
   page,
