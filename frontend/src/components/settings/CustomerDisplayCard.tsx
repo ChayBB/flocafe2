@@ -6,6 +6,7 @@ import { useTranslations } from 'use-intl';
 import { Copy, ExternalLink, MonitorSmartphone, Trash2 } from 'lucide-react';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import api from '@/lib/api';
+import { CustomerDisplayProfanityFilter } from './CustomerDisplayProfanityFilter';
 import {
   CUSTOMER_DISPLAY_DEFAULTS,
   CUSTOMER_DISPLAY_PATH,
@@ -199,6 +200,7 @@ function PairedDisplays({
     <div className="mt-6 border-t border-border pt-5">
       <h3 className="font-semibold text-foreground">{t('pairedTitle')}</h3>
       <p className="text-sm text-muted-foreground mb-4">{t('pairedHint')}</p>
+      <CustomerDisplayProfanityFilter />
 
       <div className="mb-4">
         <div>

@@ -211,6 +211,48 @@ async function main(): Promise<void> {
     assert.ok(!serialized.includes(secret), `feed pages never leak ${secret}`);
   }
 
+  const filterPath = '/api/settings/customer-display/profanity-filter';
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'business_name'").run('Cafe .*');
+  assert.equal((await request(app).get(filterPath).set(display)).status, 401);
+  const cashier = seedUser(db, 'feed-cashier', 'cashier');
+  assert.equal((await request(app).get(filterPath).set(cashier)).status, 403);
+  assert.equal(
+    (
+      await request(app)
+        .put(filterPath)
+        .set(cashier)
+        .send({ words: ['x'] })
+    ).status,
+    403,
+  );
+  for (const words of [
+    'bad',
+    [1],
+    ['x'.repeat(51)],
+    Array.from({ length: 201 }, (_, i) => `w${i}`),
+  ]) {
+    assert.equal(
+      (await request(app).put(filterPath).set(owner).send({ words })).status,
+      400,
+      `rejects ${JSON.stringify(words).slice(0, 40)}`,
+    );
+  }
+  const saved = await request(app)
+    .put(filterPath)
+    .set(owner)
+    .send({ words: [' e- ', '.*'] });
+  assert.equal(saved.status, 200);
+  const loaded = await request(app).get(filterPath).set(owner);
+  assert.deepEqual(loaded.body.words, ['e-', '.*']);
+  const filtered = await request(app).get(FEED).set(display);
+  assert.equal(filtered.body.business_name, 'Cafe ***');
+  assert.equal(filtered.body.orders[0].number, '***131');
+  assert.equal(filtered.body.config.words, undefined);
+  const cleared = await request(app).put(filterPath).set(owner).send({ words: [] });
+  assert.equal(cleared.status, 200);
+  const unfiltered = await request(app).get(FEED).set(display);
+  assert.equal(unfiltered.body.orders[0].number, 'E-131');
+
   for (const badQuery of [
     'cursor=',
     'cursor=not-valid-base64!',

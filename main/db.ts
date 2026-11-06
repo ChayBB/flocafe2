@@ -8272,6 +8272,13 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
         db.exec(`ALTER TABLE orders ADD COLUMN coupon_codes TEXT DEFAULT NULL`);
     },
   },
+  {
+    version: 139,
+    name: 'add_customer_display_profanity_words',
+    up: () => {
+      insertSettingIfMissing('customer_display_profanity_words', '[]');
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

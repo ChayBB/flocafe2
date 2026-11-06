@@ -5,6 +5,7 @@ import {
   readStoredCustomerDisplayConfig,
   type CustomerDisplayConfig,
 } from './customer-display-config';
+import { maskProfanity, PROFANITY_WORDS_KEY, readStoredProfanityWords } from './profanity-filter';
 
 const TOKEN_PREFIX = 'cdt_';
 const MAX_LABEL_LENGTH = 60;
@@ -158,11 +159,15 @@ export function buildDisplayFeed(options?: CustomerDisplayFeedOptions): Customer
   const settings = Object.fromEntries(
     (
       db
-        .prepare('SELECT key, value FROM settings WHERE key IN (?, ?)')
-        .all('business_name', CUSTOMER_DISPLAY_KEY) as Array<{ key: string; value: string }>
+        .prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?)')
+        .all('business_name', CUSTOMER_DISPLAY_KEY, PROFANITY_WORDS_KEY) as Array<{
+        key: string;
+        value: string;
+      }>
     ).map((row) => [row.key, row.value]),
   );
   const config = readStoredCustomerDisplayConfig(settings[CUSTOMER_DISPLAY_KEY]);
+  const words = readStoredProfanityWords(settings[PROFANITY_WORDS_KEY]);
   const placeholders = config.statuses.map(() => '?').join(', ');
   const selectColumns = `SELECT o.id AS id,
               COALESCE((SELECT b.bill_number FROM bills b WHERE b.order_id = o.id ORDER BY b.id DESC LIMIT 1), o.order_number) AS number,
@@ -209,9 +214,9 @@ export function buildDisplayFeed(options?: CustomerDisplayFeedOptions): Customer
     .sort((a, b) =>
       a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id,
     )
-    .map(({ id, number, status }) => ({ id, number, status }));
+    .map(({ id, number, status }) => ({ id, number: maskProfanity(number, words), status }));
   return {
-    business_name: settings.business_name || '',
+    business_name: maskProfanity(settings.business_name || '', words),
     config,
     orders,
     next_cursor,

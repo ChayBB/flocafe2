@@ -842,6 +842,12 @@ Router: `main/routes/customer-display-feed.ts`. Full path: `/api/customer-displa
 | ------ | ------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `/feed` | a customer display token (`Authorization: Bearer cdt_...`); exempt from the JWT middleware by exact path and method | query: ?cursor            | `{ business_name, config, orders, next_cursor, has_more }` where `orders` is `{ id, number, status }` for up to 100 active orders per page, sorted oldest first within the page, filtered by the configured statuses, with `next_cursor` paging older eligible orders. Carries no customer, staff, or item data. `400` for an invalid cursor; `401` for an unauthenticated token. Rate limited to 120 requests per minute. |
 
+The feed replaces case-insensitive matches in the business name and displayed order number with
+`***`. Managers can read or replace the word list with `GET` or `PUT` on
+`/api/settings/customer-display/profanity-filter`. Both methods require `settings.manage` and
+use the settings rate limits. The response is `{ words }`. The PUT body takes the same shape,
+with at most 200 entries of up to 50 characters each. An empty array clears the list.
+
 A display token is not a JWT, so it cannot authorize any other endpoint. Only its SHA-256 hash is stored in `customer_display_tokens`; the table is excluded from database export and cleared on restore.
 
 ### POS info

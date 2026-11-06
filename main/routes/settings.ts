@@ -42,6 +42,13 @@ import {
   revokeDisplayToken,
 } from '../services/customer-display-tokens';
 import { requireMasterPin } from '../middleware/master-pin';
+import {
+  parseProfanityWords,
+  PROFANITY_MAX_WORD_LENGTH,
+  PROFANITY_MAX_WORDS,
+  PROFANITY_WORDS_KEY,
+  readStoredProfanityWords,
+} from '../services/profanity-filter';
 import { resolveTaxIdFormat, validateTaxRegistrationNumber } from '../services/tax';
 import { sendEvent } from '../services/telemetry';
 import { readProductAnalyticsChoice, syncPostHogIdentity } from '../services/posthog';
@@ -947,6 +954,43 @@ router.delete(
         return res.status(404).json({ error: 'Display token not found' });
       }
       res.json({ success: true });
+    } catch (error) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.get(
+  '/customer-display/profanity-filter',
+  settingsReadRateLimit,
+  requirePermission('settings.manage'),
+  (_req: Request, res: Response) => {
+    try {
+      res.json({
+        words: readStoredProfanityWords(getAllSettings(getDatabase())[PROFANITY_WORDS_KEY]),
+      });
+    } catch (error) {
+      console.error('[API] Internal error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.put(
+  '/customer-display/profanity-filter',
+  settingsWriteRateLimit,
+  requirePermission('settings.manage'),
+  (req: Request, res: Response) => {
+    try {
+      const words = parseProfanityWords(req.body?.words);
+      if (!words) {
+        return res.status(400).json({
+          error: `Provide up to ${PROFANITY_MAX_WORDS} words of at most ${PROFANITY_MAX_WORD_LENGTH} characters`,
+        });
+      }
+      upsertSettings(getDatabase(), { [PROFANITY_WORDS_KEY]: JSON.stringify(words) });
+      res.json({ words });
     } catch (error) {
       console.error('[API] Internal error:', error);
       res.status(500).json({ error: 'Internal server error' });
