@@ -65,7 +65,9 @@ const spokenAbout = async (page: Page, text: string) =>
     line.includes(text),
   );
 
-test('the KDS shows and reads a profane note masked by the word list', async ({ page }) => {
+test('the KDS shows a profane note masked and stops reading it at the first masked word', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const headers = { Authorization: `Bearer ${getE2eToken()}` };
   const run = Math.random().toString(36).slice(2, 7);
@@ -128,12 +130,11 @@ test('the KDS shows and reads a profane note masked by the word list', async ({ 
     await expect(page.getByText('spicy *** | *** เผ็ดมาก').first()).toBeVisible({
       timeout: 15000,
     });
-    await expect
-      .poll(() => spokenAbout(page, 'spicy'), { timeout: 15000 })
-      .toEqual(['spicy | เผ็ดมาก']);
+    await expect.poll(() => spokenAbout(page, 'spicy'), { timeout: 15000 }).toEqual(['spicy']);
     const spoken = await page.evaluate(() => (window as unknown as SpeechLog).__spoken);
     expect(spoken.join(' ')).not.toContain('*');
     expect(spoken.join(' ')).not.toContain(banned);
+    expect(spoken.join(' ')).not.toContain('เผ็ดมาก');
   } finally {
     await page.request.put(filter, { headers, data: { words: savedWords } });
   }

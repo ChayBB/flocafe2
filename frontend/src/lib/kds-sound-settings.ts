@@ -195,12 +195,11 @@ export function kdsServerVoices(
   return serverInfo;
 }
 
-/** Drops the profanity filter's *** so a masked word is skipped rather than read as symbols. */
-export function withoutMaskedWords(text: string): string {
-  return text
-    .replace(/\*{3,}/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+/** Stops a read-out at the profanity filter's first ***, dropping the rest of that part. */
+export function spokenUntilMaskedWord(text: string): string {
+  const masked = text.search(/\*{3,}/);
+  const kept = masked === -1 ? text : text.slice(0, masked);
+  return kept.replace(/[\s|,:;.\-–—]+$/u, '').trim();
 }
 
 /**
@@ -209,7 +208,7 @@ export function withoutMaskedWords(text: string): string {
  * computer's Windows voice, else any voice this device has. A voice that fails falls through.
  */
 async function speakNow(rawText: string, lang: string): Promise<void> {
-  const text = withoutMaskedWords(rawText);
+  const text = spokenUntilMaskedWord(rawText);
   if (!text) return;
   const chosenName = readKdsVoiceName();
   if (chosenName.startsWith(KDS_SERVER_VOICE_PREFIX)) {
