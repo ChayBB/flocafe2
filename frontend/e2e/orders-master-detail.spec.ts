@@ -120,11 +120,13 @@ test.describe('orders master/detail is the default layout', () => {
     await expect(masterRow).toHaveAttribute('aria-current', 'true');
     await expect(page.getByText(PLACEHOLDER)).toBeHidden();
     await expect(page.getByText('E2E Coffee')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Checkout|Take Payment/ })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Print Bill|Checkout|Take Payment/ }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add Item' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Link Customer' })).toBeVisible();
     const detailPane = page
-      .getByRole('button', { name: /Checkout|Take Payment/ })
+      .getByRole('button', { name: /Print Bill|Checkout|Take Payment/ })
       .locator('xpath=ancestor::div[contains(@class, "md:flex-1")]');
     const paneBounds = await detailPane.boundingBox();
     const panelBounds = await page.getByTestId('orders-detail-panel').boundingBox();
@@ -371,7 +373,7 @@ test.describe('orders master/detail is the default layout', () => {
 
     const detail = page.getByTestId('orders-detail-panel');
     await expect(detail).toContainText(`#${selected.order_number}`);
-    await expect(detail.getByText('Pending', { exact: true })).toBeVisible();
+    await expect(detail.getByText('Pending', { exact: true })).toHaveCount(0);
 
     let releaseLookup!: () => void;
     let markLookupStarted!: () => void;
@@ -431,10 +433,10 @@ test.describe('orders master/detail is the default layout', () => {
           !url.searchParams.has('before_id')
         );
       });
-      const statusResponse = await page.request.patch(`${BASE}/api/orders/${selected.id}/status`, {
-        headers,
-        data: { status: 'preparing' },
-      });
+      const statusResponse = await page.request.post(
+        `${BASE}/api/orders/${selected.id}/bill-request`,
+        { headers, data: { cashier: true } },
+      );
       expect(statusResponse.ok()).toBeTruthy();
       await refreshedPage;
 
@@ -443,7 +445,7 @@ test.describe('orders master/detail is the default layout', () => {
         .getByRole('button', { name: 'Load more' })
         .click();
       await expect(selectedRow).toBeVisible();
-      await expect(detail.getByText('Preparing', { exact: true })).toBeVisible();
+      await expect(detail.getByTestId('bill-request-waiting')).toBeVisible();
       await expect(outsideListNotice).toBeHidden();
 
       const lateLookupResponse = page.waitForResponse((response) => {
@@ -462,7 +464,7 @@ test.describe('orders master/detail is the default layout', () => {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
           ),
       );
-      await expect(detail.getByText('Preparing', { exact: true })).toBeVisible();
+      await expect(detail.getByTestId('bill-request-waiting')).toBeVisible();
       await expect(outsideListNotice).toBeHidden();
       expect(heldLookups).toBe(1);
     } finally {
@@ -513,7 +515,24 @@ test.describe('orders master/detail is the default layout', () => {
         data: { type: 'dine_in', items: [{ product_id: 'e2e-product', quantity: 1 }] },
       });
       expect(orderResponse.status()).toBe(201);
-      const order = (await orderResponse.json()).order as { id: number; order_number: string };
+      const order = (await orderResponse.json()).order as {
+        id: number;
+        order_number: string;
+        items: { id: number }[];
+      };
+      // A dine-in bill prints only once every item is confirmed served at the table.
+      for (const item of order.items) {
+        const served = await page.request.patch(`${BASE}/api/order-items/${item.id}/status`, {
+          headers,
+          data: { status: 'served' },
+        });
+        expect(served.ok()).toBeTruthy();
+      }
+      const confirmed = await page.request.post(
+        `${BASE}/api/orders/${order.id}/items/confirm-served`,
+        { headers, data: { item_ids: order.items.map((item) => item.id) } },
+      );
+      expect(confirmed.ok(), await confirmed.text()).toBeTruthy();
 
       await login(page);
       await page.goto(`${BASE}/orders`);

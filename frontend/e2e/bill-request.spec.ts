@@ -157,11 +157,12 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     .first();
   await expect(row).toHaveAttribute('data-bill-awaiting', 'true', { timeout: 15000 });
   await expect(row).toHaveClass(/animate-bill-awaiting/);
-  await expect(row.getByText('Bill printed', { exact: true })).toBeVisible();
-  await expect(row.getByText('Pending', { exact: true })).toHaveCount(0);
+  // One badge only: the bill-printed state replaces both the in-service and the unpaid badges.
   await expect(row.getByTestId('bill-request-waiting')).toContainText(
-    /Awaiting payment\s*\d+:\d{2}/,
+    /Bill printed, awaiting payment\s*\d+:\d{2}/,
   );
+  await expect(row.getByText('Pending', { exact: true })).toHaveCount(0);
+  await expect(row.getByText('Unpaid', { exact: true })).toHaveCount(0);
   await row.click();
   await expect(page.getByText('Bill printed by').first()).toBeVisible();
 
@@ -184,9 +185,9 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     .filter({ hasText: `#${created.order_number}` })
     .first()
     .click();
-  await expect(page.getByTestId('bill-request-received').first()).toContainText(
-    /Paid \d{2}:\d{2} · waited \d+ min/,
-  );
+  const received = page.getByTestId('bill-request-received').first();
+  await expect(received).toHaveText(/^Payment received(: .+)?$/);
+  await expect(received).toHaveAttribute('title', /Paid \d{2}:\d{2} · waited \d+ min/);
   await expect(
     page
       .getByRole('button')

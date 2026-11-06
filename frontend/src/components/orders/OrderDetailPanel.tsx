@@ -1,12 +1,12 @@
 'use client';
 
-import {
-  BillRequestBadge,
-  isAwaitingBillPayment,
-  paymentReceiverName,
-} from '@/components/orders/BillRequestBadge';
+import { OrderStatusBadge, isAwaitingBillPayment } from '@/components/orders/BillRequestBadge';
 import { amountDue, needsBillPrintBeforePayment } from '@/lib/bill-print-flow';
-import { OrderFoodStatusBar, type FoodStage } from '@/components/orders/OrderFoodStatusBar';
+import {
+  OrderFoodProgressBar,
+  OrderFoodStageCounts,
+  type FoodStage,
+} from '@/components/orders/OrderFoodStatusBar';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -58,8 +58,6 @@ import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
 import {
-  orderStatusBadgeFor,
-  paymentStatusBadge,
   itemStatusDot,
   whatsappReceiptStatusBadge,
   itemAwaitingWeight,
@@ -200,7 +198,6 @@ function OrderDetailContent({
     if (bill?.payment_status === 'partial') return 'partial';
     return 'unpaid';
   })();
-  const payBadge = payStatus ? paymentStatusBadge[payStatus] : null;
 
   const orderBills = order.bills && order.bills.length > 0 ? order.bills : bill ? [bill] : [];
   const splitBills = orderBills.filter((candidate) => Boolean(candidate.split_group_id));
@@ -261,7 +258,6 @@ function OrderDetailContent({
     bill ? bill.charges_breakdown : order.charges_breakdown,
   ).filter((charge) => charge.id !== 'service_charge' && charge.id !== 'packaging_charge');
 
-  const statusBadgeInfo = orderStatusBadgeFor(order);
   const orderPrints = bill?.id ? printHistory[bill.id] || [] : [];
   const printCount = orderPrints.length;
 
@@ -273,7 +269,6 @@ function OrderDetailContent({
   };
 
   const awaitingBillPayment = isAwaitingBillPayment(order);
-  const receiverName = payStatus === 'paid' ? paymentReceiverName(order) : null;
   // An unpaid bill is printed first; the cashier then confirms the payment.
   const printBillFirst = needsBillPrintBeforePayment(order);
   const checkoutButtonLabel =
@@ -312,22 +307,7 @@ function OrderDetailContent({
                 {tPos(orderPendingLabelKey(order))}
               </span>
             )}
-            {statusBadgeInfo && (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadgeInfo.bg} ${statusBadgeInfo.text}`}
-              >
-                {tOrders(statusBadgeInfo.labelKey)}
-              </span>
-            )}
-            {payBadge && (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}
-              >
-                {tOrders(payBadge.labelKey)}
-                {receiverName && <>: {receiverName}</>}
-              </span>
-            )}
-            <BillRequestBadge order={order} showRequester />
+            <OrderStatusBadge order={order} showRequester hideInService />
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {(bill ||
@@ -434,23 +414,26 @@ function OrderDetailContent({
               {getTimeSince(order.created_at)}
             </span>
           </div>
-          {receiptStatusBadge && (
-            <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${receiptStatusBadge.bg} ${receiptStatusBadge.text}`}
-            >
-              {receiptStatusBadge.labelKey === 'sent' && <Send size={11} />}
-              {receiptStatusBadge.labelKey === 'failed' && <AlertCircle size={11} />}
-              {receiptStatusLabel}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {order.status !== 'cancelled' && (
+              <OrderFoodStageCounts
+                items={order.items || []}
+                selected={stageFilter}
+                onSelect={(stage) => setFoodFilter(stage ? { orderId: order.id, stage } : null)}
+              />
+            )}
+            {receiptStatusBadge && (
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${receiptStatusBadge.bg} ${receiptStatusBadge.text}`}
+              >
+                {receiptStatusBadge.labelKey === 'sent' && <Send size={11} />}
+                {receiptStatusBadge.labelKey === 'failed' && <AlertCircle size={11} />}
+                {receiptStatusLabel}
+              </span>
+            )}
+          </div>
         </div>
-        {order.status !== 'cancelled' && (
-          <OrderFoodStatusBar
-            items={order.items || []}
-            selected={stageFilter}
-            onSelect={(stage) => setFoodFilter(stage ? { orderId: order.id, stage } : null)}
-          />
-        )}
+        {order.status !== 'cancelled' && <OrderFoodProgressBar items={order.items || []} />}
       </div>
 
       {/* ── SCROLLING BODY ─────────────────────────────────────────────────── */}

@@ -1,18 +1,13 @@
 'use client';
 
-import { BillRequestBadge } from '@/components/orders/BillRequestBadge';
+import { OrderStatusBadge } from '@/components/orders/BillRequestBadge';
 import { Utensils, ShoppingBag, Truck, Globe, Clock, UserRound } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { Order } from '@/lib/types';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { parseDbTimestamp, cn } from '@/lib/utils';
-import {
-  orderStatusBadgeFor,
-  orderAwaitingWeight,
-  orderPendingLabelKey,
-  ORDER_TYPE_KEYS,
-} from './OrderCard';
+import { orderAwaitingWeight, orderPendingLabelKey, ORDER_TYPE_KEYS } from './OrderCard';
 
 function OrderTypeIcon({ type }: { type: Order['type'] }) {
   const cls = 'shrink-0 text-muted-foreground';
@@ -59,7 +54,6 @@ export function OrdersMasterList({
   return (
     <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
       {orders.map((order) => {
-        const badge = orderStatusBadgeFor(order);
         const awaitingWeight = orderAwaitingWeight(order);
         const awaitingPayment = Boolean(order.bill_requested_at) && !order.bill_payment_received_at;
         const active = order.status !== 'cancelled';
@@ -94,19 +88,12 @@ export function OrdersMasterList({
                   #<Ltr>{order.order_number}</Ltr>
                 </span>
                 <span className="flex items-center gap-1 shrink-0">
-                  <BillRequestBadge order={order} />
                   {awaitingWeight && (
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300">
                       {tPos(orderPendingLabelKey(order))}
                     </span>
                   )}
-                  {badge && (
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.bg} ${badge.text}`}
-                    >
-                      {tOrders(badge.labelKey)}
-                    </span>
-                  )}
+                  <OrderStatusBadge order={order} compact />
                 </span>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">

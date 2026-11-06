@@ -53,33 +53,61 @@ export function formatWait(fromStamp: string, toMs: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+type BadgeOrder = BillRequestFields &
+  Pick<Order, 'status' | 'bill' | 'bills'> & { bill_requested_at?: string | null };
+
+const BADGE = 'inline-flex items-center gap-1 rounded-full font-medium';
+
 /**
- * The table asked for its bill: while the cashier has not received the money the wait counts up;
- * once paid it shows when, and how long the table waited.
+ * The order's one status badge: in service until the bill prints, then awaiting payment with a
+ * running wait, then received with the name of whoever took the money.
  */
-export function BillRequestBadge({
+export function OrderStatusBadge({
   order,
+  compact = false,
   showRequester = false,
+  hideInService = false,
 }: {
-  order: BillRequestFields;
+  order: BadgeOrder;
+  compact?: boolean;
   showRequester?: boolean;
+  /** Leave the plain in-service state unlabelled, as the detail pane does. */
+  hideInService?: boolean;
 }) {
   const t = useTranslations('orders');
   const { formatTime } = useFormatDate();
-  const waiting = isAwaitingBillPayment(order);
+  const waiting =
+    !['completed', 'cancelled'].includes(order.status) && isAwaitingBillPayment(order);
   const now = useTickingNow(waiting);
-  if (!order.bill_requested_at) return null;
+  const size = compact ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-0.5 text-xs';
+  const bills =
+    order.bills && order.bills.length > 0 ? order.bills : order.bill ? [order.bill] : [];
+  const paid =
+    order.status === 'completed' ||
+    Boolean(order.bill_payment_received_at) ||
+    (bills.length > 0 && bills.every((bill) => bill.payment_status === 'paid'));
+
+  if (order.status === 'cancelled') {
+    return (
+      <span
+        data-testid="order-status-badge"
+        className={`${BADGE} ${size} bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300`}
+      >
+        {t('cancelled')}
+      </span>
+    );
+  }
 
   if (waiting) {
     return (
       <span className="inline-flex items-center gap-1.5">
         <span
           data-testid="bill-request-waiting"
-          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+          className={`${BADGE} ${size} bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300`}
         >
           <ReceiptText size={12} aria-hidden="true" />
-          {t('billAwaitingPayment')}
-          <Ltr className="tabular-nums">{formatWait(order.bill_requested_at, now)}</Ltr>
+          {t('billPrinted')}
+          <Ltr className="tabular-nums">{formatWait(order.bill_requested_at!, now)}</Ltr>
         </span>
         {showRequester && order.bill_requested_by_name && (
           <span className="text-xs text-muted-foreground">
@@ -90,21 +118,47 @@ export function BillRequestBadge({
     );
   }
 
-  const minutes = Math.max(
-    0,
-    Math.round(
-      (parseDbTimestamp(order.bill_payment_received_at!).getTime() -
-        parseDbTimestamp(order.bill_requested_at).getTime()) /
-        60000,
-    ),
-  );
+  if (paid) {
+    const name = paymentReceiverName(order);
+    const receivedAt = order.bill_payment_received_at;
+    return (
+      <span
+        data-testid="bill-request-received"
+        title={
+          receivedAt && order.bill_requested_at
+            ? t('billPaymentReceived', {
+                time: formatTime(receivedAt),
+                minutes: Math.max(
+                  0,
+                  Math.round(
+                    (parseDbTimestamp(receivedAt).getTime() -
+                      parseDbTimestamp(order.bill_requested_at).getTime()) /
+                      60000,
+                  ),
+                ),
+              })
+            : undefined
+        }
+        className={`${BADGE} ${size} bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300`}
+      >
+        <CheckCircle2 size={12} aria-hidden="true" />
+        {name ? t('paymentReceivedBy', { name }) : t('paymentReceived')}
+      </span>
+    );
+  }
+
+  const partial = bills.some((bill) => bill.payment_status === 'partial');
+  if (hideInService && !partial) return null;
   return (
     <span
-      data-testid="bill-request-received"
-      className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-950/50 dark:text-green-300"
+      data-testid="order-status-badge"
+      className={`${BADGE} ${size} ${
+        partial
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300'
+      }`}
     >
-      <CheckCircle2 size={12} aria-hidden="true" />
-      {t('billPaymentReceived', { time: formatTime(order.bill_payment_received_at!), minutes })}
+      {t(partial ? 'partiallyPaid' : 'pending')}
     </span>
   );
 }

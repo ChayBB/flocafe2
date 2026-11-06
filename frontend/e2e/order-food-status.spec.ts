@@ -28,6 +28,7 @@ test('the order header shows how far its food has got, stage by stage, and each 
   });
   expect(order.status()).toBe(201);
   const created = (await order.json()).order as {
+    id: number;
     order_number: string;
     items: { id: number }[];
   };
@@ -73,4 +74,25 @@ test('the order header shows how far its food has got, stage by stage, and each 
   await page.getByTestId('order-food-status-pending').click();
   await expect(items).toHaveCount(4);
   await expect(page.getByTestId('order-food-status-served')).toBeDisabled();
+  await expect(page.getByTestId('order-food-served-confirmed')).toHaveCount(0);
+
+  // Once every dish is served and confirmed at the table, a check follows the served count.
+  await moveTo(created.items[0].id, ['preparing', 'ready', 'served']);
+  await moveTo(created.items[1].id, ['ready', 'served']);
+  await moveTo(created.items[2].id, ['served']);
+  await moveTo(created.items[3].id, ['served']);
+  await page.reload();
+  await page.getByText(created.order_number).first().click();
+  await expect(page.getByTestId('order-food-status-served')).toHaveText('Served4');
+  await expect(page.getByTestId('order-food-served-confirmed')).toHaveCount(0);
+  const confirmed = await page.request.post(
+    `${E2E_BASE_URL}/api/orders/${created.id}/items/confirm-served`,
+    { headers, data: { item_ids: created.items.map((item) => item.id) } },
+  );
+  expect(confirmed.ok(), await confirmed.text()).toBeTruthy();
+  await page.reload();
+  await page.getByText(created.order_number).first().click();
+  await expect(
+    page.getByTestId('order-food-status-served').getByTestId('order-food-served-confirmed'),
+  ).toBeVisible();
 });

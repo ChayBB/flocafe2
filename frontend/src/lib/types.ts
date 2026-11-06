@@ -285,6 +285,8 @@ export interface OrderItem {
   weight?: number | null;
   /** How a pending line gets its price; absent on lines saved before the kitchen-price option. */
   pending_price_mode?: 'weight' | 'kitchen_price' | null;
+  /** When service staff confirmed the item reached the table. */
+  served_confirmed_at?: string | null;
 }
 
 export interface Bill {

@@ -48,80 +48,15 @@ import { parseDbTimestamp } from '@/lib/utils';
 import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
-import { isAwaitingBillPayment, paymentReceiverName } from './BillRequestBadge';
-import { amountDue, needsBillPrintBeforePayment } from '@/lib/bill-print-flow';
+import { OrderStatusBadge } from './BillRequestBadge';
+import {
+  amountDue,
+  isAwaitingBillPayment,
+  needsBillPrintBeforePayment,
+} from '@/lib/bill-print-flow';
 
 type OrdersKey = keyof AppConfig['Messages']['orders'];
 type WhatsAppStatusKey = keyof AppConfig['Messages']['whatsapp']['status'];
-
-export const orderStatusBadge: Record<
-  Order['status'],
-  { bg: string; text: string; labelKey: OrdersKey }
-> = {
-  pending: {
-    bg: 'bg-yellow-100 dark:bg-yellow-950/40',
-    text: 'text-yellow-700 dark:text-yellow-300',
-    labelKey: 'pending',
-  },
-  preparing: {
-    bg: 'bg-orange-100 dark:bg-orange-950/40',
-    text: 'text-orange-700 dark:text-orange-300',
-    labelKey: 'preparing',
-  },
-  ready: {
-    bg: 'bg-purple-100 dark:bg-purple-950/40',
-    text: 'text-purple-700 dark:text-purple-300',
-    labelKey: 'ready',
-  },
-  served: {
-    bg: 'bg-green-100 dark:bg-green-950/40',
-    text: 'text-green-700 dark:text-green-300',
-    labelKey: 'served',
-  },
-  completed: { bg: 'bg-muted', text: 'text-muted-foreground', labelKey: 'completed' },
-  cancelled: {
-    bg: 'bg-red-100 dark:bg-red-950/40',
-    text: 'text-red-700 dark:text-red-300',
-    labelKey: 'cancelled',
-  },
-};
-
-const billPrintedBadge = {
-  bg: 'bg-sky-100 dark:bg-sky-950/40',
-  text: 'text-sky-700 dark:text-sky-300',
-  labelKey: 'billPrinted',
-} as const;
-
-/** An open order whose bill is printed and awaiting payment reads "Bill printed". */
-export function orderStatusBadgeFor(
-  order: Pick<Order, 'status' | 'bill_requested_at' | 'bill_payment_received_at'>,
-): { bg: string; text: string; labelKey: OrdersKey } | undefined {
-  if (!['completed', 'cancelled'].includes(order.status) && isAwaitingBillPayment(order)) {
-    return billPrintedBadge;
-  }
-  return orderStatusBadge[order.status];
-}
-
-export const paymentStatusBadge: Record<
-  'paid' | 'partial' | 'unpaid',
-  { bg: string; text: string; labelKey: OrdersKey }
-> = {
-  paid: {
-    bg: 'bg-green-100 dark:bg-green-950/40',
-    text: 'text-green-700 dark:text-green-300',
-    labelKey: 'paid',
-  },
-  partial: {
-    bg: 'bg-amber-100 dark:bg-amber-950/40',
-    text: 'text-amber-700 dark:text-amber-300',
-    labelKey: 'partiallyPaid',
-  },
-  unpaid: {
-    bg: 'bg-red-100 dark:bg-red-950/40',
-    text: 'text-red-700 dark:text-red-300',
-    labelKey: 'unpaidBadge',
-  },
-};
 
 export const whatsappReceiptStatusBadge: Record<
   'sent' | 'partial' | 'pending' | 'failed' | 'notSent',
@@ -312,8 +247,6 @@ export function OrderCard({
     return 'unpaid';
   })();
 
-  const payBadge = payStatus ? paymentStatusBadge[payStatus] : null;
-
   const hasPaidBill =
     order.bills?.some((candidate) => candidate.payment_status === 'paid') ?? isPaid;
   const receiptStatusBadge =
@@ -374,7 +307,6 @@ export function OrderCard({
     hasCollectedFunds;
 
   const awaitingBillPayment = isAwaitingBillPayment(order);
-  const receiverName = payStatus === 'paid' ? paymentReceiverName(order) : null;
   // An unpaid bill is printed first; the cashier then confirms the payment.
   const showCheckout = !needsBillPrintBeforePayment(order);
   const showPrintBill = !awaitingBillPayment && (Boolean(bill) || Boolean(onPrintOrder));
@@ -392,7 +324,6 @@ export function OrderCard({
     return tCommon('timeHoursMinutesAgo', { h: Math.floor(minutes / 60), m: minutes % 60 });
   };
 
-  const statusBadgeInfo = orderStatusBadgeFor(order);
   const orderPrints = bill?.id ? printHistory[bill.id] || [] : [];
   const printCount = orderPrints.length;
 
@@ -437,21 +368,7 @@ export function OrderCard({
                 {tPos(orderPendingLabelKey(order))}
               </span>
             )}
-            {statusBadgeInfo && (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadgeInfo.bg} ${statusBadgeInfo.text}`}
-              >
-                {tOrders(statusBadgeInfo.labelKey)}
-              </span>
-            )}
-            {payBadge && (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}
-              >
-                {tOrders(payBadge.labelKey)}
-                {receiverName && <>: {receiverName}</>}
-              </span>
-            )}
+            <OrderStatusBadge order={order} />
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
