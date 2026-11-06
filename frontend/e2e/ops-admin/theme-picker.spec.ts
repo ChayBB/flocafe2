@@ -112,18 +112,18 @@ test.describe('@ci-tier2 operations admin - theme picker', () => {
     await radio('Dark 2').click();
     await expect(radio('Dark 2')).toHaveAttribute('aria-checked', 'true');
     await expect.poll(hasDarkTwo).toBe(true);
-    await expect.poll(bodyBackground).toBe('rgb(28, 53, 70)');
-    expect(plainDark).not.toBe('rgb(28, 53, 70)');
+    await expect.poll(bodyBackground).toBe('rgb(24, 57, 74)');
+    expect(plainDark).not.toBe('rgb(24, 57, 74)');
     await expect.poll(() => storedSetting(page, 'theme_dark_variant')).toBe('2');
 
     await page.reload();
     await expect.poll(hasDarkTwo).toBe(true);
-    await expect.poll(bodyBackground).toBe('rgb(28, 53, 70)');
+    await expect.poll(bodyBackground).toBe('rgb(24, 57, 74)');
     await expect(radio('Dark 2')).toHaveAttribute('aria-checked', 'true', { timeout: 20_000 });
 
     await radio('Light').click();
     await expect.poll(() => isDark(page)).toBe(false);
-    expect(await bodyBackground()).not.toBe('rgb(28, 53, 70)');
+    expect(await bodyBackground()).not.toBe('rgb(24, 57, 74)');
 
     await radio('Dark 3').click();
     await expect.poll(() => isDark(page)).toBe(true);

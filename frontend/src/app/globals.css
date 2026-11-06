@@ -564,44 +564,44 @@ div:hover > .flo-toast-drain,
   --kds-confirmed-text: #a0c9ac;
 }
 
-/* Dark 2: deep navy-teal surfaces with a gold accent that carries dark text. */
+/* Dark 2: EDB-style navy-teal surfaces with a gold accent that carries navy text. */
 html.dark.theme-dark-2:not(.theme-kds):not(.theme-server-app) {
-  --background: #1c3546;
-  --foreground: #f3f6f8;
-  --card: #264356;
-  --card-foreground: #f3f6f8;
-  --popover: #264356;
-  --popover-foreground: #f3f6f8;
-  --panel: #264356;
-  --primary: #e8c361;
-  --primary-foreground: #1c3546;
-  --secondary: #2f4f63;
-  --secondary-foreground: #e6edf1;
-  --muted: #2b4a5d;
-  --muted-foreground: #a9bcc8;
-  --accent: #2f4f63;
-  --accent-foreground: #f3f6f8;
-  --border: #3a5a6e;
-  --input: #44657a;
-  --ring: #e8c361;
-  --selected-row: #3b4640;
-  --sidebar: #233f51;
-  --sidebar-foreground: #f3f6f8;
-  --sidebar-primary: #e8c361;
-  --sidebar-primary-foreground: #1c3546;
-  --sidebar-accent: #2f4f63;
-  --sidebar-accent-foreground: #e8c361;
-  --sidebar-border: #3a5a6e;
-  --sidebar-ring: #e8c361;
-  --color-brand: #e8c361;
-  --color-brand-light: #3f4836;
-  --color-brand-hover: #d4ad4a;
-  --color-brand-ring: #e8c36180;
+  --background: #18394a;
+  --foreground: #ffffff;
+  --card: #28495a;
+  --card-foreground: #ffffff;
+  --popover: #28495a;
+  --popover-foreground: #ffffff;
+  --panel: #28495a;
+  --primary: #e7c568;
+  --primary-foreground: #28495a;
+  --secondary: #335b6d;
+  --secondary-foreground: #e4eef5;
+  --muted: #2f5263;
+  --muted-foreground: #a8c0cc;
+  --accent: #335b6d;
+  --accent-foreground: #ffffff;
+  --border: #3a6475;
+  --input: #446f80;
+  --ring: #e7c568;
+  --selected-row: #335b6d;
+  --sidebar: #28495a;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #e7c568;
+  --sidebar-primary-foreground: #28495a;
+  --sidebar-accent: #335b6d;
+  --sidebar-accent-foreground: #e7c568;
+  --sidebar-border: #3a6475;
+  --sidebar-ring: #e7c568;
+  --color-brand: #e7c568;
+  --color-brand-light: #4a5a48;
+  --color-brand-hover: #d4b155;
+  --color-brand-ring: #e7c56880;
 }
 
 html.dark.theme-dark-2:not(.theme-kds):not(.theme-server-app)
   .text-white:is(.bg-brand, .bg-brand-hover, [class~="bg-brand/90"], [class~="hover:bg-brand-hover"]:hover) {
-  color: #1c3546;
+  color: #28495a;
 }
 
 html.dark::-webkit-scrollbar-thumb,
