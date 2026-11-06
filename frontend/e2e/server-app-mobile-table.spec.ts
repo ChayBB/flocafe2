@@ -124,7 +124,7 @@ for (const screenSize of SCREENS) {
     await screen.getByTestId('server-app-ordered-tab-ready').click();
     await expect(screen.getByTestId('server-app-ordered-item')).toHaveCount(1);
     await expect(screen.getByTestId('server-app-ordered-item')).toContainText('Ready');
-    await expect(screen.getByTestId('server-app-ordered-item')).toContainText(/\d{2}:\d{2}/);
+    await expect(screen.getByTestId('server-app-ordered-item')).not.toContainText(/\d{2}:\d{2}/);
     // The list ends with "Exit" rather than a send button, and the cart button stays out of the way.
     await expect(screen.getByTestId('server-app-ordered-exit')).toHaveText('Exit');
     await expect(page.getByTestId('server-app-cart-button')).toBeHidden();

@@ -1,9 +1,17 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Locator, Page } from '@playwright/test';
 import { E2E_BASE_URL, E2E_SERVER_APP_BASE_URL } from './helpers/urls';
 import { openServerAppTables } from './helpers/server-app';
 import { getE2eToken } from './helpers/test-auth';
 
 const TOKEN_KEY = 'flocafe:server-app-token';
+
+/** Sent E2E Coffee rows on the current ticket with the given quantity. */
+function sentCoffee(scope: Page | Locator, quantity: number): Locator {
+  return scope
+    .getByTestId('server-app-ticket-item')
+    .filter({ hasText: 'E2E Coffee' })
+    .filter({ hasText: `x ${quantity}` });
+}
 
 async function openServerApp(page: Page, serverToken: string): Promise<void> {
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
@@ -347,7 +355,7 @@ test.describe('Server App tableside ordering', () => {
     // Sending clears the table; picking it again shows what was sent.
     await expect(page.locator('header')).toContainText('Select a table');
     await pickTable(page, tableAName);
-    await expect(page.getByText('1 × E2E Coffee').first()).toBeVisible();
+    await expect(sentCoffee(page, 1).first()).toBeVisible();
     releaseKotPrint();
 
     // Now that the first send finished and unlocked the UI, adding and sending a second item must succeed.
@@ -356,7 +364,7 @@ test.describe('Server App tableside ordering', () => {
     await page.getByRole('button', { name: 'Add to order' }).first().click();
     await expect(page.locator('header')).toContainText('Select a table');
     await pickTable(page, tableAName);
-    await expect(page.locator('main').getByText('1 × E2E Coffee')).toHaveCount(2);
+    await expect(sentCoffee(page.locator('main'), 1)).toHaveCount(2);
     await expect.poll(() => kotPrintPayloads.length).toBe(2);
     expect(kotPrintPayloads[0]?.items).toHaveLength(1);
     expect(kotPrintPayloads[1]?.items).toHaveLength(1);
@@ -505,7 +513,7 @@ test.describe('Server App tableside ordering', () => {
     await pickTable(page, tableBName);
     await pickTable(page, tableAName);
     await reloadTableAOrder;
-    await expect(page.getByText('2 × E2E Coffee').first()).toBeVisible();
+    await expect(sentCoffee(page, 2).first()).toBeVisible();
 
     // Retrying the unmodified draft must replay the original POST /api/orders with the same key instead of appending a second time.
     await page.getByRole('button', { name: 'Add to order' }).first().click();
@@ -588,7 +596,7 @@ test.describe('Server App tableside ordering', () => {
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
 
     await expect(page.locator('header')).toContainText(tableBName);
-    await expect(page.getByText('2 × E2E Coffee')).toHaveCount(0);
+    await expect(sentCoffee(page, 2)).toHaveCount(0);
 
     // Prepare a new draft on Table B, then return to occupied Table A while its lookup fails:
     // Send must remain blocked until Table A's lookup succeeds so it cannot create a separate order.

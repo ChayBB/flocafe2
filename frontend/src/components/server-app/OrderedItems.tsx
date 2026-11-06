@@ -26,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/hooks/use-confirm';
 import { kdsItemLine } from '@/lib/item-options-note';
-import { parseDbTimestamp } from '@/lib/utils';
+import { nameToColor } from '@/lib/image-utils';
 import {
   ItemStatusBadge,
   KITCHEN_STAGES,
@@ -36,7 +36,6 @@ import {
   stageOf,
   type KitchenStage,
 } from '@/components/server-app/ItemStatus';
-import { itemStatusDot } from '@/components/orders/OrderCard';
 
 /** The dish as ordered, named the way the kitchen screen names it. */
 export function orderedItemName(item: OrderedItem): string {
@@ -59,6 +58,8 @@ export interface OrderedItem {
   served_confirmed_at?: string | null;
   /** Still waiting for a weight or the kitchen's price. */
   weight_pending?: boolean | number | null;
+  /** Line total as the backend priced it. */
+  total?: number | string | null;
 }
 
 /** A ready or served dish, or a take-away one still in the kitchen, not yet confirmed. */
@@ -127,24 +128,27 @@ export function TableKitchenSummary({
 }
 
 /**
- * Numbered list of a table's sent items: quantity and name, time sent, kitchen status and a menu
- * of the changes service staff may make (takeaway, cancel, confirm served).
+ * A table's sent items as plain divided rows: name, quantity, price, one status pill
+ * and a menu of the changes service staff may make (takeaway, cancel, confirm served).
  */
 export function OrderedItemList({
   items,
-  timezone,
   className = '',
   emptyText,
   itemTestId = 'server-app-ordered-item',
   onTakeaway,
   onCancel,
   onConfirmServed,
+  formatPrice,
+  imageOf,
 }: {
   items: OrderedItem[];
-  timezone?: string;
   className?: string;
+  /** The dish's menu photo, when it has one; rows show a thumbnail only when this is given. */
+  imageOf?: (item: OrderedItem) => string | null;
   emptyText?: string;
   itemTestId?: string;
+  formatPrice?: (amount: number) => string;
   onTakeaway: (item: OrderedItem) => Promise<void>;
   onCancel: (item: OrderedItem) => Promise<void>;
   onConfirmServed: (item: OrderedItem) => Promise<void>;
@@ -175,63 +179,55 @@ export function OrderedItemList({
       setChanging(null);
     }
   };
-  const timeOf = (stamp?: string) => {
-    if (!stamp) return '';
-    try {
-      return new Intl.DateTimeFormat('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-        ...(timezone ? { timeZone: timezone } : {}),
-      }).format(parseDbTimestamp(stamp));
-    } catch {
-      return '';
-    }
-  };
 
   return (
     <>
-      <ol className={`space-y-2 ${className}`}>
+      <ol className={`divide-y divide-border ${className}`}>
         {items.length === 0 && emptyText && (
           <li className="py-10 text-center text-sm text-muted-foreground">{emptyText}</li>
         )}
-        {items.map((item, index) => {
+        {items.map((item) => {
           const options = itemChangeOptions(item);
           const hasOptions = options.takeaway || options.cancel || options.confirmServed;
+          const cancelled = isCancelledItem(item.status);
+          const price =
+            formatPrice && !cancelled && !item.weight_pending && item.total != null
+              ? formatPrice(Number(item.total))
+              : null;
           return (
-            <li
-              key={item.id}
-              data-testid={itemTestId}
-              className="relative flex items-center gap-3 rounded-lg border border-border bg-card p-2"
-            >
-              <Ltr className="w-5 shrink-0 text-center text-xs text-muted-foreground">
-                {index + 1}
-              </Ltr>
+            <li key={item.id} data-testid={itemTestId} className="flex items-center gap-3 py-3">
+              {imageOf && <ItemThumb item={item} src={imageOf(item)} cancelled={cancelled} />}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  <Ltr>{item.quantity}</Ltr> × {orderedItemName(item)}
+                <p
+                  className={`truncate text-sm font-medium ${cancelled ? 'text-muted-foreground line-through' : ''}`}
+                >
+                  {orderedItemName(item)}
                 </p>
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Ltr className="tabular-nums">{timeOf(item.created_at)}</Ltr>
-                  {item.served_confirmed_at && (
-                    <span
-                      data-testid="server-app-served-confirmed-tag"
-                      className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                    >
-                      {t('servedConfirmedTag')}
-                    </span>
-                  )}
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Ltr className="tabular-nums">x {item.quantity}</Ltr>
                   {item.service_change === 'takeaway' && (
                     <span
                       data-testid="server-app-takeaway-tag"
-                      className="rounded bg-orange-100 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                      className="font-medium text-orange-600 dark:text-orange-300"
                     >
                       {t('takeawayTag')}
                     </span>
                   )}
                 </p>
               </div>
-              <ItemStatusBadge status={item.status} />
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {price && <Ltr className="text-sm tabular-nums">{price}</Ltr>}
+                {item.served_confirmed_at && !cancelled ? (
+                  <span
+                    data-testid="server-app-served-confirmed-tag"
+                    className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  >
+                    {t('servedConfirmedTag')}
+                  </span>
+                ) : (
+                  <ItemStatusBadge status={item.status} />
+                )}
+              </div>
               {/* Rendered above the page so the footer never covers it; it opens upward near the bottom. */}
               <DropdownMenu
                 modal={false}
@@ -244,7 +240,7 @@ export function OrderedItemList({
                     data-testid="server-app-item-menu"
                     aria-label={t('itemActions')}
                     disabled={!hasOptions || changing === item.id}
-                    className="flex min-h-11 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-30"
+                    className={`flex min-h-11 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground disabled:opacity-30 ${hasOptions ? '' : 'invisible'}`}
                   >
                     <MoreVertical size={18} />
                   </button>
@@ -289,6 +285,41 @@ export function OrderedItemList({
       </ol>
       {ConfirmDialog}
     </>
+  );
+}
+
+/** A small menu photo, over a coloured tile with the name's first letters as the fallback. */
+function ItemThumb({
+  item,
+  src,
+  cancelled,
+}: {
+  item: OrderedItem;
+  src: string | null;
+  cancelled: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const name = item.product_name;
+  return (
+    <div
+      data-testid="server-app-ordered-item-thumb"
+      aria-hidden="true"
+      className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-lg ${cancelled ? 'opacity-40 grayscale' : ''}`}
+      style={{ backgroundColor: nameToColor(name) }}
+    >
+      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white/80">
+        {name.substring(0, 2).toUpperCase()}
+      </span>
+      {src && !failed && (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+    </div>
   );
 }
 
@@ -389,7 +420,6 @@ export function OrderedItemsScreen({
   tableName,
   orderNumber,
   items,
-  timezone,
   onBack,
   onAddItems,
   addItemsLocked = false,
@@ -401,11 +431,13 @@ export function OrderedItemsScreen({
   onMoveTable,
   onMergeTable,
   serveConfirmRequested = false,
+  total,
+  formatPrice,
+  imageOf,
 }: {
   tableName: string;
   orderNumber?: string;
   items: OrderedItem[];
-  timezone?: string;
   onBack: () => void;
   onAddItems: () => void;
   /** The bill is out, so the table takes no more food until it is paid. */
@@ -421,6 +453,10 @@ export function OrderedItemsScreen({
   onMergeTable?: () => void;
   /** The cashier is waiting to print this table's bill. */
   serveConfirmRequested?: boolean;
+  /** The order total as the backend priced it. */
+  total?: number | string | null;
+  formatPrice?: (amount: number) => string;
+  imageOf?: (item: OrderedItem) => string | null;
 }) {
   const t = useTranslations('serverApp');
   const tCommon = useTranslations('common');
@@ -446,201 +482,216 @@ export function OrderedItemsScreen({
   const billReady = live.length > 0 && notAtTable === 0 && awaitingPrice === 0;
   const counts = stageCounts(items);
   const toConfirm = itemsToConfirmServed(live);
-  const shown = filter === 'all' ? items : live.filter((item) => stageOf(item.status) === filter);
+  // Filtering only earns a row when the items sit in more than one stage.
+  const activeStages = KITCHEN_STAGES.filter((stage) => counts[stage] > 0);
+  const showTabs = activeStages.length > 1;
+  const activeFilter = showTabs && filter !== 'all' && counts[filter] > 0 ? filter : 'all';
+  const shown =
+    activeFilter === 'all' ? items : live.filter((item) => stageOf(item.status) === activeFilter);
   const tabs: { key: KitchenStage | 'all'; count: number }[] = [
     { key: 'all', count: live.length },
-    ...KITCHEN_STAGES.map((stage) => ({ key: stage, count: counts[stage] })),
+    ...activeStages.map((stage) => ({ key: stage, count: counts[stage] })),
   ];
+  const iconButton =
+    'flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted';
 
   return (
     <div
       data-testid="server-app-ordered-items"
       className="fixed inset-0 z-40 flex flex-col bg-background text-foreground"
     >
-      <header className="flex items-center gap-2 border-b border-border bg-card px-3 py-2">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label={tCommon('back')}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-foreground"
-        >
-          <ArrowLeft size={20} className="rtl-flip" />
-        </button>
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-bold">{t('orderedItemsTitle')}</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {t('tableLabel', { name: tableName })}
-            {orderNumber && (
-              <>
-                {' · '}
-                <Ltr>{orderNumber}</Ltr>
-              </>
-            )}
-          </p>
-        </div>
-        {orderNumber && live.length > 0 && (
+      <header className="border-b border-border">
+        <div className="mx-auto grid w-full max-w-2xl grid-cols-[5.5rem_minmax(0,1fr)_5.5rem] items-center px-2 py-2">
           <button
             type="button"
-            data-testid="server-app-print-bill"
-            data-ready={billReady}
-            aria-label={t('printBill')}
-            title={t('printBill')}
-            disabled={printing}
-            onClick={async () => {
-              // Until every item is at the table and priced, the button says what is still missing.
-              if (!billReady) {
-                toast.error(
-                  [
-                    notAtTable > 0 && t('printBillNotAtTable', { count: notAtTable }),
-                    awaitingPrice > 0 && t('printBillAwaitingPrice', { count: awaitingPrice }),
-                  ]
-                    .filter(Boolean)
-                    .join('\n'),
-                );
-                return;
-              }
-              setPrinting(true);
-              try {
-                await onPrintBill();
-              } finally {
-                setPrinting(false);
-              }
-            }}
-            className={`ms-auto flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border disabled:opacity-50 ${billReady ? 'text-foreground' : 'text-muted-foreground opacity-50'}`}
+            onClick={onBack}
+            aria-label={tCommon('back')}
+            className={`${iconButton} justify-self-start text-foreground`}
           >
-            <Printer size={20} />
+            <ArrowLeft size={20} className="rtl-flip" />
           </button>
-        )}
-        {orderNumber && tableActions.length > 0 && (
-          <div className={`relative ${live.length > 0 ? '' : 'ms-auto'}`}>
-            <button
-              type="button"
-              data-testid="server-app-ordered-menu"
-              aria-label={t('ticketActions')}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground"
-            >
-              <MoreVertical size={20} />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute end-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+          <div className="min-w-0 text-center">
+            <h2 className="truncate text-base font-bold">{t('orderedItemsTitle')}</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {t('tableLabel', { name: tableName })}
+              {orderNumber && (
+                <>
+                  {' · '}
+                  <Ltr>{orderNumber}</Ltr>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center justify-self-end">
+            {orderNumber && live.length > 0 && (
+              <button
+                type="button"
+                data-testid="server-app-print-bill"
+                data-ready={billReady}
+                aria-label={t('printBill')}
+                title={t('printBill')}
+                disabled={printing}
+                onClick={async () => {
+                  // Until every item is at the table and priced, the button says what is still missing.
+                  if (!billReady) {
+                    toast.error(
+                      [
+                        notAtTable > 0 && t('printBillNotAtTable', { count: notAtTable }),
+                        awaitingPrice > 0 && t('printBillAwaitingPrice', { count: awaitingPrice }),
+                      ]
+                        .filter(Boolean)
+                        .join('\n'),
+                    );
+                    return;
+                  }
+                  setPrinting(true);
+                  try {
+                    await onPrintBill();
+                  } finally {
+                    setPrinting(false);
+                  }
+                }}
+                className={`${iconButton} disabled:opacity-50 ${billReady ? 'text-foreground' : 'opacity-40'}`}
               >
-                {tableActions.map(({ key, label, icon: Icon, run }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      run();
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                <Printer size={20} />
+              </button>
+            )}
+            {orderNumber && tableActions.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  data-testid="server-app-ordered-menu"
+                  aria-label={t('ticketActions')}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className={iconButton}
+                >
+                  <MoreVertical size={20} />
+                </button>
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute end-0 top-full z-20 mt-1 min-w-44 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
                   >
-                    <Icon size={16} />
-                    {label}
-                  </button>
-                ))}
+                    {tableActions.map(({ key, label, icon: Icon, run }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          run();
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-muted"
+                      >
+                        <Icon size={16} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
       </header>
 
-      {/* The same thin stage bar as the POS order header; each label filters the list. */}
-      <div data-testid="server-app-ordered-stages" className="space-y-1 px-3 pt-3">
-        <div className="flex h-1 gap-0.5">
-          {KITCHEN_STAGES.map((stage) =>
-            counts[stage] > 0 ? (
-              <div
-                key={stage}
-                className={`rounded-full opacity-75 ${itemStatusDot[stage].dot}`}
-                style={{ flexGrow: counts[stage], flexBasis: 0 }}
-              />
-            ) : null,
-          )}
-        </div>
-        <div className="-mx-1 flex items-center justify-between overflow-x-auto whitespace-nowrap text-xs text-muted-foreground">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              data-testid={`server-app-ordered-tab-${tab.key}`}
-              aria-pressed={filter === tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1.5 ${
-                filter === tab.key ? 'bg-muted font-semibold text-foreground' : ''
-              } ${tab.count > 0 || tab.key === 'all' ? '' : 'opacity-50'}`}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-4">
+          {showTabs && (
+            <div
+              data-testid="server-app-ordered-stages"
+              className="-mx-2 flex items-center overflow-x-auto whitespace-nowrap pt-2 text-xs text-muted-foreground"
             >
-              {tab.key !== 'all' && (
-                <span
-                  className={`h-1.5 w-1.5 rounded-full opacity-75 ${itemStatusDot[tab.key].dot}`}
-                />
-              )}
-              {tab.key === 'all' ? t('filterAll') : t(STAGE_STYLES[tab.key].key)}
-              <Ltr className="font-medium tabular-nums text-foreground/80">{tab.count}</Ltr>
-            </button>
-          ))}
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  data-testid={`server-app-ordered-tab-${tab.key}`}
+                  aria-pressed={activeFilter === tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={`inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-2 ${
+                    activeFilter === tab.key ? 'bg-muted font-semibold text-foreground' : ''
+                  }`}
+                >
+                  {tab.key === 'all' ? t('filterAll') : t(STAGE_STYLES[tab.key].key)}
+                  <Ltr className="tabular-nums">{tab.count}</Ltr>
+                </button>
+              ))}
+            </div>
+          )}
+          <OrderedItemList
+            items={shown}
+            emptyText={t('noOrderedItems')}
+            formatPrice={formatPrice}
+            imageOf={imageOf}
+            onTakeaway={onTakeaway}
+            onCancel={onCancel}
+            onConfirmServed={onConfirmServed}
+          />
         </div>
       </div>
 
-      <OrderedItemList
-        items={shown}
-        timezone={timezone}
-        className="flex-1 overflow-y-auto p-3"
-        emptyText={t('noOrderedItems')}
-        onTakeaway={onTakeaway}
-        onCancel={onCancel}
-        onConfirmServed={onConfirmServed}
-      />
-
-      <footer className="grid grid-cols-2 gap-2 border-t border-border bg-card p-3">
-        {toConfirm.length > 0 && (
+      <footer className="border-t border-border">
+        <div className="mx-auto grid w-full max-w-2xl grid-cols-2 gap-2 p-3">
+          {live.length > 0 && (
+            <div
+              data-testid="server-app-ordered-summary"
+              className="col-span-2 flex items-baseline justify-between px-1 pb-1"
+            >
+              <span className="text-sm text-muted-foreground">
+                {t('orderedItemsCount', { count: live.length })}
+              </span>
+              {formatPrice && total != null && (
+                <Ltr className="text-lg font-bold tabular-nums">{formatPrice(Number(total))}</Ltr>
+              )}
+            </div>
+          )}
+          {toConfirm.length > 0 && (
+            <button
+              type="button"
+              data-testid="server-app-confirm-served-many"
+              disabled={confirmingOne}
+              onClick={async () => {
+                // A single dish needs no checklist: confirm it straight away.
+                if (toConfirm.length > 1) {
+                  setConfirmingMany(true);
+                  return;
+                }
+                setConfirmingOne(true);
+                try {
+                  await onConfirmServedMany(toConfirm);
+                } finally {
+                  setConfirmingOne(false);
+                }
+              }}
+              className={`col-span-2 flex h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60 ${serveConfirmRequested ? 'animate-pulse ring-2 ring-red-500' : ''}`}
+            >
+              <CheckCheck size={17} />
+              {t('confirmServedMany', { count: toConfirm.length })}
+            </button>
+          )}
           <button
             type="button"
-            data-testid="server-app-confirm-served-many"
-            disabled={confirmingOne}
-            onClick={async () => {
-              // A single dish needs no checklist: confirm it straight away.
-              if (toConfirm.length > 1) {
-                setConfirmingMany(true);
-                return;
-              }
-              setConfirmingOne(true);
-              try {
-                await onConfirmServedMany(toConfirm);
-              } finally {
-                setConfirmingOne(false);
-              }
-            }}
-            className={`col-span-2 flex h-12 disabled:opacity-60 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white ${serveConfirmRequested ? 'animate-pulse ring-2 ring-red-500' : ''}`}
+            data-testid="server-app-ordered-add"
+            onClick={onAddItems}
+            disabled={addItemsLocked}
+            className="flex h-12 items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand disabled:opacity-40"
           >
-            <CheckCheck size={17} />
-            {t('confirmServedMany', { count: toConfirm.length })}
+            <Plus size={17} />
+            {t('addFoodItems')}
           </button>
-        )}
-        <button
-          type="button"
-          data-testid="server-app-ordered-add"
-          onClick={onAddItems}
-          disabled={addItemsLocked}
-          className="flex h-12 items-center justify-center gap-1.5 rounded-lg border border-brand text-sm font-semibold text-brand disabled:opacity-40"
-        >
-          <Plus size={17} />
-          {t('addFoodItems')}
-        </button>
-        <button
-          type="button"
-          data-testid="server-app-ordered-exit"
-          onClick={onBack}
-          className="flex h-12 items-center justify-center gap-1.5 rounded-lg bg-brand text-sm font-semibold text-white"
-        >
-          <LogOut size={17} className="rtl-flip" />
-          {t('exitOrderedItems')}
-        </button>
+          <button
+            type="button"
+            data-testid="server-app-ordered-exit"
+            onClick={onBack}
+            className="flex h-12 items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold text-foreground"
+          >
+            <LogOut size={17} className="rtl-flip" />
+            {t('exitOrderedItems')}
+          </button>
+        </div>
       </footer>
       {confirmingMany && (
         <ConfirmServedDialog

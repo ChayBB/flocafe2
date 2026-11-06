@@ -12,8 +12,14 @@ test('the current ticket lists sent items without customer fields, and its menu 
   const headers = { Authorization: `Bearer ${managerToken}` };
   const run = Math.random().toString(36).slice(2, 7);
   const makeTable = async (label: string) =>
-    (await (await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: label, capacity: 2 } })).json())
-      .table.id as string;
+    (
+      await (
+        await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+          headers,
+          data: { number: label, capacity: 2 },
+        })
+      ).json()
+    ).table.id as string;
   const from = `From ${run}`;
   const to = `To ${run}`;
   const fromId = await makeTable(from);
@@ -45,12 +51,12 @@ test('the current ticket lists sent items without customer fields, and its menu 
   );
   await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?table=${fromId}`);
 
-  // No phone or customer name; sent items are numbered rows with time, status and a menu.
+  // No phone or customer name; sent items are rows with quantity, status and a menu.
   await expect(page.getByPlaceholder('Phone')).toHaveCount(0);
   await expect(page.getByPlaceholder('Customer name')).toHaveCount(0);
   const rows = page.getByTestId('server-app-ticket-item');
   await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText(/\d{2}:\d{2}/);
+  await expect(rows.first()).toContainText('x 1');
   await expect(rows.first().getByTestId('server-app-item-status')).toHaveText('Waiting');
   await expect(rows.first().getByTestId('server-app-item-menu')).toBeEnabled();
 
@@ -62,13 +68,17 @@ test('the current ticket lists sent items without customer fields, and its menu 
   // A typed table that is in use is refused; the free one is accepted.
   await dialog.getByTestId('server-app-table-transfer-input').fill(from);
   await dialog.getByTestId('server-app-table-transfer-confirm').click();
-  await expect(dialog.getByTestId('server-app-table-transfer-error')).toHaveText('That is this table');
+  await expect(dialog.getByTestId('server-app-table-transfer-error')).toHaveText(
+    'That is this table',
+  );
   await dialog.getByTestId('server-app-table-transfer-input').fill(to);
   await dialog.getByTestId('server-app-table-transfer-confirm').click();
   await expect(page.getByText(`Moved to table ${to}`).first()).toBeVisible();
   await expect(page.locator('header')).toContainText(to);
   await expect(rows).toHaveCount(2);
 
-  const moved = await (await page.request.get(`${E2E_BASE_URL}/api/orders/${created.id}`, { headers })).json();
+  const moved = await (
+    await page.request.get(`${E2E_BASE_URL}/api/orders/${created.id}`, { headers })
+  ).json();
   expect(moved.order.table_id).toBe(toId);
 });

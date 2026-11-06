@@ -47,6 +47,7 @@ import {
   type TransferTable,
 } from '@/components/server-app/TableTransferDialog';
 import { toastApiError } from '@/lib/api-error';
+import { parseDbTimestamp } from '@/lib/utils';
 import { formatCurrencyForTenant } from '@/lib/countries';
 import { createPaymentIdempotencyKey } from '@/lib/payment-idempotency';
 import { printerService } from '@/lib/printer/PrinterService';
@@ -95,6 +96,7 @@ type Order = {
   order_number: string;
   table_id?: string | null;
   status: string;
+  total?: number;
   items?: OrderItem[];
   customer?: { id: string; name: string; phone?: string } | null;
   /** Menu lines still waiting or cooking, ready to serve, and served. */
@@ -308,6 +310,15 @@ export default function ServerStandalonePage() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const productImageOf = useMemo(() => {
+    const byId = new Map(products.map((product) => [String(product.id), product]));
+    return (item: OrderedItem): string | null => {
+      const product = byId.get(String(item.product_id ?? ''));
+      if (!product?.has_image) return null;
+      const version = product.updated_at ? parseDbTimestamp(product.updated_at).getTime() : 0;
+      return `${window.location.origin}/api/products/${product.id}/image?t=${version}`;
+    };
+  }, [products]);
   // Best sellers of the last 30 days; staff only, so a guest at a QR table sees no popular filter.
   const [popularIds, setPopularIds] = useState<string[] | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
@@ -1786,7 +1797,6 @@ export default function ServerStandalonePage() {
           <OrderedItemList
             itemTestId="server-app-ticket-item"
             items={currentOrder.items as OrderedItem[]}
-            timezone={regional?.timezone}
             onTakeaway={(item) => changeSentItem(item.id, 'takeaway')}
             onCancel={(item) => changeSentItem(item.id, 'cancel')}
             onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
@@ -2157,7 +2167,6 @@ export default function ServerStandalonePage() {
           tableName={activeTable.name ?? String(activeTable.number)}
           orderNumber={currentOrder?.order_number}
           items={(currentOrder?.items ?? []) as OrderedItem[]}
-          timezone={regional?.timezone}
           onBack={() => setOrderedItemsOpen(false)}
           onAddItems={() => {
             setOrderedItemsOpen(false);
@@ -2169,6 +2178,9 @@ export default function ServerStandalonePage() {
           onConfirmServed={(item) => changeSentItem(item.id, 'confirm-served')}
           onConfirmServedMany={confirmServedMany}
           serveConfirmRequested={Boolean(currentOrder?.serve_confirm_requested_at)}
+          total={currentOrder?.total}
+          formatPrice={(amount) => money(amount, regional)}
+          imageOf={productImageOf}
           onPrintBill={requestBill}
           onMoveTable={() => setTransferMode('move')}
           onMergeTable={() => setTransferMode('merge')}
