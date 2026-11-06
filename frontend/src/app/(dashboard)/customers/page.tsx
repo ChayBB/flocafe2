@@ -16,7 +16,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertCircle,
-  LogOut,
+  ArrowLeft,
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -258,7 +258,7 @@ export default function CustomersPage() {
             }
             className="border-neutral-900 bg-white text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900"
           >
-            <LogOut size={16} className="me-1" /> {tCustomers('exit')}
+            <ArrowLeft size={16} className="me-1 rtl-flip" /> {tCustomers('exit')}
           </Button>
         </div>
       </div>

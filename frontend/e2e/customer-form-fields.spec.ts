@@ -225,11 +225,11 @@ test('Customers table shows Visits, then Average Spend, then Total Spent, and so
   await sorted;
 });
 
-test('Customers page Exit button returns to Marketing & Members', async ({ page }) => {
+test('Customers page Back button returns to Marketing & Members', async ({ page }) => {
   await loginAsManager(page);
   await page.goto(`${BASE}/customers`);
   const exit = page.getByTestId('customers-exit');
-  await expect(exit).toHaveText('Exit');
+  await expect(exit).toHaveText('Back');
   await exit.click();
   await page.waitForURL(
     (url) => url.pathname.startsWith('/settings') && url.searchParams.get('tab') === 'marketing',

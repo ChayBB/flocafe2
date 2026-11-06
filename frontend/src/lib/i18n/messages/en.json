@@ -261,7 +261,7 @@
     "columnPoints": "Points",
     "columnRedeemed": "Redeemed",
     "empty": "No customers found",
-    "exit": "Exit",
+    "exit": "Back",
     "first200": "Showing the first 200 customers — refine your search to see more.",
     "invalidPhoneCount": "{count, plural, one {# customer has an invalid or legacy phone number format.} other {# customers have an invalid or legacy phone number format.}}",
     "loyaltyLedger": "Loyalty Ledger",
