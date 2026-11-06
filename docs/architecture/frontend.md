@@ -372,6 +372,12 @@ The renderer writes the theme over HTTP too, with `PUT /api/settings/theme_mode`
 calls it today. Widening `ALLOWED_IPC_KEYS` means moving an authorization decision from a
 permission-gated route onto a window-origin check, which is a different and weaker boundary.
 
+The Settings theme picker also stores which light and which dark theme is chosen, in
+`theme_light_variant` and `theme_dark_variant` (`1`, `2`, or `3`, written over the same HTTP
+route). Variants 2 and 3 are placeholders with no palette of their own yet: choosing one saves the
+variant and applies the base `light` or `dark` mode, so `theme_mode` alone still decides what the
+window paints at startup.
+
 ### The database channels
 
 Five channels do database work, and they are gated two different ways on purpose.

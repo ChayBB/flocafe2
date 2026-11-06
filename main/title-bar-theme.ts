@@ -37,7 +37,10 @@ export function applyTitleBarOverlayTheme(
   const candidate = win as OverlayCapableWindow | null | undefined;
   if (!candidate || typeof candidate.setTitleBarOverlay !== 'function') return false;
   try {
-    candidate.setTitleBarOverlay({ ...resolveTitleBarOverlayColors(isDark), height: TITLE_BAR_HEIGHT });
+    candidate.setTitleBarOverlay({
+      ...resolveTitleBarOverlayColors(isDark),
+      height: TITLE_BAR_HEIGHT,
+    });
     return true;
   } catch {
     // Some window-manager combinations reject runtime overlay changes even
@@ -62,7 +65,10 @@ export function attachTitleBarThemeSync(
   };
   nativeTheme.on('updated', onUpdated);
   return () => {
-    (nativeTheme as ThemeLike & { off?(event: 'updated', listener: () => void): unknown }).off?.('updated', onUpdated);
+    (nativeTheme as ThemeLike & { off?(event: 'updated', listener: () => void): unknown }).off?.(
+      'updated',
+      onUpdated,
+    );
   };
 }
 
@@ -70,6 +76,13 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 export function isThemeMode(value: unknown): value is ThemeMode {
   return value === 'light' || value === 'dark' || value === 'system';
+}
+
+export const THEME_VARIANT_KEYS = ['theme_light_variant', 'theme_dark_variant'] as const;
+export type ThemeVariant = '1' | '2' | '3';
+
+export function isThemeVariant(value: unknown): value is ThemeVariant {
+  return value === '1' || value === '2' || value === '3';
 }
 
 /** Absent, null, or unrecognized values resolve to 'system'. */

@@ -8279,6 +8279,14 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('customer_display_profanity_words', '[]');
     },
   },
+  {
+    version: 140,
+    name: 'add_theme_variants',
+    up: () => {
+      insertSettingIfMissing('theme_light_variant', '1');
+      insertSettingIfMissing('theme_dark_variant', '1');
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

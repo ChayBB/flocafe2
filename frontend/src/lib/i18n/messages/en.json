@@ -2896,6 +2896,8 @@
     "restoreReplacesDetail": "Restoring replaces every order, bill, product and customer record added since this backup was taken.",
     "restoreKeepsDetail": "Your staff accounts, PINs, printers, tax settings and this computer's cloud account are kept.",
     "restoreSafetyCopyDetail": "Before anything changes, Flo keeps a copy of your current data so you can undo this restore.",
+    "themeLightVariant": "Light {n}",
+    "themeDarkVariant": "Dark {n}",
     "diagnosticsLocalOnlyHint": "Automatic reporting is off. Bounded problem evidence stays on this device.",
     "diagnosticsRecentFailures": "Recent failures",
     "diagnosticsRefresh": "Refresh",

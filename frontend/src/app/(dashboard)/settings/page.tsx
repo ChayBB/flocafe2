@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type BillTemplate } from '@/store/pos-settings';
 import { useThemeMode, type ThemeMode } from '@/store/theme';
+
+type ThemeVariant = '1' | '2' | '3';
+const THEME_VARIANTS: readonly ThemeVariant[] = ['1', '2', '3'];
+const isThemeVariant = (v: unknown): v is ThemeVariant => v === '1' || v === '2' || v === '3';
 import { useOrdersLayoutPreference } from '@/hooks/useOrdersLayout';
 import { CustomerDisplayCard } from '@/components/settings/CustomerDisplayCard';
 import type {
@@ -499,6 +503,10 @@ export default function SettingsPage() {
   // Armed when a save fails outright; the next hydration applies server truth.
   const needsServerTruth = useRef(false);
   const [savingTheme, setSavingTheme] = useState(false);
+  const [themeVariants, setThemeVariants] = useState<Record<'light' | 'dark', ThemeVariant>>({
+    light: '1',
+    dark: '1',
+  });
 
   // Optimistically updates theme store and rolls back on API failure.
   const saveThemeMode = async (next: ThemeMode) => {
@@ -530,6 +538,26 @@ export default function SettingsPage() {
     } finally {
       setSavingTheme(false);
     }
+  };
+
+  // Placeholder variants only store their id; the base light/dark mode drives the palette.
+  const saveThemeChoice = async (base: 'light' | 'dark', variant: ThemeVariant) => {
+    if (savingTheme) return;
+    const previous = themeVariants[base];
+    if (previous !== variant) {
+      setSavingTheme(true);
+      setThemeVariants((v) => ({ ...v, [base]: variant }));
+      try {
+        await api.put(`/settings/theme_${base}_variant`, { value: variant });
+      } catch {
+        setThemeVariants((v) => ({ ...v, [base]: previous }));
+        toast.error(t('saveFailed'));
+        return;
+      } finally {
+        setSavingTheme(false);
+      }
+    }
+    if (themeMode !== base) await saveThemeMode(base);
   };
 
   // Sync active settings tab when query string changes while mounted.
@@ -2537,8 +2565,20 @@ export default function SettingsPage() {
     try {
       if (tab === 'appearance') {
         const seqAtFetch = saveSeq.current;
-        const { data } = await get('/settings/theme_mode');
+        const [{ data }, lightVariant, darkVariant] = await Promise.all([
+          get('/settings/theme_mode'),
+          get('/settings/theme_light_variant'),
+          get('/settings/theme_dark_variant'),
+        ]);
         if (!active()) return;
+        const light = lightVariant.data?.setting?.value;
+        const dark = darkVariant.data?.setting?.value;
+        if (!userTouched.current) {
+          setThemeVariants({
+            light: isThemeVariant(light) ? light : '1',
+            dark: isThemeVariant(dark) ? dark : '1',
+          });
+        }
         const raw = data?.setting?.value;
         if (raw === 'light' || raw === 'dark' || raw === 'system') {
           if (!userTouched.current || needsServerTruth.current) setThemeMode(raw);
@@ -4040,45 +4080,67 @@ export default function SettingsPage() {
                     <SunMoon size={20} className="text-muted-foreground" />
                     <h2 className="font-semibold text-foreground">{t('themeTitle')}</h2>
                   </div>
-                  <div className="flex gap-3" role="radiogroup" aria-label={t('themeTitle')}>
-                    {(['light', 'dark', 'system'] as const).map((m) => {
-                      const active = themeMode === m;
-                      const label =
-                        m === 'light'
-                          ? t('themeLight')
-                          : m === 'dark'
-                            ? t('themeDark')
-                            : t('themeSystem');
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          disabled={savingTheme}
-                          onClick={() => {
-                            if (!active) saveThemeMode(m);
-                          }}
-                          className={`text-start rounded-lg border-2 px-4 py-3 transition flex-1 ${
-                            active
-                              ? 'border-brand bg-brand/5'
-                              : 'border-border hover:border-gray-300 dark:border-border'
-                          } ${savingTheme ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span
-                              aria-hidden="true"
-                              className={`inline-block w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                active ? 'border-brand' : 'border-gray-300 dark:border-border'
-                              }`}
-                            >
-                              {active && <span className="block w-2 h-2 rounded-full bg-brand" />}
-                            </span>
-                            <span className="font-medium text-foreground">{label}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div
+                    className="flex flex-col gap-3"
+                    role="radiogroup"
+                    aria-label={t('themeTitle')}
+                  >
+                    {[
+                      ...(['light', 'dark'] as const).map((base) =>
+                        THEME_VARIANTS.map((variant) => ({
+                          id: `${base}-${variant}`,
+                          active: themeMode === base && themeVariants[base] === variant,
+                          label:
+                            variant === '1'
+                              ? t(base === 'light' ? 'themeLight' : 'themeDark')
+                              : t(base === 'light' ? 'themeLightVariant' : 'themeDarkVariant', {
+                                  n: variant,
+                                }),
+                          onSelect: () => saveThemeChoice(base, variant),
+                        })),
+                      ),
+                      [
+                        {
+                          id: 'system',
+                          active: themeMode === 'system',
+                          label: t('themeSystem'),
+                          onSelect: () => saveThemeMode('system'),
+                        },
+                      ],
+                    ].map((row) => (
+                      <div key={row[0].id} className="grid grid-cols-3 gap-3">
+                        {row.map(({ id, active, label, onSelect }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            data-theme-option={id}
+                            disabled={savingTheme}
+                            onClick={() => {
+                              if (!active) onSelect();
+                            }}
+                            className={`text-start rounded-lg border-2 px-4 py-3 transition ${
+                              active
+                                ? 'border-brand bg-brand/5'
+                                : 'border-border hover:border-gray-300 dark:border-border'
+                            } ${savingTheme ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                aria-hidden="true"
+                                className={`inline-block w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                  active ? 'border-brand' : 'border-gray-300 dark:border-border'
+                                }`}
+                              >
+                                {active && <span className="block w-2 h-2 rounded-full bg-brand" />}
+                              </span>
+                              <span className="font-medium text-foreground">{label}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
 

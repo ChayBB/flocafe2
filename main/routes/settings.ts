@@ -88,7 +88,7 @@ import {
   defaultLanguagePolicySettingJson,
   validateLanguagePolicySetting,
 } from '../lib/print-language-settings';
-import { isThemeMode } from '../title-bar-theme';
+import { isThemeMode, isThemeVariant, THEME_VARIANT_KEYS } from '../title-bar-theme';
 import { STORE_IMAGE_KEYS, storeImageError } from '../lib/store-branding';
 import {
   ChargeValidationError,
@@ -189,6 +189,8 @@ const OPTIONAL_SETTING_DEFAULTS: Record<string, string> = {
   calendar: 'locale',
   // Returns 'system' if not yet explicitly saved by the user.
   theme_mode: 'system',
+  theme_light_variant: '1',
+  theme_dark_variant: '1',
   // Orders screen layout (#639): master/detail split view is the default.
   orders_layout: 'split',
   kot_print_layout: 'combined',
@@ -1796,6 +1798,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'number_digits',
   'calendar',
   'theme_mode',
+  ...THEME_VARIANT_KEYS,
   'orders_layout',
   'require_open_shift',
 ]);
@@ -2061,6 +2064,12 @@ router.put(
       }
       if (req.params.key === 'theme_mode' && !isThemeMode(value)) {
         return res.status(400).json({ error: 'Invalid theme_mode value' });
+      }
+      if (
+        (THEME_VARIANT_KEYS as readonly string[]).includes(req.params.key as string) &&
+        !isThemeVariant(value)
+      ) {
+        return res.status(400).json({ error: 'Theme variant must be "1", "2" or "3"' });
       }
       if (req.params.key === 'orders_layout' && !isOrdersLayout(value)) {
         return res.status(400).json({ error: 'orders_layout must be "split" or "cards"' });
