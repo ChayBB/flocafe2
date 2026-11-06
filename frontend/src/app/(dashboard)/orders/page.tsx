@@ -189,6 +189,7 @@ export default function OrdersPage() {
   const [now, setNow] = useState(() => Date.now());
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
+  const [printMemberBill, setPrintMemberBill] = useState(false);
   const [refundModal, setRefundModal] = useState<{ order: Order; bills: Bill[] } | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
   // null until /settings/kds_enabled resolves; the WebSocket stays closed
@@ -966,7 +967,7 @@ export default function OrdersPage() {
         tenantCan(currentTenant, 'payments.take') &&
         tenantCan(currentTenant, 'bills.generate')
       ) {
-        await handleCheckout(orderId);
+        await handleCheckout(orderId, true);
       }
       void fetchOrders(undefined, { refreshLoadedPages: true });
     } catch {
@@ -1005,7 +1006,7 @@ export default function OrdersPage() {
     setSelectedOrderMissing(false);
   };
 
-  const handleCheckout = async (orderId: number) => {
+  const handleCheckout = async (orderId: number, fromMemberCard = false) => {
     setGeneratingBill(orderId);
     const operationId = createOperationReference();
     try {
@@ -1014,6 +1015,7 @@ export default function OrdersPage() {
         { order_id: orderId },
         { headers: operationHeaders(operationId) },
       );
+      setPrintMemberBill(fromMemberCard);
       setPaymentBill(data.bill);
     } catch (error) {
       const failure = classifyOrderRequestFailure(error, {
@@ -1034,6 +1036,7 @@ export default function OrdersPage() {
   };
 
   const handlePayBill = async (billToPay: Bill) => {
+    setPrintMemberBill(false);
     try {
       const { data } = await api.get(`/bills/${billToPay.id}`);
       if (data?.bill) {
@@ -2117,7 +2120,11 @@ export default function OrdersPage() {
           onBillUpdate={(updated) => setPaymentBill(updated)}
           onPrintBill={
             paymentOrder &&
-            needsBillPrintBeforePayment({ ...paymentOrder, bill: paymentOrder.bill ?? paymentBill })
+            (printMemberBill ||
+              needsBillPrintBeforePayment({
+                ...paymentOrder,
+                bill: paymentOrder.bill ?? paymentBill,
+              }))
               ? printBillFromPayment
               : undefined
           }

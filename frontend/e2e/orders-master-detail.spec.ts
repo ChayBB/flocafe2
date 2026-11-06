@@ -49,6 +49,7 @@ test('a ten-digit member phone opens checkout and keeps the paid items in their 
   expect(created.ok(), await created.text()).toBeTruthy();
   const { customer } = await created.json();
   const order = await createTakeaway(page, 'Member checkout');
+  await printBillFirst(page.request, headers, order.id);
   await login(page);
   await page.goto(`${BASE}/orders`);
   await page
@@ -64,9 +65,9 @@ test('a ten-digit member phone opens checkout and keeps the paid items in their 
   );
   await detail.getByPlaceholder('Search by phone or name…').fill(phone);
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
+  await expect(page.getByTestId('payment-print-bill')).toBeVisible();
   const { bill } = await (await billResponse).json();
   expect(String(bill.customer_id)).toBe(String(customer.id));
-  await printBillFirst(page.request, headers, order.id);
   const paid = await page.request.post(`${BASE}/api/bills/${bill.id}/payments`, {
     headers,
     data: { payments: [{ method: 'cash', amount: bill.total }] },
