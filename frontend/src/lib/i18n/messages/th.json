@@ -830,7 +830,7 @@
     "itemStatusWaiting": "กำลังเตรียม",
     "itemVoided": "ยกเลิกสินค้าแล้ว",
     "itemsAdded": "เพิ่มสินค้า {count} รายการเข้าคำสั่งซื้อแล้ว",
-    "linkCustomer": "เชื่อมโยงลูกค้า",
+    "linkCustomer": "บัตรสมาชิก",
     "linkCustomerFailed": "เชื่อมโยงลูกค้าไม่สำเร็จ",
     "linking": "กำลังเชื่อมโยง...",
     "loadOrdersFailed": "ไม่สามารถโหลดคำสั่งซื้อได้",

@@ -316,6 +316,14 @@ export default function OrdersPage() {
   const [createCustomerOrderId, setCreateCustomerOrderId] = useState<number | null>(null);
   const [createCustomerSearch, setCreateCustomerSearch] = useState('');
   const linkSearchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const linkLookupRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      clearTimeout(linkSearchRef.current);
+      linkLookupRef.current?.abort();
+    },
+    [],
+  );
 
   const currency = getCurrencySymbol(
     currentTenant?.currency || '',
@@ -884,31 +892,83 @@ export default function OrdersPage() {
     toast.success(tOrders('newOrderStarted', { name: order.customer.name }));
   };
 
-  const searchCustomersForLink = (query: string) => {
+  const cancelCustomerLookup = () => {
     clearTimeout(linkSearchRef.current);
-    if (query.length < 2) {
-      setLinkCustomerResults([]);
-      return;
-    }
+    linkLookupRef.current?.abort();
+  };
+
+  const openCustomerLink = (orderId: number | null) => {
+    cancelCustomerLookup();
+    setLinkCustomerOrderId(orderId);
+    setLinkCustomerSearch('');
+    setLinkCustomerResults([]);
+  };
+
+  const openCustomerRegistration = (orderId: number, phoneOrName: string) => {
+    openCustomerLink(null);
+    setCreateCustomerSearch(phoneOrName);
+    setCreateCustomerOrderId(orderId);
+  };
+
+  const searchCustomersForLink = (query: string) => {
+    cancelCustomerLookup();
+    setLinkCustomerSearch(query);
+    setLinkCustomerResults([]);
+    const orderId = linkCustomerOrderId;
+    const phone = query.trim();
+    const exactPhone = /^[0-9]{10}$/.test(phone);
+    if (orderId === null || phone.length < 2 || linkingCustomer) return;
+
+    const lookup = new AbortController();
+    linkLookupRef.current = lookup;
     linkSearchRef.current = setTimeout(async () => {
       try {
-        const { data } = await api.get(`/customers-search?q=${encodeURIComponent(query)}`);
-        setLinkCustomerResults(Array.isArray(data) ? data : data.customers || []);
+        if (exactPhone) {
+          const { data } = await api.get('/crm/lookup', {
+            params: { phone },
+            signal: lookup.signal,
+          });
+          if (lookup.signal.aborted) return;
+          if (data.found && data.customer && Boolean(data.customer.is_active)) {
+            await handleLinkCustomer(orderId, String(data.customer.id), true);
+          } else if (tenantCan(currentTenant, 'customers.create')) {
+            openCustomerRegistration(orderId, phone);
+          } else {
+            toast.error(tOrders('linkCustomerFailed'));
+          }
+          return;
+        }
+        const { data } = await api.get('/customers-search', {
+          params: { q: query },
+          signal: lookup.signal,
+        });
+        if (!lookup.signal.aborted) {
+          setLinkCustomerResults(Array.isArray(data) ? data : data.customers || []);
+        }
       } catch {
-        setLinkCustomerResults([]);
+        if (!lookup.signal.aborted && exactPhone) toast.error(tOrders('linkCustomerFailed'));
       }
     }, 300);
   };
 
-  const handleLinkCustomer = async (orderId: number, customerId: string) => {
+  const handleLinkCustomer = async (orderId: number, customerId: string, openCheckout = false) => {
+    cancelCustomerLookup();
     setLinkingCustomer(true);
     try {
-      await api.patch(`/orders/${orderId}/customer`, { customer_id: customerId });
+      const { data } = await api.patch(`/orders/${orderId}/customer`, { customer_id: customerId });
       toast.success(tOrders('customerLinked'));
-      setLinkCustomerOrderId(null);
-      setLinkCustomerSearch('');
-      setLinkCustomerResults([]);
-      fetchOrders(undefined, { refreshLoadedPages: true });
+      openCustomerLink(null);
+      const order = data.order as Order;
+      if (
+        openCheckout &&
+        order &&
+        !['completed', 'cancelled'].includes(order.status) &&
+        tenantCan(currentTenant, 'payments.take') &&
+        tenantCan(currentTenant, 'bills.generate')
+      ) {
+        await handleCheckout(orderId);
+      }
+      void fetchOrders(undefined, { refreshLoadedPages: true });
     } catch {
       toast.error(tOrders('linkCustomerFailed'));
     } finally {
@@ -924,6 +984,7 @@ export default function OrdersPage() {
         : undefined;
 
   const handleSelectOrder = (orderId: number) => {
+    if (linkCustomerOrderId !== null && linkCustomerOrderId !== orderId) openCustomerLink(null);
     selectedOrderLookupIdRef.current++;
     selectedOrderLookupInProgressRef.current = null;
     selectedOrderIdRef.current = orderId;
@@ -934,6 +995,7 @@ export default function OrdersPage() {
   };
 
   const handleBackFromOrder = () => {
+    openCustomerLink(null);
     selectedOrderLookupIdRef.current++;
     selectedOrderLookupInProgressRef.current = null;
     selectedOrderIdRef.current = null;
@@ -1949,25 +2011,11 @@ export default function OrdersPage() {
               }
               onPrintDeliverySlip={handlePrintDeliverySlip}
               onSendWhatsApp={handleSendViaFlo}
-              onLinkCustomer={(orderId) => {
-                setLinkCustomerOrderId(orderId);
-                setLinkCustomerSearch('');
-                setLinkCustomerResults([]);
-              }}
-              onCancelLinkCustomer={() => {
-                setLinkCustomerOrderId(null);
-                setLinkCustomerSearch('');
-                setLinkCustomerResults([]);
-              }}
-              onSearchCustomer={(query) => {
-                setLinkCustomerSearch(query);
-                searchCustomersForLink(query);
-              }}
+              onLinkCustomer={openCustomerLink}
+              onCancelLinkCustomer={() => openCustomerLink(null)}
+              onSearchCustomer={searchCustomersForLink}
               onSelectCustomer={handleLinkCustomer}
-              onCreateCustomer={(orderId, search) => {
-                setCreateCustomerSearch(search);
-                setCreateCustomerOrderId(orderId);
-              }}
+              onCreateCustomer={openCustomerRegistration}
               onCreateNewOrderForCustomer={handleCreateNewOrderForCustomer}
               onDownloadPrintPreview={handleDownloadPrintPreview}
               onDeleteItem={deleteItem}
@@ -2029,25 +2077,11 @@ export default function OrdersPage() {
                 tenantCan(currentTenant, 'bills.generate') ? handlePrintOrder : undefined
               }
               onSendWhatsApp={handleSendViaFlo}
-              onLinkCustomer={(orderId) => {
-                setLinkCustomerOrderId(orderId);
-                setLinkCustomerSearch('');
-                setLinkCustomerResults([]);
-              }}
-              onCancelLinkCustomer={() => {
-                setLinkCustomerOrderId(null);
-                setLinkCustomerSearch('');
-                setLinkCustomerResults([]);
-              }}
-              onSearchCustomer={(query) => {
-                setLinkCustomerSearch(query);
-                searchCustomersForLink(query);
-              }}
+              onLinkCustomer={openCustomerLink}
+              onCancelLinkCustomer={() => openCustomerLink(null)}
+              onSearchCustomer={searchCustomersForLink}
               onSelectCustomer={handleLinkCustomer}
-              onCreateCustomer={(orderId, search) => {
-                setCreateCustomerSearch(search);
-                setCreateCustomerOrderId(orderId);
-              }}
+              onCreateCustomer={openCustomerRegistration}
               onCreateNewOrderForCustomer={handleCreateNewOrderForCustomer}
               onDownloadPrintPreview={handleDownloadPrintPreview}
               onDeleteItem={deleteItem}
@@ -2702,7 +2736,11 @@ export default function OrdersPage() {
             const orderId = createCustomerOrderId;
             setCreateCustomerOrderId(null);
             setCreateCustomerSearch('');
-            await handleLinkCustomer(orderId, String(newCustomer.id));
+            await handleLinkCustomer(
+              orderId,
+              String(newCustomer.id),
+              /^[0-9]{10}$/.test(createCustomerSearch.trim()),
+            );
           }}
         />
       )}

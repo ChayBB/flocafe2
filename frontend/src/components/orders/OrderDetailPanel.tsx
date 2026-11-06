@@ -461,6 +461,7 @@ function OrderDetailContent({
               <input
                 type="text"
                 value={linkCustomerSearch || ''}
+                disabled={linkingCustomer}
                 onChange={(e) => onSearchCustomer?.(e.target.value)}
                 placeholder={tOrders('searchCustomer')}
                 className="flex-1 px-3 py-1.5 text-xs sm:text-sm border border-border bg-card rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
@@ -551,7 +552,7 @@ function OrderDetailContent({
                 <span>{tOrders('newOrder')}</span>
               </button>
             )}
-            {!order.customer && !['completed', 'cancelled'].includes(order.status) && (
+            {!order.customer && order.status !== 'cancelled' && (
               <button
                 type="button"
                 onClick={() => onLinkCustomer(order.id)}

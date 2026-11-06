@@ -8,6 +8,7 @@ import {
   setOrdersLayout,
 } from './helpers/test-auth';
 import { elementTop, expectPinned, innermostScrollableAncestor } from './helpers/layout';
+import { printBillFirst } from './helpers/bill-print';
 
 /**
  * Orders master/detail split view (#639) — DEFAULT layout coverage.
@@ -33,6 +34,106 @@ import { elementTop, expectPinned, innermostScrollableAncestor } from './helpers
  */
 
 const PLACEHOLDER = 'Select an order on the left to view details.';
+
+test('a ten-digit member phone opens checkout and keeps the paid items in their history', async ({
+  page,
+}) => {
+  const headers = {
+    Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
+  };
+  const phone = `089${String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0')}`;
+  const created = await page.request.post(`${BASE}/api/customers`, {
+    headers,
+    data: { name: 'Checkout Member', phone, country_code: 'TH' },
+  });
+  expect(created.ok(), await created.text()).toBeTruthy();
+  const { customer } = await created.json();
+  const order = await createTakeaway(page, 'Member checkout');
+  await login(page);
+  await page.goto(`${BASE}/orders`);
+  await page
+    .getByRole('button')
+    .filter({ hasText: `#${order.order_number}` })
+    .click();
+  const detail = page.getByTestId('orders-detail-panel');
+  await detail.getByRole('button', { name: 'Link Customer' }).click();
+  const billResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/bills/generate',
+  );
+  await detail.getByPlaceholder('Search by phone or name…').fill(phone);
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
+  const { bill } = await (await billResponse).json();
+  expect(String(bill.customer_id)).toBe(String(customer.id));
+  await printBillFirst(page.request, headers, order.id);
+  const paid = await page.request.post(`${BASE}/api/bills/${bill.id}/payments`, {
+    headers,
+    data: { payments: [{ method: 'cash', amount: bill.total }] },
+  });
+  expect(paid.ok(), await paid.text()).toBeTruthy();
+  const history = await page.request.get(`${BASE}/api/customers/${customer.id}/top-items`, {
+    headers,
+  });
+  expect(history.ok(), await history.text()).toBeTruthy();
+  expect((await history.json()).items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ product_name: 'E2E Coffee', order_count: 1 }),
+    ]),
+  );
+
+  const past = await createTakeaway(page, 'Paid before joining');
+  await printBillFirst(page.request, headers, past.id);
+  const pastBillResponse = await page.request.post(`${BASE}/api/bills/generate`, {
+    headers,
+    data: { order_id: past.id },
+  });
+  expect(pastBillResponse.ok(), await pastBillResponse.text()).toBeTruthy();
+  const { bill: pastBill } = await pastBillResponse.json();
+  const pastPayment = await page.request.post(`${BASE}/api/bills/${pastBill.id}/payments`, {
+    headers,
+    data: { payments: [{ method: 'cash', amount: pastBill.total }] },
+  });
+  expect(pastPayment.ok(), await pastPayment.text()).toBeTruthy();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'All', exact: true }).first().click();
+  await page
+    .getByRole('button')
+    .filter({ hasText: `#${past.order_number}` })
+    .click();
+  await detail.getByRole('button', { name: 'Link Customer' }).click();
+  await detail.getByPlaceholder('Search by phone or name…').fill(phone);
+  await expect(detail.getByText('Checkout Member', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toHaveCount(0);
+  const updatedHistory = await page.request.get(`${BASE}/api/customers/${customer.id}/top-items`, {
+    headers,
+  });
+  expect(updatedHistory.ok(), await updatedHistory.text()).toBeTruthy();
+  expect((await updatedHistory.json()).items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ product_name: 'E2E Coffee', order_count: 2 }),
+    ]),
+  );
+});
+
+test('a ten-digit phone without a member opens registration with the phone filled in', async ({
+  page,
+}) => {
+  const order = await createTakeaway(page, 'New member checkout');
+  const phone = '0861234567';
+  await login(page);
+  await page.goto(`${BASE}/orders`);
+  await page
+    .getByRole('button')
+    .filter({ hasText: `#${order.order_number}` })
+    .click();
+  const detail = page.getByTestId('orders-detail-panel');
+  await detail.getByRole('button', { name: 'Link Customer' }).click();
+  await detail.getByPlaceholder('Search by phone or name…').fill(phone);
+  await expect(page.getByRole('heading', { name: 'Add Customer', exact: true })).toBeVisible();
+  await expect(page.locator('input[type="tel"]')).toHaveValue(phone);
+});
 
 async function login(page: import('@playwright/test').Page, email = 'manager@flo.local') {
   await page.goto(`${BASE}/auth/login`);
