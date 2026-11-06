@@ -86,6 +86,22 @@ export const orderStatusBadge: Record<
   },
 };
 
+const billPrintedBadge = {
+  bg: 'bg-sky-100 dark:bg-sky-950/40',
+  text: 'text-sky-700 dark:text-sky-300',
+  labelKey: 'billPrinted',
+} as const;
+
+/** An open order whose bill is printed and awaiting payment reads "Bill printed". */
+export function orderStatusBadgeFor(
+  order: Pick<Order, 'status' | 'bill_requested_at' | 'bill_payment_received_at'>,
+): { bg: string; text: string; labelKey: OrdersKey } | undefined {
+  if (!['completed', 'cancelled'].includes(order.status) && isAwaitingBillPayment(order)) {
+    return billPrintedBadge;
+  }
+  return orderStatusBadge[order.status];
+}
+
 export const paymentStatusBadge: Record<
   'paid' | 'partial' | 'unpaid',
   { bg: string; text: string; labelKey: OrdersKey }
@@ -376,7 +392,7 @@ export function OrderCard({
     return tCommon('timeHoursMinutesAgo', { h: Math.floor(minutes / 60), m: minutes % 60 });
   };
 
-  const statusBadgeInfo = orderStatusBadge[order.status];
+  const statusBadgeInfo = orderStatusBadgeFor(order);
   const orderPrints = bill?.id ? printHistory[bill.id] || [] : [];
   const printCount = orderPrints.length;
 

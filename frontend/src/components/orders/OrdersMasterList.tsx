@@ -8,7 +8,7 @@ import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { parseDbTimestamp, cn } from '@/lib/utils';
 import {
-  orderStatusBadge,
+  orderStatusBadgeFor,
   orderAwaitingWeight,
   orderPendingLabelKey,
   ORDER_TYPE_KEYS,
@@ -59,7 +59,7 @@ export function OrdersMasterList({
   return (
     <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
       {orders.map((order) => {
-        const badge = orderStatusBadge[order.status];
+        const badge = orderStatusBadgeFor(order);
         const awaitingWeight = orderAwaitingWeight(order);
         const awaitingPayment = Boolean(order.bill_requested_at) && !order.bill_payment_received_at;
         const active = order.status !== 'cancelled';

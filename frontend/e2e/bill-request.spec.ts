@@ -157,6 +157,8 @@ test('printing a fully served table’s bill makes the POS time the wait for pay
     .first();
   await expect(row).toHaveAttribute('data-bill-awaiting', 'true', { timeout: 15000 });
   await expect(row).toHaveClass(/animate-bill-awaiting/);
+  await expect(row.getByText('Bill printed', { exact: true })).toBeVisible();
+  await expect(row.getByText('Pending', { exact: true })).toHaveCount(0);
   await expect(row.getByTestId('bill-request-waiting')).toContainText(
     /Awaiting payment\s*\d+:\d{2}/,
   );

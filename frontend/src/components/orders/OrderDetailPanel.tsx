@@ -58,7 +58,7 @@ import { kdsItemLine } from '@/lib/item-options-note';
 import { isTerminalItemStatus } from '../../../../shared/order-item-status';
 import PendingOrderItemEdits from './PendingOrderItemEdits';
 import {
-  orderStatusBadge,
+  orderStatusBadgeFor,
   paymentStatusBadge,
   itemStatusDot,
   whatsappReceiptStatusBadge,
@@ -261,7 +261,7 @@ function OrderDetailContent({
     bill ? bill.charges_breakdown : order.charges_breakdown,
   ).filter((charge) => charge.id !== 'service_charge' && charge.id !== 'packaging_charge');
 
-  const statusBadgeInfo = orderStatusBadge[order.status];
+  const statusBadgeInfo = orderStatusBadgeFor(order);
   const orderPrints = bill?.id ? printHistory[bill.id] || [] : [];
   const printCount = orderPrints.length;
 
