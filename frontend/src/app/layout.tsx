@@ -69,7 +69,8 @@ export default function RootLayout({
               "(function(){try{var p=new URLSearchParams(location.search).get('theme');" +
               "var t=(p==='dark'||p==='light')?p:localStorage.getItem('flo-theme-resolved');" +
               "if(t==='dark'||(t!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)){" +
-              "document.documentElement.classList.add('dark');}}catch(e){}})();",
+              "document.documentElement.classList.add('dark');}" +
+              "if(localStorage.getItem('flo-theme-dark-variant')==='2'){document.documentElement.classList.add('theme-dark-2');}}catch(e){}})();",
           }}
         />
       </head>

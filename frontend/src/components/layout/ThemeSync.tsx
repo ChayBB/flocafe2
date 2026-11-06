@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useThemeMode, THEME_REHYDRATION_EVENT } from '@/store/theme';
+import { useThemeMode, THEME_REHYDRATION_EVENT, isThemeVariant } from '@/store/theme';
 import type { ThemeMode } from '@/store/theme';
 import api from '@/lib/api';
 
 const THEME_MIRROR_KEY = 'flo-theme-resolved';
+const DARK_VARIANT_MIRROR_KEY = 'flo-theme-dark-variant';
 const RETRY_DELAY_MS = 1000;
 /** One delayed re-check for a long-lived popup whose transient outage outlived startup. */
 const RECHECK_DELAY_MS = 60_000;
@@ -30,6 +31,56 @@ export function ThemeSync() {
   const setMode = useThemeMode((s) => s.setMode);
   const [hydrated, setHydrated] = useState(false);
   const authoritative = useRef(false);
+  const darkVariant = useThemeMode((s) => s.darkVariant);
+  const setDarkVariant = useThemeMode((s) => s.setDarkVariant);
+  const [variantHydrated, setVariantHydrated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const mirrored = localStorage.getItem(DARK_VARIANT_MIRROR_KEY);
+        if (isThemeVariant(mirrored)) setDarkVariant(mirrored);
+      } catch {
+        // Best-effort mirror.
+      }
+      try {
+        let stored: unknown = null;
+        if (window.electronAPI) {
+          const all = await window.electronAPI.getSettings();
+          if (all && typeof all === 'object' && !('error' in all)) {
+            stored = (all as Record<string, string | null>).theme_dark_variant;
+          }
+        } else if (localStorage.getItem('token')) {
+          const res = await api.get('/settings/theme_dark_variant');
+          stored = res.data?.setting?.value;
+        }
+        if (!cancelled && isThemeVariant(stored)) setDarkVariant(stored);
+      } catch {
+        // Offline or signed out: keep the mirrored palette.
+      }
+      if (!cancelled) setVariantHydrated(true);
+    };
+    void load();
+    const onAuthChanged = () => {
+      void load();
+    };
+    window.addEventListener(THEME_REHYDRATION_EVENT, onAuthChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(THEME_REHYDRATION_EVENT, onAuthChanged);
+    };
+  }, [setDarkVariant]);
+
+  useEffect(() => {
+    if (!variantHydrated) return;
+    document.documentElement.classList.toggle('theme-dark-2', darkVariant === '2');
+    try {
+      localStorage.setItem(DARK_VARIANT_MIRROR_KEY, darkVariant);
+    } catch {
+      // Best-effort mirror.
+    }
+  }, [darkVariant, variantHydrated]);
 
   useEffect(() => {
     // Effect scope so cleanup can cancel a pending re-check.
@@ -69,8 +120,11 @@ export function ThemeSync() {
       recheckCancelled = false;
 
       const hasPosToken = (() => {
-        try { return Boolean(localStorage.getItem('token')); }
-        catch { return false; }
+        try {
+          return Boolean(localStorage.getItem('token'));
+        } catch {
+          return false;
+        }
       })();
       let dbMode: ThemeMode | null = null;
       let dbAttempted = false; // true once the bounded fetch has definitively resolved
@@ -78,7 +132,13 @@ export function ThemeSync() {
       if (window.electronAPI) {
         try {
           const all = await window.electronAPI.getSettings();
-          if (!cancelled && !userHasChosen() && all && typeof all === 'object' && !('error' in all)) {
+          if (
+            !cancelled &&
+            !userHasChosen() &&
+            all &&
+            typeof all === 'object' &&
+            !('error' in all)
+          ) {
             const raw = (all as Record<string, string | null>).theme_mode;
             if (isThemeModeValue(raw)) setMode(raw);
           }
@@ -142,7 +202,9 @@ export function ThemeSync() {
     };
     boot();
     // Theme store boots pre-auth; re-hydrate once a token exists (post-login).
-    const onAuthChanged = () => { void boot(); };
+    const onAuthChanged = () => {
+      void boot();
+    };
     window.addEventListener(THEME_REHYDRATION_EVENT, onAuthChanged);
     return () => {
       cancelled = true;

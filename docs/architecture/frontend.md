@@ -374,9 +374,11 @@ permission-gated route onto a window-origin check, which is a different and weak
 
 The Settings theme picker also stores which light and which dark theme is chosen, in
 `theme_light_variant` and `theme_dark_variant` (`1`, `2`, or `3`, written over the same HTTP
-route). Variants 2 and 3 are placeholders with no palette of their own yet: choosing one saves the
-variant and applies the base `light` or `dark` mode, so `theme_mode` alone still decides what the
-window paints at startup.
+route). `theme_mode` still decides light or dark. Dark 2 has its own palette: `ThemeSync` puts
+`theme-dark-2` on `<html>`, `globals.css` overrides the dark tokens under `.dark.theme-dark-2`
+(except on KDS and Server App screens), and the variant is mirrored in the
+`flo-theme-dark-variant` localStorage key so the head script applies it before first paint. The
+other variants have no palette yet and fall back to the base light or dark palette.
 
 ### The database channels
 

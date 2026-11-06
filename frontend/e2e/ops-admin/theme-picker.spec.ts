@@ -92,4 +92,42 @@ test.describe('@ci-tier2 operations admin - theme picker', () => {
     await expect(radio('System')).toHaveAttribute('aria-checked', 'true');
     await expect.poll(() => storedSetting(page, 'theme_mode')).toBe('system');
   });
+
+  test('Dark 2 paints the navy and gold palette and keeps it across a reload', async ({ page }) => {
+    await page.goto(`${E2E_BASE_URL}/settings?tab=appearance`);
+    const group = page.getByRole('radiogroup', { name: 'Theme', exact: true });
+    const radio = (name: string) => group.getByRole('radio', { name, exact: true });
+    const bodyBackground = () =>
+      page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const hasDarkTwo = () =>
+      page.evaluate(() => document.documentElement.classList.contains('theme-dark-2'));
+    await expect(group).toBeVisible({ timeout: 20_000 });
+
+    await radio('Dark').click();
+    await expect(radio('Dark')).toHaveAttribute('aria-checked', 'true');
+    await expect.poll(() => isDark(page)).toBe(true);
+    expect(await hasDarkTwo()).toBe(false);
+    const plainDark = await bodyBackground();
+
+    await radio('Dark 2').click();
+    await expect(radio('Dark 2')).toHaveAttribute('aria-checked', 'true');
+    await expect.poll(hasDarkTwo).toBe(true);
+    await expect.poll(bodyBackground).toBe('rgb(28, 53, 70)');
+    expect(plainDark).not.toBe('rgb(28, 53, 70)');
+    await expect.poll(() => storedSetting(page, 'theme_dark_variant')).toBe('2');
+
+    await page.reload();
+    await expect.poll(hasDarkTwo).toBe(true);
+    await expect.poll(bodyBackground).toBe('rgb(28, 53, 70)');
+    await expect(radio('Dark 2')).toHaveAttribute('aria-checked', 'true', { timeout: 20_000 });
+
+    await radio('Light').click();
+    await expect.poll(() => isDark(page)).toBe(false);
+    expect(await bodyBackground()).not.toBe('rgb(28, 53, 70)');
+
+    await radio('Dark 3').click();
+    await expect.poll(() => isDark(page)).toBe(true);
+    await expect.poll(hasDarkTwo).toBe(false);
+    await expect.poll(bodyBackground).toBe(plainDark);
+  });
 });

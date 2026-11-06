@@ -5,11 +5,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type BillTemplate } from '@/store/pos-settings';
-import { useThemeMode, type ThemeMode } from '@/store/theme';
+import { useThemeMode, isThemeVariant, type ThemeMode, type ThemeVariant } from '@/store/theme';
 
-type ThemeVariant = '1' | '2' | '3';
 const THEME_VARIANTS: readonly ThemeVariant[] = ['1', '2', '3'];
-const isThemeVariant = (v: unknown): v is ThemeVariant => v === '1' || v === '2' || v === '3';
 import { useOrdersLayoutPreference } from '@/hooks/useOrdersLayout';
 import { CustomerDisplayCard } from '@/components/settings/CustomerDisplayCard';
 import type {
@@ -492,6 +490,7 @@ export default function SettingsPage() {
   const { layout: ordersLayout, save: saveOrdersLayout } = useOrdersLayoutPreference();
   const setThemeMode = useThemeMode((s) => s.setMode);
   const markUserSelectedTheme = useThemeMode((s) => s.markUserSelected);
+  const setStoreDarkVariant = useThemeMode((s) => s.setDarkVariant);
 
   // Last persisted theme value used as rollback target on failed saves.
   const lastCommitted = useRef<ThemeMode>('system');
@@ -540,17 +539,19 @@ export default function SettingsPage() {
     }
   };
 
-  // Placeholder variants only store their id; the base light/dark mode drives the palette.
+  // A variant without its own palette falls back to the base light or dark palette.
   const saveThemeChoice = async (base: 'light' | 'dark', variant: ThemeVariant) => {
     if (savingTheme) return;
     const previous = themeVariants[base];
     if (previous !== variant) {
       setSavingTheme(true);
       setThemeVariants((v) => ({ ...v, [base]: variant }));
+      if (base === 'dark') setStoreDarkVariant(variant);
       try {
         await api.put(`/settings/theme_${base}_variant`, { value: variant });
       } catch {
         setThemeVariants((v) => ({ ...v, [base]: previous }));
+        if (base === 'dark') setStoreDarkVariant(previous);
         toast.error(t('saveFailed'));
         return;
       } finally {
@@ -2578,6 +2579,7 @@ export default function SettingsPage() {
             light: isThemeVariant(light) ? light : '1',
             dark: isThemeVariant(dark) ? dark : '1',
           });
+          if (isThemeVariant(dark)) setStoreDarkVariant(dark);
         }
         const raw = data?.setting?.value;
         if (raw === 'light' || raw === 'dark' || raw === 'system') {
