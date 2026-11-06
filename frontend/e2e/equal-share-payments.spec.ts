@@ -8,6 +8,7 @@ import {
   type E2EOrdersLayout,
 } from './helpers/test-auth';
 import { E2E_BASE_URL as BASE } from './helpers/urls';
+import { printBillFirst } from './helpers/bill-print';
 import { readSetting, writeSetting } from './helpers/kitchen-fixture';
 
 /**
@@ -182,7 +183,12 @@ async function login(page: Page): Promise<void> {
 }
 
 /** Opens the check from the Orders master/detail list and starts its checkout. */
-async function openOrderCheckout(page: Page, orderNumber: string): Promise<void> {
+async function openOrderCheckout(
+  page: Page,
+  order: { id: number; order_number: string },
+): Promise<void> {
+  const orderNumber = order.order_number;
+  await printBillFirst(page.request, managerHeaders, order.id);
   await page.goto(`${BASE}/orders`);
   const masterRow = page
     .getByRole('button')
@@ -191,7 +197,7 @@ async function openOrderCheckout(page: Page, orderNumber: string): Promise<void>
   await expect(masterRow).toBeVisible();
   await masterRow.click();
   await page
-    .getByRole('button', { name: /Checkout|Take Payment/ })
+    .getByRole('button', { name: /Confirm payment|Take Payment/i })
     .first()
     .click();
   await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
@@ -259,7 +265,10 @@ async function submitPayment(page: Page): Promise<PaymentAttempt> {
       response.request().method() === 'POST' &&
       /^\/api\/bills\/[^/]+\/payments$/.test(new URL(response.url()).pathname),
   );
-  await page.getByRole('button', { name: /^(Pay |Send same payment$)/ }).click();
+  await page
+    .getByRole('button', { name: /^(Pay |Confirm payment |Send same payment$)/i })
+    .last()
+    .click();
   const confirmButton = page.getByRole('button', { name: 'Pay', exact: true });
   if (await confirmButton.count()) await confirmButton.click();
   const response = await pending;
@@ -346,7 +355,7 @@ test.describe('equal share payments', () => {
     });
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [bill] = await readBills(request, order.id);
     expect(minorAmount(bill.balance), 'the fixture check balances at exactly 100.00').toBe(100);
 
@@ -453,7 +462,7 @@ test.describe('equal share payments', () => {
       });
 
       await login(page);
-      await openOrderCheckout(page, order.order_number);
+      await openOrderCheckout(page, order);
       await openEqualShare(page);
       await setPayers(page, '3');
       await applyShareTo(page, 'Cash');
@@ -474,7 +483,7 @@ test.describe('equal share payments', () => {
   }) => {
     const order = await createCheck(request, fixture.productId, 'Equal share pending payment', 3);
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await openEqualShare(page);
     await applyShareTo(page, 'Cash');
     await tenderRow(page, 'Cash').getByRole('spinbutton').focus();
@@ -530,7 +539,7 @@ test.describe('equal share payments', () => {
     });
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
 
     // Item splitting is off: the equal-share shortcut is still offered.
     await expect(page.getByRole('button', { name: 'Split check' })).toHaveCount(0);
@@ -539,7 +548,7 @@ test.describe('equal share payments', () => {
 
     await writeSplitSetting(request, 'true');
     await page.getByRole('button', { name: 'Close' }).click();
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
 
     // Both actions stand side by side; using one never triggers the other.
     await expect(page.getByRole('button', { name: 'Split check' })).toBeVisible();
@@ -562,7 +571,7 @@ test.describe('equal share payments', () => {
     const centOrder = await createCheck(request, fixture.centProductId, 'Equal share tiny balance');
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await openEqualShare(page);
 
     for (const invalid of ['', '1', '21', '2.5']) {
@@ -584,13 +593,13 @@ test.describe('equal share payments', () => {
 
     // Closing the preview cancels it: nothing was applied and nothing is owed.
     await page.getByRole('button', { name: 'Close' }).click();
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     expect(await tenderAmount(page, 'Cash')).toBe('');
     expect(await paymentRequestBodies(page)).toEqual([]);
 
     // A balance with fewer minor units than the minimum payer count cannot be divided.
     await page.getByRole('button', { name: 'Close' }).click();
-    await openOrderCheckout(page, centOrder.order_number);
+    await openOrderCheckout(page, centOrder);
     await openEqualShare(page);
     await setPayers(page, '2');
     await expect(
@@ -637,7 +646,7 @@ test.describe('equal share payments', () => {
     );
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await openEqualShare(page);
     await setPayers(page, '2');
     await expect(page.getByText('Apply to Cash')).toBeVisible();
@@ -676,7 +685,7 @@ test.describe('equal share payments', () => {
 
     try {
       await login(page);
-      await openOrderCheckout(page, order.order_number);
+      await openOrderCheckout(page, order);
       await openEqualShare(page);
       await setPayers(page, '2');
       await applyShareTo(page, methodName);
@@ -723,7 +732,7 @@ test.describe('equal share payments', () => {
     try {
       expect((await writeDiscount('percentage')).status()).toBe(200);
       await login(page);
-      await openOrderCheckout(page, order.order_number);
+      await openOrderCheckout(page, order);
       await openEqualShare(page);
       await setPayers(page, '2');
       await applyShareTo(page, 'Cash');
@@ -742,7 +751,9 @@ test.describe('equal share payments', () => {
       ).toBeVisible();
       expect(await tenderAmount(page, 'Cash')).toBe('');
       await expect(tenderRow(page, 'Cash')).not.toContainText('Equal share');
-      await expect(page.getByRole('button', { name: /^Pay / })).toBeDisabled();
+      await expect(
+        page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).last(),
+      ).toBeDisabled();
 
       await expect(
         equalShareToggle(page),
@@ -793,7 +804,7 @@ test.describe('equal share payments', () => {
     try {
       expect((await writeDiscount('percentage')).status()).toBe(200);
       await login(page);
-      await openOrderCheckout(page, order.order_number);
+      await openOrderCheckout(page, order);
       await openEqualShare(page);
       await setPayers(page, '2');
       await applyShareTo(page, 'Cash');
@@ -824,7 +835,9 @@ test.describe('equal share payments', () => {
       const pendingDiscount = page.getByRole('button', { name: 'Apply Discount' }).last().click();
       try {
         await discountIntercepted;
-        await expect(page.getByRole('button', { name: /^Pay / })).toBeDisabled();
+        await expect(
+          page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).last(),
+        ).toBeDisabled();
       } finally {
         releaseDiscount();
       }
@@ -879,7 +892,7 @@ test.describe('equal share payments', () => {
       3,
     );
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [bill] = await readBills(request, order.id);
 
     // 40.00 collected up front, leaving 60.00 for the diners still at the table.
@@ -906,7 +919,7 @@ test.describe('equal share payments', () => {
     // Closing and reopening re-reads the authoritative balance and asks again:
     // the payer count is session state, never a durable guest roster.
     await page.getByRole('button', { name: 'Close' }).click();
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await openEqualShare(page);
     await expect(
       payerCount(page),
@@ -942,7 +955,7 @@ test.describe('equal share payments', () => {
     });
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [bill] = await readBills(request, order.id);
     await openEqualShare(page);
     await setPayers(page, '3');
@@ -950,7 +963,10 @@ test.describe('equal share payments', () => {
 
     // The connection drops after the request left the browser.
     await page.route('**/api/bills/*/payments', (route) => route.abort('failed'));
-    await page.getByRole('button', { name: /^Pay / }).click();
+    await page
+      .getByRole('button', { name: /^(Pay|Confirm payment) /i })
+      .last()
+      .click();
     await page.getByRole('button', { name: 'Pay', exact: true }).click();
     await expect(
       page
@@ -996,7 +1012,7 @@ test.describe('equal share payments', () => {
     });
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [bill] = await readBills(request, order.id);
     await openEqualShare(page);
     await setPayers(page, '3');
@@ -1013,7 +1029,10 @@ test.describe('equal share payments', () => {
       await route.abort('failed');
     });
 
-    await page.getByRole('button', { name: /^Pay / }).click();
+    await page
+      .getByRole('button', { name: /^(Pay|Confirm payment) /i })
+      .last()
+      .click();
     await page.getByRole('button', { name: 'Pay', exact: true }).click();
     await expect(
       page
@@ -1073,7 +1092,7 @@ test.describe('equal share payments', () => {
     );
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [bill] = await readBills(request, order.id);
     await openEqualShare(page);
     await setPayers(page, '2');
@@ -1096,7 +1115,10 @@ test.describe('equal share payments', () => {
         },
       });
     });
-    await page.getByRole('button', { name: /^Pay / }).click();
+    await page
+      .getByRole('button', { name: /^(Pay|Confirm payment) /i })
+      .last()
+      .click();
     await page.getByRole('button', { name: 'Pay', exact: true }).click();
     await expect(
       page.getByRole('alert').filter({ hasText: 'Enter an amount for each split payment.' }),
@@ -1121,6 +1143,7 @@ test.describe('equal share payments', () => {
     const order = await createCheck(request, fixture.productId, 'Equal share POS table', 2, {
       tableId: table.id,
     });
+    await printBillFirst(request, managerHeaders, order.id);
     const printRequests: string[] = [];
     page.on('request', (browserRequest) => {
       if (new URL(browserRequest.url()).pathname.startsWith('/api/printers/print')) {
@@ -1137,7 +1160,7 @@ test.describe('equal share payments', () => {
       await page.getByRole('button', { name: 'Select table' }).click();
       await page.getByRole('button', { name: new RegExp(table.number) }).click();
       await expect(page.getByRole('heading', { name: table.number })).toBeVisible();
-      await page.getByRole('button', { name: 'Checkout' }).click();
+      await page.getByRole('button', { name: /^Confirm payment/i }).click();
       await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
 
       const [bill] = await readBills(request, order.id);
@@ -1188,7 +1211,7 @@ test.describe('equal share payments', () => {
     });
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     const [remainder] = await readBills(request, order.id);
 
     // The departing check's fetch and the list refresh are held open so the
@@ -1213,7 +1236,7 @@ test.describe('equal share payments', () => {
 
     // The check that was just split must not be payable while the departing one loads.
     await expect(page.getByRole('heading', { name: 'Payment' })).toHaveCount(1);
-    const payButton = page.getByRole('button', { name: /^Pay / }).first();
+    const payButton = page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).first();
     if (await payButton.count()) {
       await payButton.dblclick({ force: true, timeout: 1500 }).catch(() => undefined);
     }
@@ -1238,7 +1261,7 @@ test.describe('equal share payments', () => {
     const order = await createCheck(request, fixture.productId, 'Equal share keyboard reach', 3);
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
 
     await equalShareToggle(page).focus();
     await page.keyboard.press('Enter');
@@ -1265,7 +1288,7 @@ test.describe('equal share payments', () => {
     const paymentBodies = paymentRequestBodies(page);
 
     await login(page);
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await openEqualShare(page);
     await setPayers(page, '4');
     expect(await shareAmounts(page)).toEqual(['25.00', '25.00', '25.00', '25.00']);
@@ -1285,7 +1308,7 @@ test.describe('equal share payments', () => {
 
     // Reopening reads the authoritative balance and asks for the count again:
     // the preview, the applied share and the payer roster are session-only.
-    await openOrderCheckout(page, order.order_number);
+    await openOrderCheckout(page, order);
     await expect(equalShareToggle(page)).toHaveAttribute('aria-expanded', 'false');
     await expect(payerCount(page)).toHaveCount(0);
     await openEqualShare(page);

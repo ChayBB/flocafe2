@@ -16,6 +16,7 @@ import {
   type E2EOrdersLayout,
 } from './helpers/test-auth';
 import { E2E_BASE_URL as BASE } from './helpers/urls';
+import { printBillFirst } from './helpers/bill-print';
 
 const managerHeaders = {
   Authorization: `Bearer ${getE2eToken('e2e-manager', 'manager@flo.local', 'manager')}`,
@@ -404,6 +405,7 @@ test('payment modal updates applied fees', async ({ page, request }) => {
     });
     expect(billResponse.status()).toBe(201);
     const { bill } = await billResponse.json();
+    await printBillFirst(request, managerHeaders, order.id);
 
     await page.goto(`${BASE}/auth/login`);
     await page.locator('#email').fill('manager@flo.local');
@@ -416,7 +418,7 @@ test('payment modal updates applied fees', async ({ page, request }) => {
       .first()
       .fill(order.order_number);
     await expect(page.getByText(`#${order.order_number}`)).toBeVisible();
-    await page.getByRole('button', { name: 'Checkout', exact: true }).click();
+    await page.getByRole('button', { name: /^Confirm payment/i }).click();
     await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
 
     const serviceRow = page.getByTestId('payment-charge-service_charge');
@@ -459,7 +461,9 @@ test('payment modal updates applied fees', async ({ page, request }) => {
     );
     await serviceRow.getByRole('button', { name: 'Waive', exact: true }).click();
     expect((await rejectedUpdate).status()).toBe(409);
-    await expect(page.getByRole('button', { name: /^Pay / })).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).last(),
+    ).toBeEnabled();
     await page.unroute(chargeRoute, rejectUpdate);
 
     let detailBillReads = 0;
@@ -536,7 +540,9 @@ test('payment modal updates applied fees', async ({ page, request }) => {
     await lostPatchRequest;
     expect(uncertainPatchStatus).toBe(200);
     expect(committedBillTotal).toBeGreaterThan(Number((await addedBill).total));
-    await expect(page.getByRole('button', { name: /^Pay / })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).last(),
+    ).toBeDisabled();
     expect(paymentRequestsAfterUncertainUpdate).toBe(0);
     await page.unroute(chargeRoute, losePatchResponse);
   } catch (error) {
@@ -646,6 +652,7 @@ test('payment modal hides charge controls without bill discount permission', asy
     });
     expect(billResponse.status()).toBe(201);
     const { bill } = await billResponse.json();
+    await printBillFirst(request, managerHeaders, order.id);
     const addOptionalCharge = await request.patch(`${BASE}/api/bills/${bill.id}/charges`, {
       headers: managerHeaders,
       data: { charge_id: 'payment_addon', applied: true },
@@ -771,7 +778,7 @@ test('payment modal hides charge controls without bill discount permission', asy
           },
           { timeout: 10000 },
         ),
-        staffOrderCard.getByRole('button', { name: 'Checkout', exact: true }).click(),
+        staffOrderCard.getByRole('button', { name: /^Confirm payment/i }).click(),
       ]);
       expect(billGenerateResponse.ok()).toBeTruthy();
       markStage('staff_checkout_click', 'complete');
@@ -824,7 +831,7 @@ test('payment modal hides charge controls without bill discount permission', asy
           elapsedMs: Date.now() - testStartedAt,
           orderCardCount: orderCard ? await orderCard.count() : 0,
           checkoutButtonCount: orderCard
-            ? await orderCard.getByRole('button', { name: 'Checkout', exact: true }).count()
+            ? await orderCard.getByRole('button', { name: /^Confirm payment/i }).count()
             : 0,
           paymentHeadingVisible: await serverPage
             .getByRole('heading', { name: 'Payment' })

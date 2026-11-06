@@ -15,6 +15,7 @@ import {
   type E2EOrdersLayout,
 } from './helpers/test-auth';
 import { E2E_BASE_URL as BASE } from './helpers/urls';
+import { printBillFirst } from './helpers/bill-print';
 
 /**
  * Checkout must stay usable when the tenant disables discounts (discount_mode
@@ -111,9 +112,11 @@ async function login(page: Page): Promise<void> {
 /** Orders opens the payment modal for this order; the caller owns the assertions. */
 async function openCheckout(
   page: Page,
-  orderNumber: string,
+  order: { id: number; order_number: string },
   waitForModalSettings = true,
 ): Promise<void> {
+  const orderNumber = order.order_number;
+  await printBillFirst(page.request, managerHeaders, order.id);
   const ordersSettingsResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return response.request().method() === 'GET' && url.pathname === '/api/settings/discount';
@@ -125,7 +128,7 @@ async function openCheckout(
     .first()
     .fill(orderNumber);
   await expect(page.getByText(`#${orderNumber}`)).toBeVisible();
-  const checkoutButton = page.getByRole('button', { name: 'Checkout', exact: true });
+  const checkoutButton = page.getByRole('button', { name: /^Confirm payment/i });
   if (waitForModalSettings) {
     const modalSettingsRequestPromise = page.waitForRequest((request) => {
       const url = new URL(request.url());
@@ -196,7 +199,7 @@ async function readBill(request: APIRequestContext, orderId: number): Promise<Bi
  */
 async function settleInCash(page: Page, expectedAmount: string): Promise<void> {
   await page.getByRole('button', { name: 'Cash', exact: true }).click();
-  const payButton = page.getByRole('button', { name: /^Pay / });
+  const payButton = page.getByRole('button', { name: /^(Pay|Confirm payment) /i }).last();
   await expect(payButton).toBeEnabled();
   await expect(payButton).toContainText(expectedAmount);
   const paymentResponse = page.waitForResponse((response) => {
@@ -207,7 +210,8 @@ async function settleInCash(page: Page, expectedAmount: string): Promise<void> {
   });
   await payButton.click();
   expect((await paymentResponse).ok()).toBeTruthy();
-  await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+  // A settled bill closes the payment window straight away.
+  await expect(page.getByRole('heading', { name: 'Payment' })).toBeHidden();
 }
 
 /** The stored bill is the authority; wait for it to reflect the settlement. */
@@ -263,7 +267,7 @@ test('orders checkout with discounts disabled opens a payable screen instead of 
   await login(page);
   await expect(page.getByPlaceholder(/search/i).first()).toBeVisible();
 
-  await openCheckout(page, order.order_number);
+  await openCheckout(page, order);
 
   // A render loop unmounts the modal before any control is usable.
   await expectNoRenderLoop(pageErrors);
@@ -316,7 +320,7 @@ test('a late disabled-discount response drops an open checkout draft and still s
   });
 
   await login(page);
-  await openCheckout(page, order.order_number, false);
+  await openCheckout(page, order, false);
   await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
   await expect.poll(() => settingsReads.length).toBeGreaterThan(1);
   const settingsRequest = settingsReads[1];
@@ -377,7 +381,7 @@ test('a bill update while discounts stay disabled keeps the checkout payable', a
     const pageErrors = collectPageErrors(page);
 
     await login(page);
-    await openCheckout(page, order.order_number);
+    await openCheckout(page, order);
     await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
 
     // Waiving a charge replaces the bill prop on the mounted modal while the
@@ -456,7 +460,7 @@ test('an already discounted bill settles on its authoritative total when discoun
 
   await login(page);
   const pageErrors = collectPageErrors(page);
-  await openCheckout(page, order.order_number);
+  await openCheckout(page, order);
   await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
   await expectNoRenderLoop(pageErrors);
 
@@ -486,7 +490,7 @@ test('enabled discount modes still expose only their allowed types', async ({ pa
 
   for (const testCase of cases) {
     await writeDiscountMode(request, testCase.mode, discountBefore);
-    await openCheckout(page, order.order_number);
+    await openCheckout(page, order);
     await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
     const toggle = page.getByRole('button', { name: /^(Apply Discount|Discount:)/ });
     await expect(toggle).toHaveCount(1);
@@ -507,7 +511,7 @@ test('enabled discount modes still expose only their allowed types', async ({ pa
   // A flat-only tenant can still apply a flat discount: the draft type converges
   // to the allowed type instead of looping.
   await writeDiscountMode(request, 'flat', discountBefore);
-  await openCheckout(page, order.order_number);
+  await openCheckout(page, order);
   await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible();
   await page.getByRole('button', { name: /^Apply Discount$/ }).click();
   const amountInput = page.locator('input[type="number"]').first();
