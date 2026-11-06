@@ -8203,6 +8203,75 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
         db.exec(`ALTER TABLE products ADD COLUMN points_eligible INTEGER NOT NULL DEFAULT 1`);
     },
   },
+  {
+    version: 138,
+    name: 'add_promotion_rule_engine_tables',
+    up: () => {
+      // 0 means no cap on the combined promotion discount per bill.
+      insertSettingIfMissing('promotion_max_total_discount_cents', '0');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS promotions (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('automatic', 'coupon')),
+          status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'ended')),
+          priority INTEGER NOT NULL DEFAULT 100,
+          exclusive_group TEXT,
+          stack_policy TEXT NOT NULL DEFAULT 'stack' CHECK (stack_policy IN ('stack', 'exclusive')),
+          conditions_json TEXT NOT NULL DEFAULT '{}',
+          reward_json TEXT NOT NULL,
+          starts_at TEXT,
+          ends_at TEXT,
+          usage_limit_per_customer INTEGER,
+          total_usage_limit INTEGER,
+          budget_cents INTEGER,
+          created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_promotions_status ON promotions(status, priority);
+
+        CREATE TABLE IF NOT EXISTS promotion_codes (
+          code TEXT PRIMARY KEY COLLATE NOCASE,
+          promotion_id TEXT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_promotion_codes_promotion ON promotion_codes(promotion_id);
+
+        CREATE TABLE IF NOT EXISTS order_promotions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+          promotion_id TEXT NOT NULL,
+          promotion_name TEXT NOT NULL,
+          coupon_code TEXT,
+          discount_cents INTEGER NOT NULL CHECK (discount_cents >= 0),
+          allocations_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_order_promotions_order ON order_promotions(order_id);
+
+        CREATE TABLE IF NOT EXISTS promotion_redemptions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          promotion_id TEXT NOT NULL,
+          order_id INTEGER,
+          bill_id INTEGER,
+          customer_id TEXT,
+          kind TEXT NOT NULL CHECK (kind IN ('redeem', 'reverse')),
+          uses INTEGER NOT NULL,
+          discount_cents INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_promotion_redemptions_promotion
+          ON promotion_redemptions(promotion_id, customer_id);
+        CREATE TRIGGER IF NOT EXISTS promotion_redemptions_no_update BEFORE UPDATE ON promotion_redemptions
+        BEGIN SELECT RAISE(ABORT, 'promotion_redemptions is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS promotion_redemptions_no_delete BEFORE DELETE ON promotion_redemptions
+        BEGIN SELECT RAISE(ABORT, 'promotion_redemptions is append-only'); END;
+      `);
+      if (!getColumns(db, 'orders').includes('coupon_codes'))
+        db.exec(`ALTER TABLE orders ADD COLUMN coupon_codes TEXT DEFAULT NULL`);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

@@ -293,6 +293,26 @@ silent disagreement the rule exists to prevent.
 
 ---
 
+## A promotion and a manual discount never combine
+
+**Rule:** An order carries either promotions or a manual discount, never both. While a promotion
+applies, staff cannot add an order, item, or bill discount (`409`, code `promotion_applied`). An
+order that already has a manual discount is not evaluated for promotions.
+
+**Reason:** the store owner decided that promotion pricing is the whole offer; stacking a staff
+discount on top would let the combined discount exceed what the campaign was priced for.
+
+**Enforced by:** `rejectWhenPromotionApplied` in `main/routes/orders.ts`, the guard on
+`POST /api/bills/:id/applyDiscount` in `main/routes/bills.ts`, and `orderHasManualDiscount()` in
+`main/services/promotions.ts`.
+
+**How to verify:** `npm run test:promotion-orders` must pass.
+
+**Change policy:** allowing a manual discount alongside a promotion needs an explicit product
+decision, plus a rule for which applies first and how `max_total_discount` covers both.
+
+---
+
 ## Supplies stock and recipe depletion
 
 **Rule:** Supplies, the ingredients and packaging tracked for recipe depletion, have their own

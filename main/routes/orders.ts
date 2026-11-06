@@ -42,6 +42,14 @@ import {
 import { applyPayableRounding } from '../services/tax-engine';
 import { calculateOrderTotals, recomputeOrderTotals } from '../services/orders';
 import {
+  PROMOTION_APPLIED_MESSAGE,
+  PROMOTION_DISCOUNT_TYPE,
+  evaluateAndStoreOrderPromotions,
+  hasActivePromotions,
+  orderHasManualDiscount,
+  orderHasPromotions,
+} from '../services/promotions';
+import {
   buildAppliedCharges,
   ChargeValidationError,
   serializeAppliedCharges,
@@ -2044,6 +2052,8 @@ router.post(
           );
         }
 
+        syncOrderPromotions(db, Number(orderId));
+
         const order = parseRowJson(
           db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId),
         ) as any;
@@ -2372,6 +2382,7 @@ router.post(
           action: 'items_added',
           details: { item_ids: insertedItemIds },
         });
+        syncOrderPromotions(db, req.params.id as string);
 
         const updatedOrder = parseRowJson(
           db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id),
@@ -3061,6 +3072,7 @@ router.patch(
         db.prepare(
           "UPDATE bills SET customer_id = ?, updated_at = ? WHERE order_id = ? AND payment_status != 'paid'",
         ).run(customer_id || null, nowStr, req.params.id);
+        syncOrderPromotions(db, req.params.id as string);
 
         return parseRowJson(
           db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id),
@@ -3763,16 +3775,25 @@ const handleOrderDiscount = asyncHandler(async (req: Request, res: Response) => 
   }
 });
 
+function rejectWhenPromotionApplied(req: Request, res: Response, next: () => void) {
+  if (orderHasPromotions(getDatabase(), String(req.params.id))) {
+    return res.status(409).json({ error: PROMOTION_APPLIED_MESSAGE, code: 'promotion_applied' });
+  }
+  next();
+}
+
 router.patch(
   '/:id/discount',
   orderWriteRateLimit,
   requirePermission('orders.discount.apply'),
+  rejectWhenPromotionApplied,
   handleOrderDiscount,
 );
 router.post(
   '/:id/discount',
   orderWriteRateLimit,
   requirePermission('orders.discount.apply'),
+  rejectWhenPromotionApplied,
   handleOrderDiscount,
 );
 
@@ -4285,12 +4306,14 @@ router.patch(
   '/:id/items/:itemId/discount',
   orderWriteRateLimit,
   requirePermission('orders.discount.apply'),
+  rejectWhenPromotionApplied,
   handleItemDiscount,
 );
 router.post(
   '/:id/items/:itemId/discount',
   orderWriteRateLimit,
   requirePermission('orders.discount.apply'),
+  rejectWhenPromotionApplied,
   handleItemDiscount,
 );
 
@@ -4828,6 +4851,7 @@ router.patch(
           details: { ...(approvedByUserId && { approved_by: approvedByUserId }) },
         });
 
+        syncOrderPromotions(db, orderId);
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
         const items = attachEffectiveAddons(
           db,
@@ -4862,6 +4886,76 @@ router.patch(
     }
   }),
 );
+
+/**
+ * Re-evaluates automatic and coupon promotions while nothing has been collected, then reprices
+ * the order through the shared totals path. A manual discount keeps promotions off the order.
+ */
+export function syncOrderPromotions(
+  db: ReturnType<typeof getDatabase>,
+  orderId: string | number,
+): void {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as
+    | (EditableOrderRow & { id: number; coupon_codes: string | null })
+    | undefined;
+  if (!order || ['completed', 'cancelled'].includes(order.status)) return;
+  const stored = orderHasPromotions(db, order.id);
+  if (!stored && !hasActivePromotions(db)) return;
+  const bills = db
+    .prepare('SELECT split_group_id, payment_status, paid_amount FROM bills WHERE order_id = ?')
+    .all(order.id) as {
+    split_group_id: string | null;
+    payment_status: string;
+    paid_amount: number | null;
+  }[];
+  if (
+    bills.some(
+      (bill) =>
+        bill.split_group_id ||
+        Number(bill.paid_amount || 0) > 0 ||
+        bill.payment_status !== 'unpaid',
+    )
+  )
+    return;
+  if (orderHasManualDiscount(db, order)) {
+    if (stored) db.prepare('DELETE FROM order_promotions WHERE order_id = ?').run(order.id);
+    return;
+  }
+
+  const tenantInfo = {
+    country: getSettingValue('country') || '',
+    business_type: getSettingValue('business_type') || 'restaurant',
+    state_code: getSettingValue('state_code') || '',
+    currency: getTenantCurrency(),
+    taxes_enabled: getSettingValue('taxes_enabled') === 'true',
+  };
+  const decimals = getCurrencyFractionDigits(tenantInfo.currency);
+  const result = evaluateAndStoreOrderPromotions(db, order, tenantInfo.currency, now());
+  const discount = Number(
+    (result.totalDiscountMinor / getCurrencyMinorUnitFactor(tenantInfo.currency)).toFixed(decimals),
+  );
+  if (discount === 0 && order.discount_type !== PROMOTION_DISCOUNT_TYPE) return;
+
+  const discountType = discount > 0 ? PROMOTION_DISCOUNT_TYPE : null;
+  const reason = discount > 0 ? result.applied.map((applied) => applied.name).join(', ') : null;
+  db.prepare(
+    'UPDATE orders SET discount_type = ?, discount_value = ?, discount_reason = ?, discount_amount = ? WHERE id = ?',
+  ).run(discountType, discount > 0 ? discount : null, reason, discount, order.id);
+  const customer = order.customer_id
+    ? (db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) as TaxCustomerRow)
+    : null;
+  persistRecomputedOrderTotals(
+    db,
+    String(order.id),
+    {
+      ...order,
+      discount_type: discountType,
+      discount_value: discount || null,
+      discount_amount: discount,
+    },
+    { tenantInfo, customer, bills, decimals },
+  );
+}
 
 // Owner-only edit of a live order line: change its quantity or swap it for another product.
 function persistRecomputedOrderTotals(
@@ -5387,6 +5481,7 @@ router.patch(
           },
         });
 
+        syncOrderPromotions(db, orderId);
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
           string,
           unknown
@@ -5605,6 +5700,7 @@ function completePendingPriceLine(mode: PendingPriceMode) {
               : { kitchen_price: unitPrice, previous_unit_price: Number(item.unit_price) },
         });
 
+        syncOrderPromotions(db, orderId);
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
           string,
           unknown
@@ -5687,6 +5783,7 @@ router.patch(
             details: { product_name: item.product_name },
           });
         }
+        syncOrderPromotions(db, orderId);
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Record<
           string,
           unknown
@@ -6126,6 +6223,8 @@ router.post(
           bills: keptBill ? [keptBill] : [],
           decimals,
         });
+        db.prepare('DELETE FROM order_promotions WHERE order_id = ?').run(source.id);
+        syncOrderPromotions(db, target.id);
         db.prepare(
           `UPDATE orders SET status = 'cancelled', subtotal = 0, tax_amount = 0, tax_breakdown = NULL, tax_snapshot = NULL,
              total = 0, service_charge = 0, packaging_charge = 0, charges_breakdown = NULL, round_off = 0,
@@ -6398,6 +6497,7 @@ router.patch('/:orderId/items/:itemId/restore', (req: Request, res: Response) =>
         action: 'item_restored',
       });
 
+      syncOrderPromotions(db, orderId);
       const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
       const items = attachEffectiveAddons(
         db,

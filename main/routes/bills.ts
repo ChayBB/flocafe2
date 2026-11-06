@@ -18,6 +18,11 @@ import {
 } from '../db';
 import { asyncHandler } from '../middleware/async-handler';
 import { awardBillPoints, pointsModeActive } from '../lib/loyalty-points';
+import {
+  PROMOTION_APPLIED_MESSAGE,
+  orderHasPromotions,
+  recordOrderPromotionRedemptions,
+} from '../services/promotions';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { printReceipt } from '../services/receipt';
 import { cloudSync } from '../services/cloud-sync';
@@ -3180,7 +3185,7 @@ function billPointsEligibleMinor(
   return Math.floor(eligible * splitRatio * minorFactor * paidShare);
 }
 
-function awardPointsForPaidBill(
+function applyPaidBillRewards(
   db: ReturnType<typeof getDatabase>,
   bill: any,
   customerId: string | null | undefined,
@@ -3189,6 +3194,13 @@ function awardPointsForPaidBill(
   minorFactor: number,
   at: string,
 ): number {
+  if (bill.order_id)
+    recordOrderPromotionRedemptions(db, {
+      orderId: bill.order_id,
+      billId: bill.id,
+      customerId: customerId ?? null,
+      at,
+    });
   if (!customerId || !pointsModeActive(db)) return 0;
   return awardBillPoints(db, {
     billId: Number(bill.id),
@@ -3344,7 +3356,7 @@ export function completeExactBalanceSettlement(
       paidList = [];
     }
     const minorFactor = getCurrencyMinorUnitFactor(currency);
-    awardPointsForPaidBill(
+    applyPaidBillRewards(
       db,
       bill,
       effectiveCustomerId,
@@ -3549,7 +3561,7 @@ function applyPaymentBatch(
       paidPoints = [];
     }
     const pointsMinorFactor = getCurrencyMinorUnitFactor(getTenantCurrency());
-    const pointsEarned = awardPointsForPaidBill(
+    const pointsEarned = applyPaidBillRewards(
       db,
       freshBill,
       effectiveCustId,
@@ -3713,7 +3725,7 @@ function applyPaymentBatch(
         loyaltyPointsEarned = finalCashback;
       }
     }
-    pointsEarned = awardPointsForPaidBill(
+    pointsEarned = applyPaidBillRewards(
       db,
       bill,
       effectiveCustomerId,
@@ -4245,6 +4257,16 @@ router.post(
 router.post(
   ['/:id/applyDiscount', '/:id/discount'],
   requirePermission('bills.discount.apply'),
+  (req: Request, res: Response, next: () => void) => {
+    const db = getDatabase();
+    const bill = db.prepare('SELECT order_id FROM bills WHERE id = ?').get(req.params.id) as
+      | { order_id: number | null }
+      | undefined;
+    if (bill?.order_id && orderHasPromotions(db, bill.order_id)) {
+      return res.status(409).json({ error: PROMOTION_APPLIED_MESSAGE, code: 'promotion_applied' });
+    }
+    next();
+  },
   asyncHandler(async (req: Request, res: Response) => {
     let operationCommitted = false;
     try {

@@ -105,6 +105,27 @@ Common rules, enforced in the handlers:
   `order_audit_log` with the authenticated actor, discount details, and the approving manager ID
   when a manager PIN override was used (the raw PIN is never stored).
 
+## Promotions
+
+Active rows in `promotions` are evaluated by the pure engine in `main/lib/promotion-engine.ts`
+(eligibility, conditions, reward, conflict resolution, then allocation to item lines).
+`syncOrderPromotions()` in `main/routes/orders.ts` runs at the end of order creation, item append,
+customer change, item cancel, edit, weight, kitchen price, takeaway, restore, and table merge. It
+re-evaluates only while the order is open, unsplit, and has nothing collected, and it does nothing
+while the order or any active line carries a manual discount.
+
+- The engine result replaces the order's `order_promotions` rows (discount in minor units plus the
+  per-line allocation) and is written to the order as `discount_type = 'promotion'`, then repriced
+  through the same totals path as a flat order discount, so tax is rescaled by the discounted share
+  of the subtotal and unpaid bills are re-synced.
+- A schedule window is checked against each line's `order_items.created_at`, so a line ordered
+  during a happy hour keeps its price after the window closes.
+- While `order_promotions` rows exist, the order, order item, and bill discount endpoints return
+  `409` with code `promotion_applied`.
+- When a bill is paid, each promotion on the order is counted once in the append-only
+  `promotion_redemptions` (one use plus its discount toward the budget). A refund that leaves the
+  bill fully refunded writes matching `reverse` rows, once; a partial refund keeps the use.
+
 ## Bills
 
 `POST /api/bills/generate` creates the order's bill, or, when a bill already exists and is not paid,
