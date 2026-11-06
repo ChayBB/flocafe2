@@ -102,10 +102,9 @@ export function TableKitchenSummary({
           <span
             key={stage}
             data-testid={`server-app-stage-${stage}`}
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_STYLES[stage].className}`}
+            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${STAGE_STYLES[stage].className}`}
           >
-            {t(STAGE_STYLES[stage].key)}{' '}
-            <Ltr className="font-bold tabular-nums">{counts[stage]}</Ltr>
+            {t(STAGE_STYLES[stage].key)} <Ltr className="tabular-nums">{counts[stage]}</Ltr>
           </span>
         ))}
       </div>
