@@ -8104,6 +8104,18 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 136,
+    name: 'add_customer_first_last_name_and_birthday',
+    up: () => {
+      // customers.name stays the full display name; existing rows keep it untouched.
+      const columns = getColumns(db, 'customers');
+      for (const column of ['first_name', 'last_name', 'birthday']) {
+        if (!columns.includes(column))
+          db.exec(`ALTER TABLE customers ADD COLUMN ${column} TEXT DEFAULT NULL`);
+      }
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {

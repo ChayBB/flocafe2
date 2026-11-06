@@ -10,6 +10,9 @@ import { MAX_RAW_FILE_SIZE, fitImage } from '@/lib/image-utils';
 
 type Kind = 'logo' | 'cover';
 
+/** Window event fired after the logo or cover is saved, so other views can refresh. */
+export const STORE_BRANDING_CHANGED = 'flocafe:store-branding-changed';
+
 const FIELD: Record<Kind, 'store_logo' | 'store_cover'> = {
   logo: 'store_logo',
   cover: 'store_cover',
@@ -42,6 +45,7 @@ export function StoreBrandingCard() {
         { [FIELD[kind]]: value },
       );
       setImages({ logo: data.store_logo, cover: data.store_cover });
+      window.dispatchEvent(new Event(STORE_BRANDING_CHANGED));
       toast.success(t('allSaved'));
     } catch {
       toast.error(t('saveFailed'));

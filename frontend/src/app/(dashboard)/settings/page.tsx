@@ -96,6 +96,7 @@ import {
 } from '@/components/settings/DatabaseSettingsTab';
 import { Toggle } from '@/components/settings/Toggle';
 import { SettingsTabShell } from '@/components/settings/SettingsTabShell';
+import { MarketingMembersCard } from '@/components/settings/MarketingMembersCard';
 import type { HealthCheckReport } from '@/types/electron';
 import { useTranslations } from 'use-intl';
 import { Ltr } from '@/components/layout/Ltr';
@@ -3821,7 +3822,7 @@ export default function SettingsPage() {
         className="flex flex-col md:flex-row gap-6 items-start md:h-full md:min-h-0"
       >
         {/* Settings sidebar nav */}
-        <div className="w-full md:w-40 md:min-w-[10rem] shrink-0 md:h-full md:min-h-0 md:flex md:flex-col">
+        <div className="w-full md:w-52 md:min-w-[13rem] shrink-0 md:h-full md:min-h-0 md:flex md:flex-col">
           <div className="flex items-center gap-3 mb-6 shrink-0">
             <Settings size={28} className="text-brand" />
             <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
@@ -3923,6 +3924,12 @@ export default function SettingsPage() {
             <SettingsNavItem
               label={t('discounts')}
               value="discounts"
+              active={activeTab}
+              onClick={handleSettingsTabChange}
+            />
+            <SettingsNavItem
+              label={t('marketingMembersTitle')}
+              value="marketing"
               active={activeTab}
               onClick={handleSettingsTabChange}
             />
@@ -5264,6 +5271,12 @@ export default function SettingsPage() {
             </SettingsTabShell>
           </TabsContent>
 
+          <TabsContent value="marketing">
+            <SettingsTabShell>
+              <MarketingMembersCard />
+            </SettingsTabShell>
+          </TabsContent>
+
           <TabsContent value="discounts">
             <SettingsTabShell>
               {/* Discount Limits */}
@@ -5283,7 +5296,7 @@ export default function SettingsPage() {
                         markHydrationTouched('discountMode');
                         setDiscountMode(e.target.value);
                       }}
-                      className="w-48 px-3 py-1.5 text-sm border border-border rounded-lg outline-none focus:ring-1 focus:ring-brand bg-card"
+                      className="min-w-48 px-3 py-1.5 text-sm border border-border rounded-lg outline-none focus:ring-1 focus:ring-brand bg-card"
                     >
                       <option value="both">{t('discountBoth')}</option>
                       <option value="percentage">{t('discountPercentageOnly')}</option>

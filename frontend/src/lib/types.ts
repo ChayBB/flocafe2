@@ -191,6 +191,9 @@ export interface Customer {
   phone_digits?: string | null;
   country_code: string;
   name: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  birthday?: string | null;
   email: string | null;
   visits_count?: number;
   total_spent?: number;

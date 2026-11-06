@@ -2162,6 +2162,20 @@ function viFallbackErrors(
 
 /** Thai translation safeguards. */
 const TH_INTENTIONAL_IDENTICAL = new Set<string>([
+  'promotionDraft.draft',
+  'promotionDraft.kindAutomatic',
+  'promotionDraft.kindBundle',
+  'promotionDraft.kindCoupon',
+  'promotionDraft.kindMember',
+  'promotionDraft.previewTitle',
+  'marketingPromo.branch.example',
+  'marketingPromo.bundle.name',
+  'marketingPromo.firstVisit.example',
+  'marketingPromo.flash.name',
+  'marketingPromo.happyHour.condition',
+  'marketingPromo.happyHour.name',
+  'marketingPromo.memberTier.example',
+  'marketingPromo.winBack.example',
   'auth.emailPlaceholder',
   'common.appTitle',
   'common.brandName',

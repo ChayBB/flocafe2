@@ -55,6 +55,32 @@ function captureCustomerValidation(
   }
 }
 
+function optionalText(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
+
+export function joinCustomerName(firstName: string | null, lastName: string | null): string {
+  return [firstName, lastName].filter(Boolean).join(' ');
+}
+
+/** Birthday is a calendar date (YYYY-MM-DD) with no time or timezone; '' or null clears it. */
+export function parseCustomerBirthday(value: unknown): { valid: boolean; value: string | null } {
+  const raw = optionalText(value);
+  if (raw === null) return { valid: true, value: null };
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) return { valid: false, value: null };
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const isRealDate =
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  if (!isRealDate || year < 1900) return { valid: false, value: null };
+  return { valid: true, value: raw };
+}
+
+const INVALID_BIRTHDAY_MESSAGE = 'Birthday must be a valid date (YYYY-MM-DD).';
+
 function captureCustomerPaginationRejection(): void {
   const failure = serializeOperationFailure({
     capture_point: 'fc.backend.customer.list.pagination_invalid',
@@ -357,6 +383,7 @@ router.get(
         phone: 'c.phone_digits',
         visits: 'visits_count',
         spent: 'total_spent',
+        avg_spent: 'COALESCE(os.total_spent, 0) * 1.0 / NULLIF(os.visits_count, 0)',
         loyalty: 'wallet_balance',
         last_visit: 'last_visit_at',
       };
@@ -519,10 +546,25 @@ router.post(
   (req: Request, res: Response) => {
     try {
       const { phone, name, email, address, notes, country_code } = req.body;
+      const hasSplitName = req.body.first_name !== undefined || req.body.last_name !== undefined;
+      const firstName = hasSplitName ? optionalText(req.body.first_name) : null;
+      const lastName = hasSplitName ? optionalText(req.body.last_name) : null;
+      const fullName = hasSplitName
+        ? joinCustomerName(firstName, lastName)
+        : typeof name === 'string'
+          ? name.trim()
+          : '';
 
-      if (!name || !name.trim()) {
+      if (!fullName || (hasSplitName && !firstName)) {
         captureCustomerValidation('fc.backend.customer.create.validation', 'name_required');
         return res.status(400).json({ error: 'Name is required', message: 'Name is required' });
+      }
+
+      const birthday = parseCustomerBirthday(req.body.birthday);
+      if (!birthday.valid) {
+        return res
+          .status(400)
+          .json({ error: INVALID_BIRTHDAY_MESSAGE, message: INVALID_BIRTHDAY_MESSAGE });
       }
 
       const db = getDatabase();
@@ -567,6 +609,9 @@ router.post(
             UPDATE customers SET
               phone = ?,
               name = ?,
+              first_name = ?,
+              last_name = ?,
+              birthday = ?,
               email = ?,
               country_code = ?,
               address = ?,
@@ -576,7 +621,10 @@ router.post(
             WHERE id = ?
           `).run(
               finalPhone,
-              String(name).trim(),
+              fullName,
+              firstName,
+              lastName,
+              birthday.value,
               email ? String(email).trim() : null,
               finalCountryCode,
               address ? String(address).trim() : null,
@@ -608,12 +656,15 @@ router.post(
       const id = `cust-${randomUUID()}`;
       const timestamp = now();
       db.prepare(`
-      INSERT INTO customers (id, phone, name, email, country_code, address, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (id, phone, name, first_name, last_name, birthday, email, country_code, address, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         id,
         finalPhone,
-        String(name).trim(),
+        fullName,
+        firstName,
+        lastName,
+        birthday.value,
         email ? String(email).trim() : null,
         finalCountryCode,
         address ? String(address).trim() : null,
@@ -688,13 +739,34 @@ router.put(
       }
 
       let finalName = customer.name;
-      if (name !== undefined) {
+      let finalFirstName: string | null = customer.first_name ?? null;
+      let finalLastName: string | null = customer.last_name ?? null;
+      if (req.body.first_name !== undefined || req.body.last_name !== undefined) {
+        if (req.body.first_name !== undefined) finalFirstName = optionalText(req.body.first_name);
+        if (req.body.last_name !== undefined) finalLastName = optionalText(req.body.last_name);
+        if (!finalFirstName) {
+          captureCustomerValidation('fc.backend.customer.update.validation', 'name_required');
+          return res.status(400).json({ error: 'Name is required' });
+        }
+        finalName = joinCustomerName(finalFirstName, finalLastName);
+      } else if (name !== undefined) {
         const trimmedName = String(name).trim();
         if (!trimmedName) {
           captureCustomerValidation('fc.backend.customer.update.validation', 'name_required');
           return res.status(400).json({ error: 'Name is required' });
         }
+        if (trimmedName !== customer.name) {
+          finalFirstName = null;
+          finalLastName = null;
+        }
         finalName = trimmedName;
+      }
+
+      let finalBirthday: string | null = customer.birthday ?? null;
+      if (req.body.birthday !== undefined) {
+        const birthday = parseCustomerBirthday(req.body.birthday);
+        if (!birthday.valid) return res.status(400).json({ error: INVALID_BIRTHDAY_MESSAGE });
+        finalBirthday = birthday.value;
       }
 
       const finalEmail =
@@ -719,6 +791,9 @@ router.put(
       UPDATE customers SET
         phone = ?,
         name = ?,
+        first_name = ?,
+        last_name = ?,
+        birthday = ?,
         email = ?,
         country_code = ?,
         address = ?,
@@ -728,6 +803,9 @@ router.put(
     `).run(
         finalPhone,
         finalName,
+        finalFirstName,
+        finalLastName,
+        finalBirthday,
         finalEmail,
         finalCountryCode,
         finalAddress,

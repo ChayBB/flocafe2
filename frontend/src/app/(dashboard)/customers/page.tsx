@@ -16,13 +16,21 @@ import {
   TrendingUp,
   TrendingDown,
   AlertCircle,
+  LogOut,
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 import type { Customer } from '@/lib/types';
 import { countryName } from '@/lib/countries';
-import { dialCodeFor, normalizeOptionalPhone } from '@/lib/phone';
+import { formatPhoneLocal, normalizeOptionalPhone } from '@/lib/phone';
+import { splitCustomerName } from '@/lib/customer-name';
+import CustomerDetailsFields, {
+  EMPTY_CUSTOMER_DETAILS,
+  type CustomerDetailsValue,
+} from '@/components/customers/CustomerDetailsFields';
 import { useTranslations } from 'use-intl';
+import { getLandingPage } from '@/components/layout/AuthGuard';
+import { tenantCan } from '@/lib/permissions';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -54,7 +62,6 @@ export default function CustomersPage() {
   const { currentTenant } = useAuthStore();
   const tCustomer = useTranslations('customer');
   const tCustomers = useTranslations('customers');
-  const tOrders = useTranslations('orders');
   const tPos = useTranslations('pos');
   const tNav = useTranslations('nav');
   const tCommon = useTranslations('common');
@@ -62,7 +69,6 @@ export default function CustomersPage() {
   const { formatDate } = useFormatDate();
   const fmtNum = useFormatNumber();
   const defaultCountry = currentTenant?.country || '';
-  const dialCode = dialCodeFor(defaultCountry);
   const searchParams = useSearchParams();
   const router = useRouter();
   const filter = searchParams.get('filter');
@@ -76,14 +82,7 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-  const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    address: '',
-    notes: '',
-    country_code: dialCode,
-  });
+  const [form, setForm] = useState<CustomerDetailsValue>(EMPTY_CUSTOMER_DETAILS);
 
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
   const [ledgerData, setLedgerData] = useState<{
@@ -153,35 +152,30 @@ export default function CustomersPage() {
 
   const openAdd = () => {
     setEditingCustomer(null);
-
-    setForm({
-      name: '',
-      phone: '',
-      email: '',
-      address: '',
-      notes: '',
-      country_code: dialCode,
-    });
+    setForm(EMPTY_CUSTOMER_DETAILS);
     setShowForm(true);
   };
 
   const openEdit = (c: Customer) => {
     setEditingCustomer(c);
-
+    const { firstName, lastName } = splitCustomerName(c);
     setForm({
-      name: c.name,
-      phone: c.phone || '',
-      email: c.email || '',
-      address: c.address || '',
+      firstName,
+      lastName,
+      phone: formatPhoneLocal(c.phone, defaultCountry),
+      birthday: c.birthday || '',
       notes: c.notes || '',
-      country_code: c.country_code || dialCode,
     });
     setShowForm(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const norm = normalizeOptionalPhone(form.phone, defaultCountry);
+    if (!form.firstName.trim()) {
+      toast.error(tPos('nameRequired'));
+      return;
+    }
+    const norm = normalizeOptionalPhone(form.phone.trim(), defaultCountry);
     if (!norm.valid) {
       toast.error(tPos('invalidPhone', { country: countryName(defaultCountry) }));
       return;
@@ -190,13 +184,13 @@ export default function CustomersPage() {
       toast.error(tPos('invalidPhone', { country: countryName(defaultCountry) }));
       return;
     }
-    const { address, ...restForm } = form;
-    const includeAddress = !editingCustomer || address !== (editingCustomer.address || '');
     const payload = {
-      ...restForm,
-      ...(includeAddress ? { address } : {}),
+      first_name: form.firstName.trim(),
+      last_name: form.lastName.trim(),
       phone: norm.e164 ?? '',
       country_code: norm.countryCode ?? '',
+      birthday: form.birthday,
+      notes: form.notes.trim(),
     };
     try {
       if (editingCustomer) {
@@ -247,9 +241,26 @@ export default function CustomersPage() {
             </span>
           )}
         </div>
-        <Button onClick={openAdd}>
-          <Plus size={16} className="me-1" /> {tCustomer('add')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={openAdd}>
+            <Plus size={16} className="me-1" /> {tCustomer('add')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="customers-exit"
+            onClick={() =>
+              router.push(
+                tenantCan(currentTenant, 'settings.view')
+                  ? '/settings?tab=marketing'
+                  : getLandingPage(currentTenant),
+              )
+            }
+            className="border-neutral-900 bg-white text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            <LogOut size={16} className="me-1" /> {tCustomers('exit')}
+          </Button>
+        </div>
       </div>
 
       <div className="relative mb-4 shrink-0">
@@ -297,6 +308,13 @@ export default function CustomersPage() {
               >
                 {tCustomer('visits')}{' '}
                 <SortIcon field="visits" sortField={sortField} sortOrder={sortOrder} />
+              </th>
+              <th
+                className="text-end p-4 text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted group transition-colors"
+                onClick={() => onSort('avg_spent')}
+              >
+                {tCustomer('averageSpend')}{' '}
+                <SortIcon field="avg_spent" sortField={sortField} sortOrder={sortOrder} />
               </th>
               <th
                 className="text-end p-4 text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted group transition-colors"
@@ -349,6 +367,11 @@ export default function CustomersPage() {
                   {c.last_visit_at ? formatDate(c.last_visit_at) : '—'}
                 </td>
                 <td className="p-4 text-center text-sm">{c.visits_count}</td>
+                <td className="p-4 text-end text-sm" data-testid="customer-average-spend">
+                  {Number(c.visits_count) > 0
+                    ? fmt(Number(c.total_spent) / Number(c.visits_count))
+                    : '—'}
+                </td>
                 <td className="p-4 text-end font-medium">{fmt(Number(c.total_spent))}</td>
                 <td className="p-4 text-end">
                   {Number(c.wallet_balance) > 0 ? (
@@ -610,50 +633,15 @@ export default function CustomersPage() {
                 <X size={20} className="text-gray-400" />
               </button>
             </div>
-            <form onSubmit={handleSave} className="space-y-4">
-              <input
-                type="text"
-                placeholder={tCustomer('name')}
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                required
-              />
-              <div className="flex items-stretch gap-2">
-                <input
-                  type="tel"
-                  placeholder={dialCode ? `${dialCode} ${tCustomer('phone')}` : tCustomer('phone')}
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="flex-1 px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
-                  required={!editingCustomer}
-                />
-              </div>
-              <input
-                type="email"
-                placeholder={`${tCustomer('email')} (${tCommon('optional')})`}
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
-              />
-              <input
-                type="text"
-                name="address"
-                aria-label={tPos('customerAddress')}
-                placeholder={`${tPos('customerAddress')} (${tCommon('optional')})`}
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
-              />
-              <textarea
-                name="notes"
-                aria-label={tOrders('notesOptional')}
-                placeholder={tOrders('notesOptional')}
-                maxLength={500}
-                rows={2}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand resize-none"
+            <form
+              onSubmit={handleSave}
+              className="space-y-4"
+              aria-label={editingCustomer ? tCustomer('edit') : tCustomer('add')}
+            >
+              <CustomerDetailsFields
+                value={form}
+                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                phoneRequired={!editingCustomer}
               />
               <Button type="submit" className="w-full">
                 {editingCustomer ? tCustomer('update') : tCustomer('add')}

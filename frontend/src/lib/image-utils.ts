@@ -139,9 +139,7 @@ export const MAX_RAW_FILE_SIZE = 5 * 1024 * 1024;
 export function fitImage(file: File, maxSide: number, maxLength: number): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    const url = URL.createObjectURL(file);
     img.onload = () => {
-      URL.revokeObjectURL(url);
       const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -157,10 +155,14 @@ export function fitImage(file: File, maxSide: number, maxLength: number): Promis
       } catch {}
       resolve(null);
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
+    img.onerror = () => resolve(null);
+    // The app CSP allows data: images but not blob: URLs.
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') img.src = reader.result;
+      else resolve(null);
     };
-    img.src = url;
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
   });
 }

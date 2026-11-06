@@ -30,6 +30,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { getLandingPage } from '@/components/layout/AuthGuard';
 import api from '@/lib/api';
+import { STORE_BRANDING_CHANGED } from '@/components/settings/StoreBrandingCard';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useThemeModeToggle } from '@/hooks/useThemeModeToggle';
 import type { PermissionId } from '@shared/permissions';
@@ -159,6 +160,17 @@ export default function AppSidebar() {
   const tCommon = useTranslations('common');
   const { confirm, ConfirmDialog } = useConfirm();
   const [emailNeedsAttention, setEmailNeedsAttention] = useState(false);
+  const [storeLogo, setStoreLogo] = useState('');
+  useEffect(() => {
+    const load = () =>
+      api
+        .get<{ store_logo: string }>('/settings/branding')
+        .then(({ data }) => setStoreLogo(data.store_logo || ''))
+        .catch(() => setStoreLogo(''));
+    load();
+    window.addEventListener(STORE_BRANDING_CHANGED, load);
+    return () => window.removeEventListener(STORE_BRANDING_CHANGED, load);
+  }, [currentTenant?.id]);
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -262,16 +274,28 @@ export default function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href={homeHref}>
-                <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-semibold">
-                  {(currentTenant?.business_name || tCommon('brandName')).charAt(0).toUpperCase()}
+            <SidebarMenuButton
+              size="lg"
+              asChild
+              className="h-auto flex-col gap-2 py-3 group-data-[collapsible=icon]:h-8"
+            >
+              <Link href={homeHref} data-testid="sidebar-store-header">
+                <div className="flex aspect-square size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-sidebar-primary text-xl font-semibold text-sidebar-primary-foreground group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-md group-data-[collapsible=icon]:text-base">
+                  {storeLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={storeLogo}
+                      alt=""
+                      data-testid="sidebar-store-logo"
+                      className="size-full bg-white object-contain"
+                    />
+                  ) : (
+                    (currentTenant?.business_name || tCommon('brandName')).charAt(0).toUpperCase()
+                  )}
                 </div>
-                <div className="flex flex-col gap-0.5 min-w-0 leading-none">
-                  <span className="font-semibold truncate">
-                    {currentTenant?.business_name || tCommon('brandName')}
-                  </span>
-                </div>
+                <span className="line-clamp-2 w-full text-center font-semibold leading-snug group-data-[collapsible=icon]:hidden">
+                  {currentTenant?.business_name || tCommon('brandName')}
+                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

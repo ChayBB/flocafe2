@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import { X, ArrowUpDown } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,10 @@ import { normalizeOptionalPhone } from '@/lib/phone';
 import { countryName } from '@/lib/countries';
 import type { Customer } from '@/lib/types';
 import { disambiguateCustomerInput } from '@/lib/customer-disambiguation';
+import CustomerDetailsFields, {
+  EMPTY_CUSTOMER_DETAILS,
+  type CustomerDetailsValue,
+} from '@/components/customers/CustomerDetailsFields';
 
 interface Props {
   initialSearch?: string;
@@ -36,22 +40,24 @@ export default function CreateCustomerModal({
     initialField ?? (initialClassification.category === 'name' ? 'name' : 'phone');
   const isPhoneInitial = targetField === 'phone';
 
-  const [name, setName] = useState(isPhoneInitial ? '' : initialSearch.trim());
-  const [phone, setPhone] = useState(isPhoneInitial ? initialSearch.trim() : '');
+  const [form, setForm] = useState<CustomerDetailsValue>(() => ({
+    ...EMPTY_CUSTOMER_DETAILS,
+    firstName: isPhoneInitial ? '' : initialSearch.trim(),
+    phone: isPhoneInitial ? initialSearch.trim() : '',
+  }));
   const [saving, setSaving] = useState(false);
 
   const handleSwapFields = () => {
-    setName(phone);
-    setPhone(name);
+    setForm((prev) => ({ ...prev, firstName: prev.phone, phone: prev.firstName }));
   };
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    if (!form.firstName.trim()) {
       toast.error(t('nameRequired'));
       return;
     }
 
-    const norm = normalizeOptionalPhone(phone.trim(), country);
+    const norm = normalizeOptionalPhone(form.phone.trim(), country);
     if (!norm.valid) {
       toast.error(t('invalidPhone', { country: countryName(country) }));
       return;
@@ -60,9 +66,12 @@ export default function CreateCustomerModal({
     setSaving(true);
     try {
       const { data } = await api.post('/customers', {
-        name: name.trim(),
+        first_name: form.firstName.trim(),
+        last_name: form.lastName.trim(),
         phone: norm.e164 ?? '',
         country_code: norm.countryCode ?? '',
+        birthday: form.birthday,
+        notes: form.notes.trim(),
       });
       onCreated(data.customer);
       toast.success(t('customerCreated'));
@@ -84,7 +93,7 @@ export default function CreateCustomerModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl w-full max-w-sm p-5 shadow-xl">
+      <div className="bg-card rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5 shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-foreground">{t('addCustomer')}</h3>
           <button
@@ -96,45 +105,12 @@ export default function CreateCustomerModal({
             <X size={20} />
           </button>
         </div>
-        <div className="space-y-3">
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-medium text-muted-foreground">
-                {t('customerName')}
-              </label>
-              <button
-                type="button"
-                onClick={handleSwapFields}
-                className="text-xs text-brand hover:text-brand-hover flex items-center gap-1 font-medium transition-colors cursor-pointer"
-              >
-                <ArrowUpDown size={12} />
-                <span>{t('swapNameAndPhone')}</span>
-              </button>
-            </div>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
-              autoFocus={!isPhoneInitial}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">
-              {t('phone')}
-            </label>
-            <input
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t('localPhonePlaceholder')}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
-              dir="ltr"
-              autoFocus={isPhoneInitial}
-            />
-          </div>
-        </div>
+        <CustomerDetailsFields
+          value={form}
+          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          autoFocusField={isPhoneInitial ? 'phone' : 'firstName'}
+          onSwapNameAndPhone={handleSwapFields}
+        />
         <div className="flex gap-2 mt-5">
           <Button variant="outline" onClick={onClose} disabled={saving} className="flex-1">
             {tCommon('cancel')}
