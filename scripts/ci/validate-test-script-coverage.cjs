@@ -14,6 +14,15 @@ const TEST_EXCLUSIONS = {
   'test:e2e': 'Alias for the dedicated browser Playwright job.',
   'test:upgrade-regression': 'Alias of test:upgrade-path, which is in the default suite.',
   'test:currency-split': 'Subset alias already executed by test:currency in the default suite.',
+  'test:qr-server': 'L1.5 harness; grows Docker-backed suites, so it runs in its own CI job.',
+  'test:qr-server:api':
+    'Needs Postgres + a running API; runs in the dedicated QR-server harness job.',
+  'test:qr-server:e2e':
+    'Needs a built FloCafe + Postgres; runs in the dedicated QR-server harness job.',
+  'test:qr-server:contract':
+    'Single-suite entry point; test:qr-server runs the same suite in the harness job.',
+  'test:qr-server:sim':
+    'Single-suite entry point; test:qr-server runs the same suite in the harness job.',
 };
 
 // Suite files that a real script runs but that `pretest`/`test` does not reach.

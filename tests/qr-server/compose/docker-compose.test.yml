@@ -1,0 +1,140 @@
+# Harness stack for the QR-server delivery tests. Run from this directory:
+#   docker compose -f docker-compose.test.yml up -d postgres redis migrate api1 api2
+#   docker compose -f docker-compose.test.yml --profile e2e up -d
+# The pipeline profile points at the target files (dispatcher/delivery-worker) that Phase 2 adds.
+name: qr-harness
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test-only
+    volumes:
+      - ./db-setup.test.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d pos']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:-test-only}
+      - --appendonly
+      - 'yes'
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-test-only}', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: oven/bun:1.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ../../../pos-server:/app
+    environment:
+      ADMIN_DATABASE_URL: postgres://pos_migrate:mig_pw@postgres:5432/pos
+    command: ['bun', 'run', 'src/migrate.ts']
+
+  api1: &api
+    image: oven/bun:1.4
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ../../../pos-server:/app
+    environment: &api_env
+      DATABASE_URL: postgres://pos_app:app_pw@postgres:5432/pos
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test-only}@redis:6379/0
+      GUEST_QR_SECRET: ${GUEST_QR_SECRET:-0123456789abcdef0123456789abcdef}
+      BASE_DOMAIN: localhost
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: '3001'
+    command: ['bun', 'run', 'src/api.ts']
+
+  api2:
+    <<: *api
+    environment:
+      <<: *api_env
+      PORT: '3002'
+
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      - api1
+      - api2
+    ports:
+      - '8443:8443'
+    volumes:
+      - ./Caddyfile.test:/etc/caddy/Caddyfile:ro
+
+  flocafe:
+    profiles: ['e2e']
+    build:
+      context: ../../..
+      dockerfile: tests/qr-server/compose/Dockerfile.flocafe
+    environment:
+      FLO_DEV_USER_DATA: /data
+      FLO_MATRIX_OFFLINE: '1'
+      FLO_WHATSAPP_SOCKET_DISABLED: '1'
+      FLO_SERVER_APP_API_RATE_LIMIT_MAX: '100000'
+    ports:
+      - '3003:3003'
+
+  connector:
+    profiles: ['e2e']
+    image: oven/bun:1.4
+    depends_on:
+      - api1
+      - flocafe
+    working_dir: /app
+    volumes:
+      - ../../../pos-server:/app
+    environment:
+      POS_URL: http://api1:3001
+      POS_DEV_SLUG: demo
+      FLO_URL: http://flocafe:3003
+      FLO_EMAIL: server@shop
+      FLO_PASSWORD: ${FLO_PASSWORD:-test-only}
+    command: ['bun', 'run', 'connector/flocafe.ts']
+
+  dispatcher:
+    profiles: ['pipeline']
+    image: oven/bun:1.4
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ../../../pos-server:/app
+    environment: *api_env
+    command: ['bun', 'run', 'src/dispatcher.ts']
+
+  delivery-worker:
+    profiles: ['pipeline']
+    image: oven/bun:1.4
+    depends_on:
+      - dispatcher
+    working_dir: /app
+    volumes:
+      - ../../../pos-server:/app
+    environment: *api_env
+    command: ['bun', 'run', 'src/delivery-worker.ts']

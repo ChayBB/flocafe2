@@ -72,6 +72,11 @@ import { getHttpRequestSignal, trackHttpRequestWork } from '../shutdown';
 import { asyncHandler } from '../middleware/async-handler';
 import { normalizeOptionalPhone } from '../lib/phone';
 import {
+  SERVER_APP_API_RATE_LIMIT_DEFAULT,
+  SERVER_APP_API_RATE_LIMIT_KEY,
+  isValidServerAppApiRateLimit,
+} from '../lib/server-app-rate-limit';
+import {
   CORE_BILL_TEMPLATES,
   isAvailableBillTemplate,
   listInstalledPrintTemplates,
@@ -194,6 +199,7 @@ const OPTIONAL_SETTING_DEFAULTS: Record<string, string> = {
   // Orders screen layout (#639): master/detail split view is the default.
   orders_layout: 'split',
   kot_print_layout: 'combined',
+  [SERVER_APP_API_RATE_LIMIT_KEY]: String(SERVER_APP_API_RATE_LIMIT_DEFAULT),
 };
 
 /** Single authority for the orders_layout enum; both write transports gate on it. */
@@ -1790,6 +1796,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'kot_printing_enabled',
   'kot_print_layout',
   'server_app_bill_printing_enabled',
+  SERVER_APP_API_RATE_LIMIT_KEY,
   'split_checks_enabled',
   BILL_LANGUAGE_POLICY_KEY,
   KOT_LANGUAGE_POLICY_KEY,
@@ -2076,6 +2083,12 @@ router.put(
       }
       if (req.params.key === 'kot_print_layout' && value !== 'separate' && value !== 'combined') {
         return res.status(400).json({ error: 'kot_print_layout must be "separate" or "combined"' });
+      }
+      if (
+        req.params.key === SERVER_APP_API_RATE_LIMIT_KEY &&
+        !isValidServerAppApiRateLimit(value)
+      ) {
+        return res.status(400).json({ error: 'server_app_api_rate_limit_max must be 60..100000' });
       }
       let valueToPersist: unknown = value;
       if (req.params.key === 'require_open_shift') {

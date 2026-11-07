@@ -18,6 +18,7 @@ import {
   createDatabaseMaintenanceHandoff,
   databaseMaintenanceMiddleware,
   getDatabase,
+  getSettingValue,
   isServerAppEnabled,
   isGuestQrOrderingEnabled,
   revokeDatabaseMaintenanceHandoff,
@@ -63,6 +64,10 @@ import {
 import { clockNow } from './lib/clock';
 import { recordClockIn, recordClockOut } from './services/attendance';
 import { isTrustedGuestProxy, verifyGuestStickerCode, verifyGuestTableToken } from './lib/guest-qr';
+import {
+  SERVER_APP_API_RATE_LIMIT_KEY,
+  resolveServerAppApiRateLimit,
+} from './lib/server-app-rate-limit';
 import { callMainApiAsGuest, ensureGuestUser, placeGuestOrder } from './lib/guest-order-placement';
 import {
   addGuestDevice,
@@ -291,7 +296,17 @@ export function startServerApp(): Promise<void> {
       next();
     });
     app.use(databaseMaintenanceMiddleware);
-    app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 150 }));
+    // The /api bucket only counts public callers (the in-repo limiter exempts LAN and loopback); the
+    // per-route limiter below is the one the connector shares with staff clients.
+    const configuredGlobalApiLimit = Number.parseInt(
+      process.env.FLO_SERVER_APP_GLOBAL_RATE_LIMIT_MAX || '',
+      10,
+    );
+    const fallbackGlobalApiLimit =
+      Number.isFinite(configuredGlobalApiLimit) && configuredGlobalApiLimit > 0
+        ? configuredGlobalApiLimit
+        : 150;
+    app.use('/api', rateLimit({ windowMs: 60 * 1000, max: fallbackGlobalApiLimit }));
 
     app.get('/api/health', (_req: Request, res: Response) => {
       res.json({
@@ -306,10 +321,15 @@ export function startServerApp(): Promise<void> {
       process.env.FLO_SERVER_APP_API_RATE_LIMIT_MAX || '',
       10,
     );
+    const fallbackApiLimit =
+      Number.isFinite(configuredApiLimit) && configuredApiLimit > 0 ? configuredApiLimit : 600;
     const serverAppApiRateLimit = expressRateLimit({
       windowMs: 60 * 1000,
-      limit:
-        Number.isFinite(configuredApiLimit) && configuredApiLimit > 0 ? configuredApiLimit : 600,
+      limit: () =>
+        resolveServerAppApiRateLimit(
+          getSettingValue(SERVER_APP_API_RATE_LIMIT_KEY),
+          fallbackApiLimit,
+        ),
       standardHeaders: true,
       legacyHeaders: false,
     });
@@ -707,7 +727,9 @@ export function startServerApp(): Promise<void> {
             if (counted) releaseGuestOrderQuota(db, found.session.id, quantity);
             return res.status(outcome.status).json({ error: outcome.error });
           }
-          res.status(201).json({ success: true, order_number: outcome.orderNumber });
+          res
+            .status(201)
+            .json({ success: true, order_number: outcome.orderNumber, idempotency_key: key });
         } catch (error: any) {
           if (getHttpRequestSignal(req)?.aborted) return res.status(503).end();
           console.error('[Server App] Guest order failed:', error);

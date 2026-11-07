@@ -102,6 +102,17 @@ the same LAN-exempt helper, and `3003` applies 150 per minute. `express-rate-lim
 `rateLimit` helper in [`main/middleware/security.ts`](../../main/middleware/security.ts) does the
 same.
 
+The `3003` `/api` bucket is a public-caller guard: the in-repo limiter exempts LAN and loopback
+addresses, so it only counts guests reaching the Server App through a trusted proxy. Its ceiling is
+`FLO_SERVER_APP_GLOBAL_RATE_LIMIT_MAX` (default 150).
+
+The per-route limiter on `3003` (`serverAppApiRateLimit`, default 600 per minute) applies to every
+caller, including the in-store connector. It is the `server_app_api_rate_limit_max` setting (whole
+number, 60–100000), editable at runtime from Settings → Server App; `FLO_SERVER_APP_API_RATE_LIMIT_MAX`
+supplies the fallback when the setting is unset or corrupt. The connector polls one FloCafe order per
+open bill every 1.5 s (~40 requests per bill per minute), so a store with several open tables should
+raise it to at least `60 × tables + 60`.
+
 `loginAuthRateLimit` and `authRateLimit` deliberately do **not** exempt private addresses, so
 LAN clients are counted against authentication rate limits.
 

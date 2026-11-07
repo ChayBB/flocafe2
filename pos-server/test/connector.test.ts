@@ -102,6 +102,7 @@ const o2 = await order(s8.dev, [{ menuItemId: soup, qty: 1 }]);
   ok(r2.sent === 1 && flo.calls.join() === "create,append" && flo.orders[0].items.length === 3, "รอบสอง: เพิ่มรายการเข้าออเดอร์เดิม ไม่สร้างใหม่", { calls: flo.calls });
   const n = (await admin`select count(*)::int as n from pos_forward where tenant_id = ${tid} and status = 'sent'`)[0]!.n;
   ok(n === 2, "ทั้งสองงานเป็น sent");
+  ok(flo.logins === 1, "cache JWT: หลายรอบส่งงานไม่ login ใหม่", flo.logins);
   ok((await runOnce(cfg())).sent === 0, "ไม่มีงานค้าง");
   const ids = await admin`select order_id, pos_item_ids from pos_forward where bill_id = ${s8.billId} order by id`;
   ok(ids[0]?.pos_item_ids.length === 2 && ids[1]?.pos_item_ids.length === 1, "เก็บ id รายการ FloCafe ของแต่ละออเดอร์", ids);
