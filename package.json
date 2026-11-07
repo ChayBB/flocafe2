@@ -401,7 +401,7 @@
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.18.2",
     "cross-env": "10.1.0",
-    "electron": "^44.9.0",
+    "electron": "^45.2.2",
     "electron-builder": "^26.18.0",
     "husky": "9.1.7",
     "js-yaml": "^5.5.0",
