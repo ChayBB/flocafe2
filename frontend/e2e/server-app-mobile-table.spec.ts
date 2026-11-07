@@ -235,6 +235,13 @@ for (const screenSize of [SCREENS[0], SCREENS[2]]) {
       data: { cashier: true, preflight: true },
     });
     expect(flag.status()).toBe(409);
+    for (const item of created.items) {
+      const served = await page.request.patch(`${E2E_BASE_URL}/api/order-items/${item.id}/status`, {
+        headers,
+        data: { status: 'served' },
+      });
+      expect(served.ok()).toBeTruthy();
+    }
 
     await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone`);
     await page.evaluate(
@@ -255,6 +262,13 @@ for (const screenSize of [SCREENS[0], SCREENS[2]]) {
     await expect(alert).toBeVisible();
     await expect(alert.getByTestId('server-app-kitchen-summary')).toHaveCount(0);
     await alert.click();
-    await expect(page.getByTestId('server-app-ordered-items')).toContainText(created.order_number);
+    const orderedItems = page.getByTestId('server-app-ordered-items');
+    await expect(orderedItems).toContainText(created.order_number);
+    await orderedItems.getByTestId('server-app-confirm-served-many').click();
+    await page.getByTestId('server-app-confirm-served-submit').click();
+    await expect(
+      orderedItems.getByRole('status', { name: '' }).filter({ hasText: 'Thank you' }),
+    ).toBeVisible();
+    await expect(orderedItems).toBeHidden();
   });
 }

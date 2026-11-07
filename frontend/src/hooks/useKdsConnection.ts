@@ -165,6 +165,7 @@ export interface KdsOrder {
   updated_at?: string;
   items?: KdsOrderItem[];
   table?: { name: string } | null;
+  moved_from_table?: string | null;
   /** The table owner's name, else the staff member who placed the order. */
   server_name?: string | null;
 }

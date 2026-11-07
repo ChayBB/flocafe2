@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import type { PairingRecord, RelayRepository, RelayStoreRecord } from "./repository";
+import type { OrderOutbox, QueuedOrder, QueuedOrderRequest, QueuedOrderResult } from "./repository";
 
 const pairingFromRow = (row: Record<string, unknown>): PairingRecord => ({
   id: String(row.id),
@@ -12,7 +13,7 @@ const pairingFromRow = (row: Record<string, unknown>): PairingRecord => ({
   expiresAt: new Date(String(row.expires_at)).toISOString(),
 });
 
-export class PostgresRelayRepository implements RelayRepository {
+export class PostgresRelayRepository implements RelayRepository, OrderOutbox {
   private readonly sql: ReturnType<typeof postgres>;
 
   constructor(databaseUrl: string) {
@@ -107,5 +108,77 @@ export class PostgresRelayRepository implements RelayRepository {
 
   async close(): Promise<void> {
     await this.sql.end({ timeout: 5 });
+  }
+
+  async findOrder(storeId: string, key: string, hash: string) {
+    const [row] = await this.sql`
+      SELECT request_hash, result::text AS result FROM qr_order_outbox
+      WHERE store_id = ${storeId} AND order_key = ${key}
+    `;
+    return row ? {
+      conflict: row.request_hash !== hash,
+      result: row.result === null ? null : JSON.parse(String(row.result)) as QueuedOrderResult,
+    } : null;
+  }
+
+  async enqueueOrder(storeId: string, key: string, hash: string, payload: QueuedOrderRequest) {
+    return this.sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${storeId}))`;
+      await tx`
+        INSERT INTO qr_order_outbox (store_id, order_key, request_hash, payload)
+        SELECT ${storeId}, ${key}, ${hash}, ${JSON.stringify(payload)}::text::jsonb
+        WHERE (SELECT count(*) FROM qr_order_outbox
+               WHERE store_id = ${storeId} AND result IS NULL) < 100
+        ON CONFLICT (store_id, order_key) DO NOTHING
+      `;
+      const [row] = await tx`
+        SELECT request_hash, result::text AS result FROM qr_order_outbox
+        WHERE store_id = ${storeId} AND order_key = ${key}
+      `;
+      return row
+        ? { conflict: row.request_hash !== hash, result: row.result === null ? null : JSON.parse(String(row.result)) as QueuedOrderResult }
+        : null;
+    });
+  }
+
+  async claimOrder(): Promise<QueuedOrder | null> {
+    const [row] = await this.sql`
+      WITH next_order AS (
+        SELECT store_id, order_key FROM qr_order_outbox
+        WHERE result IS NULL AND available_at <= now()
+        ORDER BY available_at
+        LIMIT 1 FOR UPDATE SKIP LOCKED
+      )
+      UPDATE qr_order_outbox AS job
+      SET attempts = attempts + 1, available_at = now() + interval '45 seconds'
+      FROM next_order
+      WHERE job.store_id = next_order.store_id AND job.order_key = next_order.order_key
+      RETURNING job.store_id, job.order_key, job.attempts, job.payload::text AS payload
+    `;
+    return row ? {
+      storeId: String(row.store_id),
+      key: String(row.order_key),
+      attempts: Number(row.attempts),
+      payload: JSON.parse(String(row.payload)) as QueuedOrderRequest,
+    } : null;
+  }
+
+  async settleOrder(order: QueuedOrder, result: QueuedOrderResult | null, delayMs: number) {
+    await this.sql`
+      UPDATE qr_order_outbox
+      SET result = ${result ? JSON.stringify(result) : null}::text::jsonb,
+          payload = CASE WHEN ${result !== null} THEN NULL ELSE payload END,
+          available_at = now() + ${delayMs}::integer * interval '1 millisecond'
+      WHERE store_id = ${order.storeId} AND order_key = ${order.key}
+        AND attempts = ${order.attempts} AND result IS NULL
+    `;
+  }
+
+  async listOrdersForReview() {
+    return this.sql<{ store_id: string; order_key: string; attempts: number }[]>`
+      SELECT store_id, order_key, attempts FROM qr_order_outbox
+      WHERE result->'body'->>'code' = 'order_needs_review'
+      ORDER BY available_at DESC LIMIT 100
+    `;
   }
 }

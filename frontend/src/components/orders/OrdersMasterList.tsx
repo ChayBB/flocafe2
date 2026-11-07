@@ -4,6 +4,7 @@ import { OrderStatusBadge } from '@/components/orders/BillRequestBadge';
 import { Utensils, ShoppingBag, Truck, Globe, Clock, UserRound } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import type { Order } from '@/lib/types';
+import { OrderTableChangeBadges } from './OrderTableChangeBadges';
 import { Ltr } from '@/components/layout/Ltr';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { parseDbTimestamp, cn } from '@/lib/utils';
@@ -106,6 +107,7 @@ export function OrdersMasterList({
                     {order.table.name}
                   </span>
                 )}
+                <OrderTableChangeBadges order={order} />
                 <span className="inline-flex items-center gap-1 ms-auto shrink-0">
                   <Clock size={12} />
                   {getTimeSince(order.created_at)}

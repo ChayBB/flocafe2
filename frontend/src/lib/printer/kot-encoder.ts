@@ -116,6 +116,31 @@ export function buildKotBytes(
     .bold(false)
     .newline();
 
+  if (order.table?.name) {
+    const tableName = String(order.table.name);
+    enc.bold(true).height(2);
+    safePrinterText(
+      enc,
+      thermalSafeHeaderText(
+        label('pos.tableLabel')
+          .replace(/[:：](?=\s*\{name\})/, '')
+          .replace('{name}', () => tableName),
+        `Table ${thermalSafeMetadataValue(tableName, language, arabicShaping, opts.capabilities)}`,
+        language,
+        arabicShaping,
+        opts.capabilities,
+      ),
+      warnings,
+      false,
+      arabicShaping,
+      undefined,
+      cols,
+      language,
+    )
+      .height(1)
+      .newline();
+  }
+
   // Order details
   enc.align('left').bold(true);
   if (opts.stationName) {
@@ -154,26 +179,6 @@ export function buildKotBytes(
     cols,
     language,
   ).newline();
-
-  if (order.table) {
-    const tableName = String(order.table.name);
-    safePrinterText(
-      enc,
-      thermalSafeHeaderText(
-        label('pos.tableLabel').replace('{name}', tableName),
-        `Table: ${thermalSafeMetadataValue(tableName, language, arabicShaping, opts.capabilities)}`,
-        language,
-        arabicShaping,
-        opts.capabilities,
-      ),
-      warnings,
-      false,
-      arabicShaping,
-      undefined,
-      cols,
-      language,
-    ).newline();
-  }
 
   const orderType = resolveOrderType(order.type, language);
   const localizedOrderType = `${label('print.kot.type')}: ${orderType}`;

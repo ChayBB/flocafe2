@@ -209,6 +209,9 @@ function pickLinkedTable<T extends { id: string }>(tables: T[]): T | undefined {
 }
 
 const guestDeviceStorageKey = (tableId: string) => `flocafe:guest-device:${tableId}`;
+const guestOrderStorageKey = (tableId: string) => `flocafe:guest-order:${tableId}`;
+const guestOrderJson = { headers: { 'Content-Type': 'application/json' } };
+const guestOrderStatusPath = '/api/guest/order/status';
 
 function readGuestDevice(key: string): string | null {
   try {
@@ -306,6 +309,9 @@ export default function ServerStandalonePage() {
   const [tableQrOpen, setTableQrOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const guestAttemptRef = useRef<{ signature: string; key: string } | null>(null);
+  const [guestDeliveryStatus, setGuestDeliveryStatus] = useState<
+    { kind: 'queued' | 'review' | 'failed' } | { kind: 'received'; orderNumber: string } | null
+  >(null);
   const [regional, setRegional] = useState<ServerAppInfo | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -534,6 +540,59 @@ export default function ServerStandalonePage() {
       window.clearInterval(timer);
     };
   }, [api, guestTable, guestDeviceToken]);
+
+  useEffect(() => {
+    if (!api || user || !guestTable || !guestDeviceToken) return;
+    const storageKey = guestOrderStorageKey(guestTable.id);
+    const submission = readGuestDevice(storageKey);
+    if (!submission) return;
+    try {
+      if (JSON.parse(submission).device_token !== guestDeviceToken) return;
+    } catch {
+      return;
+    }
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let misses = 0;
+    const check = async () => {
+      if (controller.signal.aborted || readGuestDevice(storageKey) !== submission) return;
+      try {
+        const res = await api.post(guestOrderStatusPath, submission, {
+          ...guestOrderJson,
+          signal: controller.signal,
+          validateStatus: (status) => status < 500,
+        });
+        if (controller.signal.aborted || readGuestDevice(storageKey) !== submission) return;
+        if (res.status === 201 && typeof res.data?.order_number === 'string') {
+          setGuestDeliveryStatus({ kind: 'received', orderNumber: res.data.order_number });
+          return;
+        }
+        if (res.data?.code === 'order_needs_review') {
+          setGuestDeliveryStatus({ kind: 'review' });
+          return;
+        }
+        if (res.data?.code === 'order_queued') {
+          misses = 0;
+          setGuestDeliveryStatus({ kind: 'queued' });
+        } else if (res.data?.code === 'order_not_found' && ++misses < 4) {
+          // The original submission may still be committing when the page reloads.
+        } else {
+          if (res.status !== 404 || res.data?.code === 'order_not_found') {
+            setGuestDeliveryStatus({ kind: 'failed' });
+          }
+          return;
+        }
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      timer = setTimeout(() => void check(), 2500);
+    };
+    void check();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [api, user, guestTable?.id, guestDeviceToken]);
 
   useEffect(() => {
     if (!api) return;
@@ -1233,21 +1292,43 @@ export default function ServerStandalonePage() {
     }));
     const items = lines.map((line) => cartItemToOrderItem(line));
     const notes = orderNotes.trim();
-    const signature = JSON.stringify([guestTable.id, items, notes]);
+    const signature = JSON.stringify([guestTable.id, guestDeviceToken, items, notes]);
     if (guestAttemptRef.current?.signature !== signature) {
       guestAttemptRef.current = { signature, key: createPaymentIdempotencyKey() };
     }
     const { key } = guestAttemptRef.current;
     sendInFlightRef.current = true;
     setSending(true);
+    setGuestDeliveryStatus(null);
     try {
-      const res = await api.post('/api/guest/order', {
+      const submission = JSON.stringify({
         table_id: guestTable.id,
         device_token: guestDeviceToken,
         items,
         special_instructions: notes || undefined,
         idempotency_key: key,
       });
+      writeGuestDevice(guestOrderStorageKey(guestTable.id), submission);
+      let res = await api.post('/api/guest/order', submission, guestOrderJson);
+      if (res.status === 202 && res.data?.code === 'order_queued') {
+        setGuestDeliveryStatus({ kind: 'queued' });
+        toast(t('guestOrderQueued'));
+        for (let poll = 0; poll < 175; poll++) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 2500));
+          try {
+            res = await api.post(guestOrderStatusPath, submission, guestOrderJson);
+          } catch (error) {
+            const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+            if (!status || status >= 500) continue;
+            throw error;
+          }
+          if (res.status !== 202 || res.data?.code !== 'order_queued') break;
+        }
+        if (res.status === 202 && res.data?.code === 'order_queued') return;
+      }
+      if (res.status === 201 && typeof res.data?.order_number === 'string') {
+        setGuestDeliveryStatus({ kind: 'received', orderNumber: res.data.order_number });
+      }
       if (guestAttemptRef.current?.signature === signature) guestAttemptRef.current = null;
       const submittedQtyById = new Map(lines.map((line) => [line.id, line.quantity]));
       setDraft((currentLines) =>
@@ -1266,7 +1347,10 @@ export default function ServerStandalonePage() {
         ?.response?.data;
       const code = data?.code;
       if (code === 'bill_awaiting_payment') toast.error(t('tableAwaitingPaymentLocked'));
-      else if (code === 'order_cooldown') {
+      else if (code === 'order_needs_review') {
+        setGuestDeliveryStatus({ kind: 'review' });
+        toast.error(t('guestOrderNeedsReview'));
+      } else if (code === 'order_cooldown') {
         toast.error(t('guestOrderCooldown', { seconds: data?.retry_after ?? 5 }));
       } else if (code === 'order_rejected') {
         guestAttemptRef.current = null;
@@ -2098,6 +2182,19 @@ export default function ServerStandalonePage() {
                 <Clock size={17} className="shrink-0 text-amber-600" />
                 {t('tableAwaitingPaymentLocked')}
               </div>
+            )}
+            {!user && guestDeliveryStatus && (
+              <p role="status" className="mb-3 rounded-lg bg-muted px-3 py-2 text-sm">
+                {guestDeliveryStatus.kind === 'received'
+                  ? t('guestOrderReceived', { orderNumber: guestDeliveryStatus.orderNumber })
+                  : t(
+                      guestDeliveryStatus.kind === 'queued'
+                        ? 'guestOrderQueued'
+                        : guestDeliveryStatus.kind === 'review'
+                          ? 'guestOrderNeedsReview'
+                          : 'couldNotSendOrder',
+                    )}
+              </p>
             )}
             <ProductGrid
               categories={categories}

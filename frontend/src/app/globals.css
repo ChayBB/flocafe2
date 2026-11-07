@@ -667,9 +667,10 @@ html.dark::-webkit-scrollbar-thumb:hover,
   animation-name: bill-awaiting-blink-dark;
 }
 
-/* A paid order flashes green twice, fades, then folds away so the rows below slide up. */
+/* Hold each color for one second before fading and folding the paid row. */
 @keyframes order-paid-flash {
-  50% { background-color: var(--color-green-200); }
+  from { background-color: var(--paid-row-green, var(--color-green-100)); }
+  50%, to { background-color: var(--paid-row-rest, var(--color-white)); }
 }
 @keyframes order-paid-fade {
   to { opacity: 0; }
@@ -681,11 +682,15 @@ html.dark::-webkit-scrollbar-thumb:hover,
 .animate-order-paid-leave {
   overflow: hidden;
   animation:
-    order-paid-fade 0.6s ease-in 1s forwards,
-    order-paid-collapse 0.4s ease-in 1.6s forwards;
+    order-paid-fade 0.6s ease-in 2s forwards,
+    order-paid-collapse 0.4s ease-in 2.6s forwards;
 }
 .animate-order-paid-leave > button {
-  animation: order-paid-flash 0.5s ease-in-out 2;
+  animation: order-paid-flash 2s step-end forwards;
+}
+.dark .animate-order-paid-leave {
+  --paid-row-green: color-mix(in oklab, var(--color-green-950) 50%, transparent);
+  --paid-row-rest: var(--card);
 }
 
 @media (prefers-reduced-motion: reduce) {

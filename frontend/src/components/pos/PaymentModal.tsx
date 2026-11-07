@@ -121,6 +121,15 @@ const IDEMPOTENCY_CONFLICT_ERROR =
 // Loyalty points are 1:1 with currency units. Must match LOYALTY_REDEMPTION_RATE in main/routes/bills.ts.
 const LOYALTY_REDEMPTION_RATE = 1;
 
+async function fetchWalletBalance(customerId: string | number): Promise<number> {
+  try {
+    const { data } = await api.get(`/customers/${customerId}/wallet`);
+    return Number(data.balance) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 type PosKey = keyof AppConfig['Messages']['pos'];
 
 // Built-in payment method label keys mapped to typed `pos` leaf keys.
@@ -571,14 +580,11 @@ export default function PaymentModal({
   }, [loadSplitCheckSetting]);
 
   useEffect(() => {
-    const custId = bill.customer_id || cartCustomerId;
-    if (custId) {
-      api
-        .get(`/customers/${custId}/wallet`)
-        .then((res) => {
-          setWalletBalance(Number(res.data.balance) || 0);
-        })
-        .catch(() => setWalletBalance(0));
+    let active = true;
+    if (effectiveCustomerId) {
+      void fetchWalletBalance(effectiveCustomerId).then((balance) => {
+        if (active) setWalletBalance(balance);
+      });
     }
     api
       .get('/settings/loyalty')
@@ -614,7 +620,10 @@ export default function PaymentModal({
         ]);
       })
       .catch(() => setCustomMethods([]));
-  }, [bill.customer_id, cartCustomerId]);
+    return () => {
+      active = false;
+    };
+  }, [effectiveCustomerId]);
 
   const walletAmt = toStoredUnit(parseFloat(walletAmount) || 0);
   const totalPaymentMinor =
@@ -825,6 +834,10 @@ export default function PaymentModal({
       : 0;
 
   const currencyFmt = useFormatCurrency();
+  const memberDiscountLimit =
+    loyaltySettings?.loyalty_enabled && effectiveCustomerId
+      ? Math.floor((walletBalance ?? 0) / LOYALTY_REDEMPTION_RATE)
+      : null;
   const fmtNum = useFormatNumber();
 
   const handleApplyDiscount = async (customVal?: number) => {
@@ -850,6 +863,16 @@ export default function PaymentModal({
       toast.error(t('discountInvalid'));
       return;
     }
+    const storedDiscountValue =
+      discountType === 'amount' && customVal === undefined ? toStoredUnit(val) : val;
+    const requestedDiscount =
+      discountType === 'percentage'
+        ? toMinorUnits((Number(bill.subtotal) * val) / 100) / minorFactor
+        : storedDiscountValue;
+    if (val > 0 && memberDiscountLimit !== null && requestedDiscount > memberDiscountLimit) {
+      toast.error(t('loyaltyDiscountLimit'));
+      return;
+    }
     const effectiveDiscountApproverId = discountApproverId ?? managerApprovers.selectedApproverId;
     // Check if PIN is required
     if (discountRequiresApproval && val > 0) {
@@ -871,8 +894,6 @@ export default function PaymentModal({
     setApplyingDiscount(true);
     const operationId = createOperationReference();
     try {
-      const storedDiscountValue =
-        discountType === 'amount' && customVal === undefined ? toStoredUnit(val) : val;
       await api.patch(
         `/orders/${bill.order_id}/discount`,
         {
@@ -914,6 +935,7 @@ export default function PaymentModal({
         disabled: t('discountDisabled'),
         type_disabled: t('discountTypeDisabled'),
         limit_exceeded: t('discountLimitExceeded'),
+        loyalty_discount_limit: t('loyaltyDiscountLimit'),
         order_not_discountable: t('orderNotDiscountable'),
         bill_not_discountable: t('billNotDiscountable'),
         split_check: t('splitCheckDiscountUnavailable'),
@@ -1143,6 +1165,17 @@ export default function PaymentModal({
       setKitchenOverrideRequired(false);
       if (updatedBill.payment_status !== 'paid') {
         if (onBillUpdate) onBillUpdate({ ...bill, ...updatedBill, order: bill.order });
+        if (
+          updatedBill.payment_status === 'partial' &&
+          attempt.customerId &&
+          attempt.lines.some((line) => line.method === 'wallet')
+        ) {
+          setWalletAmount('');
+          setPayments((rows) => rows.map((row) => ({ ...row, amount: '' })));
+          setAmountTarget(null);
+          setWalletBalance(null);
+          setWalletBalance(await fetchWalletBalance(attempt.customerId));
+        }
         // Only a committed equal share retires its payer, and only once.
         if (
           updatedBill.payment_status === 'partial' &&
@@ -1194,6 +1227,11 @@ export default function PaymentModal({
         correlationId: attempt.operationId || '',
       });
       const knownNotApplied = failure.trusted && failure.outcome === 'not_applied';
+      if (knownNotApplied && failure.displayCode === 'wallet_insufficient' && attempt.customerId) {
+        setWalletAmount('');
+        setWalletBalance(null);
+        setWalletBalance(await fetchWalletBalance(attempt.customerId));
+      }
       if (!response) {
         const code = (error as { code?: unknown } | null)?.code;
         const failureClass =
@@ -1784,7 +1822,11 @@ export default function PaymentModal({
                         placeholder={discountType === 'percentage' ? '0' : '0.00'}
                         min="0"
                         max={
-                          discountType === 'percentage' ? 100 : toDisplayUnit(Number(bill.subtotal))
+                          discountType === 'percentage'
+                            ? 100
+                            : toDisplayUnit(
+                                Math.min(Number(bill.subtotal), memberDiscountLimit ?? Infinity),
+                              )
                         }
                         step={getDiscountInputStep(unitAdapter.maxDecimals, discountType)}
                         inputMode={discountType === 'percentage' ? 'numeric' : 'decimal'}
@@ -2311,11 +2353,18 @@ export default function PaymentModal({
             </>
           ) : (
             <>
-              {onPrintBill ? (
+              {onPrintBill && !awaitingConfirmation ? (
                 <Button
                   data-testid="payment-print-bill"
                   onClick={handlePrintInstead}
-                  disabled={printingBill || processing}
+                  disabled={
+                    printingBill ||
+                    processing ||
+                    attemptLocked ||
+                    applyingDiscount ||
+                    Boolean(updatingChargeId) ||
+                    chargeStateUncertain
+                  }
                   className="w-full border border-green-300 bg-green-100 text-green-800 hover:bg-green-200"
                   size="lg"
                 >
@@ -2331,6 +2380,7 @@ export default function PaymentModal({
                   onClick={handlePay}
                   disabled={
                     processing ||
+                    printingBill ||
                     openingSplitCheck ||
                     applyingDiscount ||
                     Boolean(updatingChargeId) ||

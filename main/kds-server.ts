@@ -30,6 +30,7 @@ import {
   now,
   projectKdsItem,
   projectKdsOrder,
+  KDS_MOVED_FROM_TABLE_SQL,
   listKdsStationCategories,
   annotateKdsItems,
 } from './db';
@@ -412,7 +413,8 @@ export function startKdsServer(): Promise<void> {
           .replace(/\..*$/, '');
 
         let query = `
-          SELECT DISTINCT o.*, t.number as table_number, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name
+          SELECT DISTINCT o.*, t.number as table_number, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name,
+            ${KDS_MOVED_FROM_TABLE_SQL}
           FROM orders o
           LEFT JOIN tables t ON o.table_id = t.id
           LEFT JOIN users owner_u ON owner_u.id = o.table_owner_user_id

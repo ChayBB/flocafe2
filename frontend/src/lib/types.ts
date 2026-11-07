@@ -208,6 +208,8 @@ export interface Customer {
 }
 
 export interface Order {
+  moved_from_table?: string | null;
+  merged_from_table?: string | null;
   id: number;
   order_number: string;
   /** The table asked for its bill (Server App print): when, by whom, and when the money came in. */

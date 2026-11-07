@@ -17,6 +17,7 @@ import {
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
+  KDS_MOVED_FROM_TABLE_SQL,
   registerDatabaseMaintenanceStartListener,
   withTxn,
 } from '../db';
@@ -622,7 +623,8 @@ function buildActiveOrdersSnapshot(
     throw new Error('Could not load station permissions');
 
   let query = `
-    SELECT o.*, t.number as table_name, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name
+    SELECT o.*, t.number as table_name, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name,
+      ${KDS_MOVED_FROM_TABLE_SQL}
     FROM orders o
     LEFT JOIN tables t ON o.table_id = t.id
     LEFT JOIN users owner_u ON owner_u.id = o.table_owner_user_id

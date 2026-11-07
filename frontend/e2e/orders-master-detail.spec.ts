@@ -65,7 +65,12 @@ test('a ten-digit member phone opens checkout and keeps the paid items in their 
   );
   await detail.getByPlaceholder('Search by phone or name…').fill(phone);
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
-  await expect(page.getByTestId('payment-print-bill')).toBeVisible();
+  await expect(page.getByTestId('payment-print-bill')).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('button', { name: /^Confirm payment/i })
+      .and(page.locator('button:not([data-testid="order-checkout"])')),
+  ).toBeVisible();
   const { bill } = await (await billResponse).json();
   expect(String(bill.customer_id)).toBe(String(customer.id));
   const paid = await page.request.post(`${BASE}/api/bills/${bill.id}/payments`, {
@@ -306,7 +311,7 @@ test.describe('orders master/detail is the default layout', () => {
     await expect(page.getByText('This order is no longer in the current list.')).toBeHidden();
   });
 
-  test('says a selected order is complete when paying it removes it from the current view', async ({
+  test('reprints a completed order after payment removes it from the current view', async ({
     page,
   }) => {
     const order = await createTakeaway(page, 'Live completed selection check');
@@ -325,6 +330,11 @@ test.describe('orders master/detail is the default layout', () => {
     });
     expect(bill.ok()).toBeTruthy();
     const billBody = (await bill.json()).bill as { id: number; total: number };
+    const printed = await page.request.post(`${BASE}/api/bills/${billBody.id}/print`, {
+      headers,
+      data: { print_type: 'receipt' },
+    });
+    expect(printed.ok()).toBeTruthy();
     const paid = await page.request.post(`${BASE}/api/bills/${billBody.id}/payments`, {
       headers,
       data: { payments: [{ method: 'cash', amount: billBody.total }] },
@@ -333,6 +343,31 @@ test.describe('orders master/detail is the default layout', () => {
 
     await expect(page.getByText('This order is complete.')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('This order is no longer in the current list.')).toHaveCount(0);
+    await expect(masterRow).toHaveCount(0);
+    await page.evaluate(() => {
+      const printDocument = document.implementation.createHTMLDocument('Bill');
+      window.open = (() => ({
+        document: printDocument,
+        print() {},
+        close() {},
+      })) as unknown as typeof window.open;
+    });
+    await page
+      .getByTestId('orders-detail-panel')
+      .getByRole('button', { name: /^(Print|Reprint)$/ })
+      .first()
+      .click();
+    await expect(page.getByRole('heading', { name: 'Reprint Receipt' })).toBeVisible();
+    const reprint = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/bills/${billBody.id}/print`,
+    );
+    await page.getByRole('button', { name: 'Confirm Reprint' }).click();
+    const response = await reprint;
+    expect(response.ok()).toBeTruthy();
+    expect(response.request().postDataJSON()).toEqual({ print_type: 'reprint' });
+    await expect(page.getByRole('heading', { name: 'Reprint Receipt' })).toBeHidden();
   });
 
   test('finds a paid order by its amount from the search box', async ({ page }) => {

@@ -15,6 +15,7 @@ import {
   now,
   parseItemJson,
   parseRowJson,
+  KDS_MOVED_FROM_TABLE_SQL,
   withTxn,
   verifyPin,
   verifyPinAsync,
@@ -77,6 +78,7 @@ import {
   resolveExpectedPaymentMethod,
   resolveExpectedPaymentMethodIdentity,
 } from './orders-validation';
+import { getWalletBalance } from './customers';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { ROLE_ACCESS, hasRole } from '../../shared/role-permissions';
 import { isTerminalItemStatus } from '../../shared/order-item-status';
@@ -1165,6 +1167,25 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
   );
 
   const orderIdsCsv = `(${ids.map(() => '?').join(',')})`;
+  const tableChanges = db
+    .prepare(`
+    SELECT o.id, ${KDS_MOVED_FROM_TABLE_SQL}, (
+      SELECT COALESCE(json_extract(a.details_json, '$.from_table'), source_table.number)
+      FROM order_audit_log a
+      LEFT JOIN orders source ON source.order_number = json_extract(a.details_json, '$.from_order')
+      LEFT JOIN tables source_table ON source_table.id = source.table_id
+      WHERE a.order_id = o.id AND a.action = 'order_merged'
+        AND json_extract(a.details_json, '$.to_order') = o.order_number
+      ORDER BY a.id DESC LIMIT 1
+    ) AS merged_from_table
+    FROM orders o WHERE o.id IN ${orderIdsCsv} AND o.table_id IS NOT NULL
+  `)
+    .all(...ids) as {
+    id: number;
+    moved_from_table: string | null;
+    merged_from_table: string | null;
+  }[];
+  const tableChangesById = new Map(tableChanges.map((change) => [change.id, change]));
   const itemsRows = db
     .prepare(`SELECT * FROM order_items WHERE order_id IN ${orderIdsCsv} ORDER BY order_id, id`)
     .all(...ids)
@@ -1325,6 +1346,8 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
       ...order,
       items: itemList,
       table,
+      moved_from_table: tableChangesById.get(order.id)?.moved_from_table ?? null,
+      merged_from_table: tableChangesById.get(order.id)?.merged_from_table ?? null,
       table_owner_name: tableOwnerName,
       user_name: order.user_id ? (ownerNameById.get(order.user_id) ?? null) : null,
       customer,
@@ -3602,6 +3625,17 @@ const handleOrderDiscount = asyncHandler(async (req: Request, res: Response) => 
           discountAmount = Math.min(discount_value, totals.subtotal);
         }
         discountAmount = Number(discountAmount.toFixed(decimals));
+        if (
+          currentOrder.customer_id &&
+          ['true', '1'].includes(getSettingValue('loyalty_enabled') || '') &&
+          (discount_type === 'amount' ? discount_value : discountAmount) >
+            Math.floor(getWalletBalance(currentOrder.customer_id))
+        ) {
+          throw Object.assign(new Error('Discount exceeds available loyalty points'), {
+            statusCode: 400,
+            diagnosticCode: 'loyalty_discount_limit',
+          });
+        }
       }
 
       const engineCharges = resolveEngineCharges(currentOrder, totals.subtotal, discountAmount);
@@ -6246,6 +6280,10 @@ router.post(
         );
         const details = {
           from_order: source.order_number,
+          from_table: db
+            .prepare('SELECT number FROM tables WHERE id = ?')
+            .pluck()
+            .get(source.table_id),
           to_order: target.order_number,
           to_table: targetTable.number,
           items: movedItems,

@@ -55,6 +55,34 @@ async function joinDevice(
 }
 
 test.describe('Server App guest from a table QR', () => {
+  test('reopening after a lost submit response looks up the same request without sending again', async ({
+    page,
+  }) => {
+    const table = await createTable(page);
+    await setEnglish(page);
+    let original = '';
+    let submissions = 0;
+    await page.route('**/api/guest/order', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      submissions++;
+      original = route.request().postData() ?? '';
+      await route.abort('connectionreset');
+    });
+    await page.route('**/api/guest/order/status', async (route) => {
+      expect(route.request().postData()).toBe(original);
+      await route.fulfill({ status: 201, json: { order_number: 'ORD-RECOVERED' } });
+    });
+    await page.goto(`${E2E_SERVER_APP_BASE_URL}/server-standalone?${table.query}`);
+    const search = page.getByTestId('pos-product-grid').getByPlaceholder('Search menu');
+    await search.fill('E2E Coffee');
+    await search.press('Enter');
+    await page.getByRole('button', { name: 'Send to kitchen' }).first().click();
+    await expect.poll(() => submissions).toBe(1);
+    await page.reload();
+    await expect(page.getByRole('status').filter({ hasText: 'ORD-RECOVERED' })).toBeVisible();
+    expect(submissions).toBe(1);
+  });
+
   test('shows a Guest label and orange login button, no table picker, and orders for that table only', async ({
     page,
   }) => {
@@ -324,6 +352,82 @@ test.describe('Server App guest from a table QR', () => {
   });
 });
 
+test('a QR or device token cannot order for another table or after the table is freed', async ({
+  page,
+  request,
+}) => {
+  const source = await createTable(page);
+  const other = await createTable(page);
+  const mismatchedQr = await request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/table`, {
+    params: { table_id: other.id, t: source.token },
+  });
+  expect(mismatchedQr.status()).toBe(410);
+  const submit = (tableId: string) =>
+    request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+      data: {
+        table_id: tableId,
+        device_token: source.device,
+        idempotency_key: 'qa-invalid-table-token',
+        items: [{ product_id: 'e2e-product', quantity: 1 }],
+      },
+    });
+  expect((await submit(other.id)).status()).toBe(410);
+  for (const status of ['occupied', 'available']) {
+    const updated = await request.patch(`${E2E_BASE_URL}/api/tables/${source.id}/status`, {
+      headers: manager(),
+      data: { status },
+    });
+    expect(updated.ok()).toBeTruthy();
+  }
+  expect((await submit(source.id)).status()).toBe(410);
+});
+
+test('three QR lines keep their quantities and notes and use the POS price', async ({
+  page,
+  request,
+}) => {
+  const table = await createTable(page);
+  const menu = await request.get(`${E2E_SERVER_APP_BASE_URL}/api/guest/menu`);
+  expect(menu.ok()).toBeTruthy();
+  const product = (await menu.json()).products.find(
+    (entry: { id: string }) => entry.id === 'e2e-product',
+  );
+  expect(product).toBeTruthy();
+  const items = [1, 2, 3].map((quantity) => ({
+    product_id: product.id,
+    quantity,
+    unit_price: 0.01,
+    special_instructions: `QR note ${quantity}`,
+  }));
+  const submitted = await request.post(`${E2E_SERVER_APP_BASE_URL}/api/guest/order`, {
+    data: {
+      table_id: table.id,
+      device_token: table.device,
+      idempotency_key: 'qa-three-qr-lines',
+      items,
+    },
+  });
+  expect(submitted.status()).toBe(201);
+  const orders = await request.get(`${E2E_BASE_URL}/api/orders`, {
+    headers: manager(),
+    params: { table_id: table.id, type: 'dine_in' },
+  });
+  expect(orders.ok()).toBeTruthy();
+  const [order] = (await orders.json()).orders;
+  expect(order.items).toHaveLength(3);
+  expect(order.items).toEqual(
+    expect.arrayContaining(
+      items.map((item) =>
+        expect.objectContaining({
+          quantity: item.quantity,
+          unit_price: product.price,
+          special_instructions: item.special_instructions,
+        }),
+      ),
+    ),
+  );
+});
+
 test('guests at one table ordering at the same moment share one bill, and every order needs a key', async ({
   page,
   request,
@@ -351,7 +455,19 @@ test('guests at one table ordering at the same moment share one bill, and every 
   ]);
   for (const response of sent) expect(response.status()).toBe(201);
   // A retry with a key already used is a replay, not another dish.
-  expect((await post({ idempotency_key: `guest-${run}-a` })).status()).toBe(201);
+  const replays = await Promise.all(
+    Array.from({ length: 4 }, () => post({ idempotency_key: `guest-${run}-a` })),
+  );
+  const firstReceipt = await sent[0].json();
+  expect(firstReceipt).toMatchObject({
+    success: true,
+    idempotency_key: `guest-${run}-a`,
+    order_number: expect.any(String),
+  });
+  for (const replay of replays) {
+    expect(replay.status()).toBe(201);
+    expect(await replay.json()).toEqual(firstReceipt);
+  }
 
   const orders = (
     await (
