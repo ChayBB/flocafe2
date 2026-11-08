@@ -40,10 +40,13 @@ export function resolveKotTicketLanguage(language?: Language): Language {
     return 'en';
   }
 }
-function translatorFor(lang: Language): (key: string) => string {
+function translatorFor(lang: Language) {
   const locale = LANGUAGES[lang]?.locale ?? 'en';
   const messages = getCachedMessages(lang) ?? getCachedMessages('en') ?? {};
-  return createTranslator({ locale, messages }) as unknown as (key: string) => string;
+  return createTranslator({ locale, messages }) as unknown as {
+    (key: string): string;
+    raw(key: string): string;
+  };
 }
 
 /** Render one kernel-annotated value with bidi-isolated LTR span inside RTL tickets. */
@@ -154,6 +157,9 @@ export function generateKotHtml(order: Order, opts: KotWebPrintOptions = {}): st
   const orderNumber = directionalText(String(order.order_number ?? ''), base);
   const createdAt = String(order.created_at ?? '');
   const stationName = String(opts.stationName ?? '');
+  const tableHeading = order.table?.name
+    ? ` ${escapeHtml(labelWithoutPlaceholder(tr.raw('pos.tableLabel')))} <strong style="font-size:1.5em;">${directionalValue(directionalText(order.table.name, base), base)}</strong>`
+    : '';
 
   const orderType = resolveOrderType(order.type, lang, tr);
 
@@ -209,10 +215,9 @@ export function generateKotHtml(order: Order, opts: KotWebPrintOptions = {}): st
 
   return `
     <div class="kot-container" lang="${escapeHtml(locale)}" dir="${base}" style="width:100%;max-width:${paperWidthCss};min-width:0;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word;text-align:start;padding:${padding};font-family:${fontFamily};font-size:${fontSize};">
-      <h2 style="margin:0 0 ${padding} 0;font-size:${paperWidth === 58 ? '14px' : '16px'};text-align:center;">${escapeHtml(tr('print.kot.banner'))}</h2>
+      <h2 style="margin:0 0 ${padding} 0;font-size:${paperWidth === 58 ? '14px' : '16px'};text-align:center;">${escapeHtml(tr('print.kot.banner'))}${tableHeading}</h2>
       ${stationName ? `<p style="margin:2px 0;">${escapeHtml(tr('print.kot.station'))}: ${directionalValue(directionalText(stationName, base), base)}</p>` : ''}
       <p style="margin:2px 0;font-weight:bold;">${formatOrderNumberLabel(tr('pos.orderNumber'), orderNumber, base)}</p>
-      ${order.table?.name ? `<p style="margin:2px 0;">${escapeHtml(labelWithoutPlaceholder(tr('pos.tableLabel')))}: ${directionalValue(directionalText(String(order.table.name), base), base)}</p>` : ''}
       ${orderType ? `<p style="margin:2px 0;">${escapeHtml(tr('print.kot.type'))}: ${escapeHtml(orderType)}</p>` : ''}
       ${order.customer?.name ? `<p style="margin:2px 0;">${escapeHtml(tr('pos.customer'))}: ${directionalValue(directionalText(String(order.customer.name), base), base)}</p>` : ''}
       <p style="margin:2px 0;">${escapeHtml(`${tr('print.time')}: ${formatTime(createdAt, locale, timezone ? { timeZone: timezone } : undefined)}`)}</p>

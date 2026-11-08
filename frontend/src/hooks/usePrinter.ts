@@ -687,7 +687,16 @@ export const usePrinterStore = create<PrinterState>()(
             }
           }
 
-          const orderForPrint = opts?.items ? { ...order, items: opts.items } : order;
+          let orderForPrint = opts?.items ? { ...order, items: opts.items } : order;
+          if (orderForPrint.table_id && !orderForPrint.table?.name) {
+            try {
+              const { data } = await api.get<{ order: Order }>(`/orders/${orderForPrint.id}`);
+              if (data.order.table?.name)
+                orderForPrint = { ...orderForPrint, table: data.order.table };
+            } catch (error) {
+              console.warn('[Printer] Could not load the KOT table name:', error);
+            }
+          }
           const { resolveKotTicketLanguage } = await import('@/lib/printer/kot-web-print');
           const kotLanguage = resolveKotTicketLanguage();
           const failedLanguages = await ensurePrintLanguagesLoaded([kotLanguage]);
@@ -700,6 +709,7 @@ export const usePrinterStore = create<PrinterState>()(
             const warnings: PrintWarning[] = [];
             const encoderWarnings: PrintWarning[] = [];
             const webusbPrinter = get().webusbPrinter;
+            const stationName = webusbPrinter?.name?.trim() || opts?.stationName || 'Kitchen';
             const kotColumns = columnsForConfiguredPrinter(webusbPrinter?.paper_width, paperWidth);
             const webusbCapabilities = webusbPrinter?.capabilities;
             const rasterizeKotDocument = window.electronAPI?.rasterizeKotDocument;
@@ -726,7 +736,7 @@ export const usePrinterStore = create<PrinterState>()(
                 ...opts,
                 paperWidth,
                 columns: kotColumns,
-                stationName: opts?.stationName,
+                stationName,
                 arabicShaping: printerArabicShaping,
                 language: kotLanguage,
                 timezone: tenantTimezone ?? opts?.timezone,
@@ -743,7 +753,7 @@ export const usePrinterStore = create<PrinterState>()(
                 const rasterResult = await rasterizeKotDocument({
                   document: buildFrontendKotDocument(rasterOrder, {
                     items: rasterOrder.items,
-                    stationName: opts?.stationName ?? 'Kitchen',
+                    stationName,
                     columns: kotColumns,
                     language: kotLanguage,
                     ...((tenantTimezone ?? opts?.timezone)
@@ -814,7 +824,11 @@ export const usePrinterStore = create<PrinterState>()(
           const html = generateKotHtml(orderForPrint, {
             paperWidth,
             language: kotLanguage,
-            stationName: opts?.stationName ?? 'Kitchen',
+            stationName:
+              get().defaultPrinter?.name?.trim() ||
+              hw?.name?.trim() ||
+              opts?.stationName ||
+              'Kitchen',
             timezone: tenantTimezone ?? opts?.timezone,
           });
           await printerService.printViaBrowser(html, paperWidth);

@@ -128,6 +128,17 @@ assert.ok(
 async function runAsyncTests() {
   const frontend = loadFrontendModules();
   await frontend.loadLocaleMessages('en');
+  await frontend.loadLocaleMessages('th');
+
+  const thaiTableTicket = frontend.kotWebPrint.generateKotHtml(
+    {
+      ...baseOrder,
+      table: { name: 'T1' },
+      items,
+    } as any,
+    { language: 'th' },
+  );
+  assert.match(thaiTableTicket, /ใบสั่งอาหาร โต๊ะ <strong style="font-size:1.5em;">T1<\/strong>/);
 
   // 1. generateKotHtml tests
   const htmlWithSpecialInstructions = frontend.kotWebPrint.generateKotHtml({

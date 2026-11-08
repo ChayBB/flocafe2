@@ -397,6 +397,24 @@ header. The tunnel works like this:
 - **Trust:** while the tunnel runs, loopback counts as a trusted proxy, so rate limits key on the
   customer.
 
+For `POST /api/guest/order`, the relay first saves the request and its delivery state in
+PostgreSQL. The store ID and guest idempotency key identify one request. Repeating the same
+submission returns its current state, and changing the payload under that key returns 409.
+The guest page shows that the request is waiting until the POS returns a successful receipt
+with the matching key and an order number. After a reload, the guest page looks up the same
+submission through `POST /api/guest/order/status`. This lookup never enqueues an order.
+The POS replays its stored result for the same
+guest order key if a previous reply was lost.
+
+The relay retries transient failures with exponential backoff and jitter, up to seven attempts.
+The final attempt is scheduled at least 315 seconds after the first attempt.
+It holds each claim for 45 seconds so a restarted worker can pick up unfinished work. After
+the last attempt, an unconfirmed request goes to review. Relay administrators can list up to
+100 recent review entries at `GET /api/admin/order-review` with the relay admin bearer token.
+The relay clears the submitted payload when it records a final result. Apply
+[`qr-ordering-server/sql/init.sql`](../../qr-ordering-server/sql/init.sql) before starting
+the updated relay and grant its database account read and write access to `qr_order_outbox`.
+
 The tunnel forwards only the guest routes, `GET /api/server-app/info` and the static guest page.
 The relay keeps the content-hashed `/_next/static/` files it has fetched for each store (up to 64 MB,
 4 MB a file, dropped on unpair) and answers them with an immutable `Cache-Control`, so a guest's page

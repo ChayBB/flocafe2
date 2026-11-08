@@ -5,6 +5,7 @@ import {
   isServerAppEnabled,
   now,
   parseRowJson,
+  recordOrderAudit,
   withTxn,
 } from '../db';
 import * as QRCode from 'qrcode';
@@ -1184,6 +1185,12 @@ router.post(
         db.prepare(
           'UPDATE orders SET table_id = ?, table_owner_user_id = (SELECT owner_user_id FROM tables WHERE id = ?), type = ?, updated_at = ? WHERE id = ?',
         ).run(target_table_id, target_table_id, order.type, nowStr, order.id);
+        recordOrderAudit(db, {
+          orderId: order.id,
+          actorUserId: (req as Request & { user: { userId: string } }).user.userId,
+          action: 'order_table_moved',
+          details: { from_table: sourceTable.number, to_table_id: targetTable.id },
+        });
         db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?").run(
           nowStr,
           sourceTableId,

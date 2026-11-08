@@ -14,6 +14,7 @@ import {
   KDS_VOIDED_ITEM_VISIBILITY_MS,
   projectKdsItem,
   projectKdsOrder,
+  KDS_MOVED_FROM_TABLE_SQL,
   projectKdsStation,
   withTxn,
 } from '../db';
@@ -150,7 +151,8 @@ router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
         JOIN order_items oi ON oi.order_id = o.id AND oi.status NOT IN ('served','cancelled')
         WHERE o.status NOT IN ('pending','preparing','ready','served','cancelled')
       )
-      SELECT o.*, t.number as table_name, t.floor, t.section, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name
+      SELECT o.*, t.number as table_name, t.floor, t.section, t.kitchen_station_id, COALESCE(owner_u.name, creator_u.name) as server_name,
+        ${KDS_MOVED_FROM_TABLE_SQL}
       FROM orders o
       LEFT JOIN tables t ON o.table_id = t.id
       LEFT JOIN users owner_u ON owner_u.id = o.table_owner_user_id

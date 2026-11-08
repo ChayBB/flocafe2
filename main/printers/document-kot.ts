@@ -152,7 +152,9 @@ function labelOf(label: SemanticLabel): string {
 
 /** Interpolate the ICU {name} placeholder of pos.tableLabel inline (#440). */
 function formatTableLabel(label: SemanticLabel, tableName: string): string {
-  return labelOf(label).replace('{name}', tableName);
+  return labelOf(label)
+    .replace(/[:：](?=\s*\{name\})/, '')
+    .replace('{name}', () => tableName);
 }
 
 // Use localized header metadata if supported; fallback to ASCII labels.
@@ -240,7 +242,7 @@ function kotHeaderLines(
   const table = header.table
     ? thermalSafeText(
         formatTableLabel(header.table.label, header.table.name.text),
-        `Table: ${thermalSafeMetadataValue(header.table.name.text, options.language, options.arabicShaping, options.capabilities)}`,
+        `Table ${thermalSafeMetadataValue(header.table.name.text, options.language, options.arabicShaping, options.capabilities)}`,
         options.language,
         options.arabicShaping,
         options.capabilities,
@@ -286,6 +288,21 @@ function kotHeaderLines(
   );
   sourceLines?.push(labelOf(header.banner));
   sourceControlLines?.push(lines.at(-1) ?? '');
+  if (table && header.table) {
+    lines.push(
+      '{CENTER}{DOUBLE_HEIGHT}{BOLD}' +
+        truncateShapedLine(
+          table,
+          cols,
+          options.arabicShaping,
+          options.language,
+          options.capabilities,
+        ) +
+        '{/BOLD}{/DOUBLE_HEIGHT}{/CENTER}',
+    );
+    sourceLines?.push(formatTableLabel(header.table.label, header.table.name.text));
+    sourceControlLines?.push(lines.at(-1) ?? '');
+  }
   lines.push('');
   sourceLines?.push('');
   sourceControlLines?.push('');
@@ -317,19 +334,6 @@ function kotHeaderLines(
   );
   sourceLines?.push(labelOf(header.orderNumberLabel).replace('{number}', header.orderNumber.text));
   sourceControlLines?.push(lines.at(-1) ?? '');
-  if (table) {
-    lines.push(
-      truncateShapedLine(
-        table,
-        cols,
-        options.arabicShaping,
-        options.language,
-        options.capabilities,
-      ),
-    );
-    sourceLines?.push(formatTableLabel(header.table!.label, header.table!.name.text));
-    sourceControlLines?.push(lines.at(-1) ?? '');
-  }
   if (orderType) {
     lines.push(
       truncateShapedLine(

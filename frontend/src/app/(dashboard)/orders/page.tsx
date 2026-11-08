@@ -75,7 +75,7 @@ type OrdersKey = keyof AppConfig['Messages']['orders'];
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
 const ORDERS_PAGE_SIZE = 15;
 // Matches the .animate-order-paid-leave flash, fade and fold in globals.css.
-const ORDER_PAID_LEAVE_MS = 2000;
+const ORDER_PAID_LEAVE_MS = 3000;
 
 // Statuses a tab already excludes; picking one of them alongside that tab could only list nothing.
 const tabExcludedStatuses: Record<FilterType, string[]> = {
@@ -1109,17 +1109,26 @@ export default function OrdersPage() {
   };
 
   const handlePrint = async (billId: number, knownOrder?: Order): Promise<boolean> => {
-    const order = knownOrder ?? orders.find((o) => o.bill?.id === billId);
-    if (!order || (!knownOrder && !order.bill)) {
-      toast.error(tOrders('billNotFound'));
-      return false;
-    }
     let printed = false;
     const isReprint = (printHistory[billId]?.length ?? 0) > 0;
     setPrintingBillId(billId);
     try {
-      const { data } = await api.get(`/bills/${billId}`);
-      const latestBill = preferChildScopedBill(data.bill as Bill, order);
+      const { data } = await api.get<{ bill: Bill }>(`/bills/${billId}`);
+      const fallbackOrder =
+        knownOrder ??
+        (selectedOrder?.id === data.bill.order_id ? selectedOrder : undefined) ??
+        orders.find((o) => o.id === data.bill.order_id);
+      const latestBill = preferChildScopedBill(data.bill, fallbackOrder);
+      if (!latestBill.order) {
+        toast.error(tOrders('billNotFound'));
+        return false;
+      }
+      const order = {
+        ...latestBill.order,
+        bill: latestBill,
+        bills: latestBill.order.bills ?? fallbackOrder?.bills,
+      };
+      if (!(await passesBillPrintGate(order))) return false;
       // Actually attempt the print first — only log/report success if the printer accepted the job,
       // otherwise a disconnected printer would silently report "success" (it was only logging before).
       const printWarnings = await printBill(
@@ -1166,7 +1175,6 @@ export default function OrdersPage() {
   // The payment window's main button prints the bill while it still has to print first.
   const printBillFromPayment = async (billToPrint: Bill): Promise<boolean> => {
     const order = orders.find((o) => o.id === billToPrint.order_id) ?? billToPrint.order;
-    if (!order || !(await passesBillPrintGate(order))) return false;
     return handlePrint(billToPrint.id, order);
   };
   const paymentOrder = paymentBill
@@ -1188,6 +1196,7 @@ export default function OrdersPage() {
   const handlePrintBill = async (billId: number) => {
     const order = orders.find((o) => o.bill?.id === billId);
     if (order && !(await passesBillPrintGate(order))) return;
+    await fetchPrintHistory(billId);
     setConfirmPrintBillId(billId);
   };
 

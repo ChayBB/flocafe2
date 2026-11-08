@@ -39,6 +39,8 @@ import {
   UserCog,
 } from 'lucide-react';
 import type { Order, OrderItem, Bill, Customer } from '@/lib/types';
+import { OrderTableChangeBadges } from './OrderTableChangeBadges';
+import { formatOrderCancellationReason } from './order-cancellation-reason';
 import { receiptChargeLines } from '@/lib/charges';
 import { Ltr } from '@/components/layout/Ltr';
 import { useTranslations, type AppConfig } from 'use-intl';
@@ -469,6 +471,7 @@ export function OrderCard({
                 {order.table.name}
               </span>
             )}
+            <OrderTableChangeBadges order={order} />
             {order.table_owner_name && (
               <span
                 className="inline-flex items-center gap-1 text-muted-foreground"
@@ -505,7 +508,9 @@ export function OrderCard({
             {order.cancellation_reason
               ? tOrders('orderCancelledBanner', {
                   time: formatTime(order.cancelled_at || order.created_at),
-                  reason: order.cancellation_reason,
+                  reason: formatOrderCancellationReason(order.cancellation_reason, (orderNumber) =>
+                    tOrders('orderMergedInto', { orderNumber }),
+                  ),
                 })
               : tOrders('orderCancelledBannerNoReason', {
                   time: formatTime(order.cancelled_at || order.created_at),

@@ -18,7 +18,12 @@ const num = (v: string) => (/^[0-9]+$/.test(v) ? Number(v) : v);
 
 class Http {
   jwt: string | null = null;
+  retryAfterMs = 0;
   constructor(private cfg: Cfg) {}
+  private noteRetry(response: Response): void {
+    const seconds = Number(response.headers.get('retry-after'));
+    if (Number.isFinite(seconds) && seconds > 0) this.retryAfterMs = Math.min(60_000, seconds * 1000);
+  }
   async pos(method: string, path: string, body?: unknown) {
     const h: Record<string, string> = { authorization: `Bearer ${this.cfg.posToken}` };
     if (this.cfg.posDevSlug) h["x-tenant-slug"] = this.cfg.posDevSlug;
@@ -33,7 +38,10 @@ class Http {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: this.cfg.floEmail, password: this.cfg.floPassword }),
     });
-    if (!r.ok) throw new Error(`flocafe login -> ${r.status}`);
+    if (!r.ok) {
+      this.noteRetry(r);
+      throw new Error(`flocafe login -> ${r.status}`);
+    }
     this.jwt = ((await r.json()) as any).access_token;
   }
   async flo(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<{ status: number; json: any }> {
@@ -43,10 +51,23 @@ class Http {
       if (body !== undefined) h["content-type"] = "application/json";
       const r = await fetch(this.cfg.floUrl + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
       if (r.status === 401 && attempt === 0) { this.jwt = null; continue; } // token หมดอายุ → login ใหม่ครั้งเดียว
+      if (r.status === 429) this.noteRetry(r);
       return { status: r.status, json: await r.json().catch(() => null) };
     }
     throw new Error("unreachable");
   }
+}
+
+/**
+ * One client per connector process: the JWT and the Retry-After cooldown must survive across poll
+ * cycles, otherwise every 1.5 s cycle logs in again and trips FloCafe's login limiter.
+ */
+let sharedClient: { key: string; http: Http } | null = null;
+
+function clientFor(cfg: Cfg): Http {
+  const key = [cfg.posUrl, cfg.posToken, cfg.posDevSlug ?? "", cfg.floUrl, cfg.floEmail, cfg.floPassword].join("\u0000");
+  if (!sharedClient || sharedClient.key !== key) sharedClient = { key, http: new Http(cfg) };
+  return sharedClient.http;
 }
 
 const TERMINAL_ITEM = new Set(["cancelled", "voided", "void_adjustment", "refunded"]);
@@ -82,9 +103,10 @@ export function newItemIds(floItems: any[], knownIds: string[], productIds: stri
 
 export async function runOnce(
   cfg: Cfg,
-): Promise<{ sent: number; failed: number; synced: number; closed: number; cancelled: number; statuses: number }> {
-  const http = new Http(cfg);
-  const out = { sent: 0, failed: 0, synced: 0, closed: 0, cancelled: 0, statuses: 0 };
+): Promise<{ sent: number; failed: number; synced: number; closed: number; cancelled: number; statuses: number; retryAfterMs: number }> {
+  const http = clientFor(cfg);
+  http.retryAfterMs = 0;
+  const out = { sent: 0, failed: 0, synced: 0, closed: 0, cancelled: 0, statuses: 0, retryAfterMs: 0 };
 
   // 1) ออเดอร์ใหม่ → FloCafe
   const { jobs } = await http.pos("GET", "/jobs");
@@ -144,6 +166,7 @@ export async function runOnce(
       if (!res.alreadyClosed) out.cancelled++;
     }
   }
+  out.retryAfterMs = http.retryAfterMs;
   return out;
 }
 
@@ -162,7 +185,7 @@ if (import.meta.main) {
       const r = await runOnce(cfg);
       if (r.sent || r.failed || r.closed || r.cancelled || r.statuses) console.log(JSON.stringify({ level: "info", ...r }));
       backoff = 1000;
-      await Bun.sleep(1500);
+      await Bun.sleep(Math.max(1500, r.retryAfterMs));
     } catch (e) {
       console.error(JSON.stringify({ level: "error", msg: String(e), retryMs: backoff }));
       await Bun.sleep(backoff);

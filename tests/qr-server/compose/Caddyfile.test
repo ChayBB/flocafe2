@@ -1,0 +1,40 @@
+# Local TLS front for the harness. Caddy's internal CA issues the certificate; tests that need to
+# trust it mount the CA root from the container.
+{
+	local_certs
+	admin off
+}
+
+https://localhost:8443 {
+	tls internal
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+		-Server
+	}
+
+	handle /internal/* {
+		respond 404
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 128KB
+		}
+		reverse_proxy api1:3001 api2:3002 {
+			lb_policy least_conn
+			header_up X-Real-IP {client_ip}
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

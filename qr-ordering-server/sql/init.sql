@@ -41,3 +41,17 @@ CREATE OR REPLACE VIEW api.store_status AS
 GRANT USAGE ON SCHEMA api TO web_anon;
 GRANT SELECT ON api.store_status TO web_anon;
 REVOKE ALL ON SCHEMA public FROM web_anon;
+
+CREATE TABLE IF NOT EXISTS qr_order_outbox (
+  store_id text NOT NULL REFERENCES qr_stores(store_id),
+  order_key text NOT NULL,
+  request_hash text NOT NULL,
+  payload jsonb,
+  attempts integer NOT NULL DEFAULT 0,
+  available_at timestamptz NOT NULL DEFAULT now(),
+  result jsonb,
+  PRIMARY KEY (store_id, order_key)
+);
+
+CREATE INDEX IF NOT EXISTS qr_order_outbox_due_idx
+  ON qr_order_outbox (available_at) WHERE result IS NULL;

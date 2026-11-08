@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -465,6 +465,13 @@ export function OrderedItemsScreen({
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingMany, setConfirmingMany] = useState(false);
   const [confirmingOne, setConfirmingOne] = useState(false);
+  const [showAcknowledgment, setShowAcknowledgment] = useState(false);
+  const closeAfterAcknowledgment = useEffectEvent(onBack);
+  useEffect(() => {
+    if (!showAcknowledgment) return;
+    const timer = setTimeout(() => closeAfterAcknowledgment(), 500);
+    return () => clearTimeout(timer);
+  }, [showAcknowledgment]);
   const tableActions = [
     onMoveTable && { key: 'move', label: t('moveTable'), icon: ArrowLeftRight, run: onMoveTable },
     onMergeTable && { key: 'merge', label: t('mergeTable'), icon: Merge, run: onMergeTable },
@@ -478,6 +485,12 @@ export function OrderedItemsScreen({
   const live = items.filter((item) => !isCancelledItem(item.status));
   // The bill is printed once every live item is priced and confirmed at the table.
   const notAtTable = live.filter((item) => !item.served_confirmed_at).length;
+  const confirmDishes = async (selected: OrderedItem[]) => {
+    const finishesRequest = serveConfirmRequested && selected.length === notAtTable;
+    const done = await onConfirmServedMany(selected);
+    if (done && finishesRequest) setShowAcknowledgment(true);
+    return done;
+  };
   const awaitingPrice = live.filter((item) => item.weight_pending).length;
   const billReady = live.length > 0 && notAtTable === 0 && awaitingPrice === 0;
   const counts = stageCounts(items);
@@ -628,7 +641,10 @@ export function OrderedItemsScreen({
             imageOf={imageOf}
             onTakeaway={onTakeaway}
             onCancel={onCancel}
-            onConfirmServed={onConfirmServed}
+            onConfirmServed={async (item) => {
+              if (serveConfirmRequested) await confirmDishes([item]);
+              else await onConfirmServed(item);
+            }}
           />
         </div>
       </div>
@@ -661,7 +677,7 @@ export function OrderedItemsScreen({
                 }
                 setConfirmingOne(true);
                 try {
-                  await onConfirmServedMany(toConfirm);
+                  await confirmDishes(toConfirm);
                 } finally {
                   setConfirmingOne(false);
                 }
@@ -697,8 +713,18 @@ export function OrderedItemsScreen({
         <ConfirmServedDialog
           items={toConfirm}
           onClose={() => setConfirmingMany(false)}
-          onConfirm={onConfirmServedMany}
+          onConfirm={confirmDishes}
         />
+      )}
+      {showAcknowledgment && (
+        <div className="absolute inset-0 z-10 grid place-items-center bg-background/75">
+          <p
+            role="status"
+            className="rounded-xl border border-border bg-card px-6 py-4 text-lg font-semibold"
+          >
+            {t('serveConfirmThanks')}
+          </p>
+        </div>
       )}
     </div>
   );

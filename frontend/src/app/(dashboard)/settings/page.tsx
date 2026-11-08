@@ -1758,6 +1758,8 @@ export default function SettingsPage() {
   const [serverAppEnabledSetting, setServerAppEnabledSetting] = useState(true);
   const [guestQrOrderingEnabled, setGuestQrOrderingEnabled] = useState(true);
   const [savingServerAppEnabled, setSavingServerAppEnabled] = useState(false);
+  const [serverAppApiRateLimit, setServerAppApiRateLimit] = useState('600');
+  const [savingServerAppApiRateLimit, setSavingServerAppApiRateLimit] = useState(false);
   const [serverAppBillPrintingEnabledSetting, setServerAppBillPrintingEnabledSetting] =
     useState(false);
   const [savingServerAppBillPrintingEnabled, setSavingServerAppBillPrintingEnabled] =
@@ -2701,13 +2703,15 @@ export default function SettingsPage() {
         return;
       }
       if (tab === 'server-app') {
-        const [{ data }, { data: billPrintData }] = await Promise.all([
+        const [{ data }, { data: billPrintData }, { data: rateLimitData }] = await Promise.all([
           get('/settings/server_app_enabled'),
           get('/settings/server_app_bill_printing_enabled'),
+          get('/settings/server_app_api_rate_limit_max'),
         ]);
         if (active()) {
           setServerAppEnabledSetting(data.setting?.value !== 'false');
           setServerAppBillPrintingEnabledSetting(billPrintData.setting?.value === 'true');
+          setServerAppApiRateLimit(String(rateLimitData.setting?.value ?? '600'));
         }
         return;
       }
@@ -3471,6 +3475,24 @@ export default function SettingsPage() {
       toast.error(t('saveFailed'));
     } finally {
       setSavingServerAppEnabled(false);
+    }
+  };
+
+  const saveServerAppApiRateLimit = async () => {
+    const parsed = Number.parseInt(serverAppApiRateLimit, 10);
+    if (!Number.isInteger(parsed) || parsed < 60 || parsed > 100000) {
+      toast.error(t('serverAppApiRateLimitInvalid'));
+      return;
+    }
+    setSavingServerAppApiRateLimit(true);
+    try {
+      await api.put('/settings/server_app_api_rate_limit_max', { value: String(parsed) });
+      setServerAppApiRateLimit(String(parsed));
+      toast.success(t('serverAppApiRateLimitSaved'));
+    } catch {
+      toast.error(t('saveFailed'));
+    } finally {
+      setSavingServerAppApiRateLimit(false);
     }
   };
 
@@ -5033,6 +5055,41 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+
+              {serverAppEnabledSetting && (
+                <div className="bg-card rounded-xl border border-border p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground">{t('serverAppApiRateLimit')}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t('serverAppApiRateLimitHint')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="60"
+                        max="100000"
+                        step="10"
+                        value={serverAppApiRateLimit}
+                        onChange={(e) => setServerAppApiRateLimit(e.target.value)}
+                        aria-label={t('serverAppApiRateLimit')}
+                        className="w-28 px-3 py-2 border border-gray-300 dark:border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand transition-shadow text-end"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!savingServerAppApiRateLimit) saveServerAppApiRateLimit();
+                        }}
+                        disabled={savingServerAppApiRateLimit}
+                        className="px-4 py-2 rounded-lg bg-brand text-white font-medium disabled:opacity-60"
+                      >
+                        {savingServerAppApiRateLimit ? t('saving') : t('save')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {!serverAppEnabledSetting && (
                 <p className="text-sm text-muted-foreground italic">

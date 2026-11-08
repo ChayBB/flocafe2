@@ -1,0 +1,70 @@
+name: qr-saas
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks: [frontend]
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["bun","run","apps/api/src/index.ts"]
+    expose: ["3000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [frontend,backend]
+    security_opt: ["no-new-privileges:true"]
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["bun","run","apps/worker/src/index.ts"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qrserver
+      POSTGRES_DB: qrserver
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set_DB_PASSWORD}
+    volumes: ["pgdata:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qrserver -d qrserver"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set_REDIS_PASSWORD}
+    command: ["sh","-c","exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD""]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+networks:
+  frontend: {}
+  backend: {internal: true}
+volumes:
+  pgdata: {}
+  redisdata: {}
+  caddy_data: {}
+  caddy_config: {}

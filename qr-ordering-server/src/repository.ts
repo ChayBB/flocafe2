@@ -29,6 +29,35 @@ export interface RelayRepository {
   close?(): Promise<void>;
 }
 
+export interface QueuedOrderRequest {
+  path: string;
+  headers: Record<string, string>;
+  client_ip: string;
+  body: string;
+}
+
+export interface QueuedOrderResult {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+export interface QueuedOrder {
+  storeId: string;
+  key: string;
+  attempts: number;
+  payload: QueuedOrderRequest;
+}
+
+export interface OrderOutbox {
+  findOrder(storeId: string, key: string, hash: string):
+    Promise<{ conflict: boolean; result: QueuedOrderResult | null } | null>;
+  enqueueOrder(storeId: string, key: string, hash: string, payload: QueuedOrderRequest):
+    Promise<{ conflict: boolean; result: QueuedOrderResult | null } | null>;
+  claimOrder(): Promise<QueuedOrder | null>;
+  settleOrder(order: QueuedOrder, result: QueuedOrderResult | null, delayMs: number): Promise<void>;
+  listOrdersForReview(): Promise<{ store_id: string; order_key: string; attempts: number }[]>;
+}
+
 export class MemoryRelayRepository implements RelayRepository {
   private readonly pairings = new Map<string, PairingRecord>();
   private readonly stores = new Map<string, RelayStoreRecord>();

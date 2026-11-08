@@ -320,6 +320,7 @@ export function generateBillHtml(
 
   const languages = resolvePrintLanguages(opts);
   const lang = languages[0] as Language;
+  const pointsUnit = lang === 'th' ? 'คะแนน' : 'pts';
 
   const document = buildFrontendBillDocument(bill, tenant, {
     columns: opts.columns ?? columnsForReceiptPaperSize(paperSize === 'thermal80' ? 80 : 58),
@@ -494,7 +495,7 @@ export function generateBillHtml(
       ${
         totals
           ? `
-      ${totals.pointsRedeemed ? `<tr><td>${escapeHtml(totals.pointsRedeemed.label.primary)}</td><td class="text-end num">-${escapeHtml(totals.pointsRedeemed.points)} pts</td></tr>` : ''}
+      ${totals.pointsRedeemed ? `<tr><td>${escapeHtml(totals.pointsRedeemed.label.primary)}</td><td class="text-end num">-${escapeHtml(totals.pointsRedeemed.points)} ${pointsUnit}</td></tr>` : ''}
       <tr><td>${escapeHtml(totals.subtotal.label.primary)}</td><td class="text-end num">${fmtAmount(totals.subtotal.amount)}</td></tr>
       ${totals.discount ? `<tr><td>${escapeHtml(totals.discount.label.primary)}</td><td class="text-end num">-${fmtAmount(totals.discount.amount)}</td></tr>` : ''}
       ${totals.tax ? `<tr><td>${escapeHtml(L.totalTax)}</td><td class="text-end num">${fmtAmount(totals.tax.amount)}</td></tr>` : ''}
@@ -503,8 +504,8 @@ export function generateBillHtml(
       ${totals.packagingCharge && !itemisedChargeIds.has('packaging_charge') ? `<tr><td>${escapeHtml(L.packagingCharge)}</td><td class="text-end num">${fmtAmount(totals.packagingCharge.amount)}</td></tr>` : ''}
       ${itemisedCharges.map((charge) => `<tr><td>${escapeHtml(charge.name)}</td><td class="text-end num">${fmtAmount(charge.amount)}</td></tr>`).join('')}
       <tr class="total-row"><td><strong>${escapeHtml(L.grandTotal)}</strong></td><td class="text-end num"><strong>${fmtAmount(totals.grandTotal.amount)}</strong></td></tr>
-      ${totals.pointsEarned ? `<tr><td>${escapeHtml(totals.pointsEarned.label.primary)}</td><td class="text-end num">${escapeHtml(totals.pointsEarned.points)} pts</td></tr>` : ''}
-      ${totals.pointsBalance ? `<tr><td>${escapeHtml(totals.pointsBalance.label.primary)}</td><td class="text-end num">${escapeHtml(totals.pointsBalance.points)} pts</td></tr>` : ''}
+      ${totals.pointsEarned ? `<tr><td>${escapeHtml(totals.pointsEarned.label.primary)}</td><td class="text-end num">${escapeHtml(totals.pointsEarned.points)} ${pointsUnit}</td></tr>` : ''}
+      ${totals.pointsBalance ? `<tr><td>${escapeHtml(totals.pointsBalance.label.primary)}</td><td class="text-end num">${escapeHtml(totals.pointsBalance.points)} ${pointsUnit}</td></tr>` : ''}
       `
           : ''
       }

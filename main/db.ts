@@ -9425,6 +9425,14 @@ export function isVoidedItemKdsVisible(voidedAt: string | null | undefined): boo
   return Date.now() - parseDbTimestamp(voidedAt).getTime() < KDS_VOIDED_ITEM_VISIBILITY_MS;
 }
 
+export const KDS_MOVED_FROM_TABLE_SQL = `(
+  SELECT CASE WHEN json_extract(move.details_json, '$.to_table_id') = o.table_id
+    THEN json_extract(move.details_json, '$.from_table') END
+  FROM order_audit_log move
+  WHERE move.order_id = o.id AND move.action = 'order_table_moved'
+  ORDER BY move.id DESC LIMIT 1
+) AS moved_from_table`;
+
 /** Remove customer/payment/order-financial fields from category-scoped KDS payloads. */
 export function projectKdsOrder(order: any, restricted: boolean): any {
   if (!restricted) return order;
@@ -9439,6 +9447,7 @@ export function projectKdsOrder(order: any, restricted: boolean): any {
     'updated_at',
     'table_name',
     'table_number',
+    'moved_from_table',
     'floor',
     'section',
     'server_name',

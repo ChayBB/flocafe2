@@ -14,7 +14,7 @@ if (adminToken.length < 24) throw new Error("QR_ADMIN_TOKEN must be at least 24 
 if (!/^https:\/\//i.test(publicBaseUrl)) throw new Error("PUBLIC_BASE_URL must use HTTPS");
 
 const repository = new PostgresRelayRepository(databaseUrl);
-const app = createRelayApp({ repository, adminToken, publicBaseUrl, clientIpHeader });
+const app = createRelayApp({ repository, outbox: repository, adminToken, publicBaseUrl, clientIpHeader });
 app.listen({ port, hostname: host });
 console.log(`QR Ordering relay listening on ${host}:${port}`);
 

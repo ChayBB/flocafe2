@@ -2,13 +2,42 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import WebSocket from "ws";
 import { describe, expect, test } from "bun:test";
 import { createRelayApp } from "./app";
-import { MemoryRelayRepository } from "./repository";
+import { MemoryRelayRepository, type QueuedOrder, type QueuedOrderResult } from "./repository";
 
 describe("POS tunnel forwarding", () => {
   test("authenticates the paired POS and forwards only guest traffic", async () => {
     const repository = new MemoryRelayRepository();
+    let queued: QueuedOrder | null = null;
+    let queuedHash: string | undefined;
+    let result: QueuedOrderResult | null = null;
+    let readyToDeliver = false;
     const app = createRelayApp({
       repository,
+      outbox: {
+        async findOrder(storeId, key, hash) {
+          return queued?.storeId === storeId && queued.key === key
+            ? { conflict: hash !== queuedHash, result }
+            : null;
+        },
+        async enqueueOrder(storeId, key, hash, payload) {
+          if (!queued) {
+            queued = { storeId, key, payload, attempts: 0 };
+            queuedHash = hash;
+            readyToDeliver = true;
+          }
+          return { conflict: hash !== queuedHash, result };
+        },
+        async claimOrder() {
+          if (!queued || !readyToDeliver) return null;
+          readyToDeliver = false;
+          return { ...queued, attempts: ++queued.attempts };
+        },
+        async settleOrder(_order, settled) {
+          result = settled;
+          readyToDeliver = !settled;
+        },
+        async listOrdersForReview() { return []; },
+      },
       adminToken: "test-admin-token",
       publicBaseUrl: "https://qr.example.test",
     });
@@ -116,9 +145,45 @@ describe("POS tunnel forwarding", () => {
 
       const blocked = await app.handle(new Request("https://qr.example.test/api/orders"));
       expect(blocked.status).toBe(404);
+
+      const submitOrder = (quantity = 1, lookup = false) => app.handle(new Request(
+        "https://qr.example.test/api/guest/order" + (lookup ? "/status" : ""), {
+        method: "POST",
+        headers: { ...guest.headers, "content-type": "application/json" },
+        body: JSON.stringify({
+          table_id: "table-one", device_token: "device-token", idempotency_key: "guest-key-1",
+          items: [{ product_id: "coffee", quantity }],
+        }),
+      }));
+      expect((await submitOrder(1, true)).status).toBe(404);
+      expect(queued).toBeNull();
+      expect((await submitOrder()).status).toBe(202);
+      const firstAttempt = await waitForType("request");
+      expect(firstAttempt).toMatchObject({ method: "POST", path: "/api/guest/order" });
+      expect((await submitOrder(2)).status).toBe(409);
+      expect((await submitOrder(2, true)).status).toBe(404);
+      // The first request reached the POS, but its response never reaches the relay.
+      expect((await submitOrder(1, true)).status).toBe(202);
+      const retry = await waitForType("request");
+      expect(retry.id).not.toBe(firstAttempt.id);
+      expect(retry.body).toBe(firstAttempt.body);
+      socket.send(JSON.stringify({
+        type: "response", id: retry.id, status: 201,
+        headers: { "content-type": "application/json" },
+        body: Buffer.from(JSON.stringify({
+          success: true, idempotency_key: "guest-key-1", order_number: "ORD-1",
+        })).toString("base64"),
+      }));
+      let delivered = await submitOrder(1, true);
+      for (let poll = 0; delivered.status === 202 && poll < 20; poll++) {
+        await Bun.sleep(50);
+        delivered = await submitOrder(1, true);
+      }
+      expect(delivered.status).toBe(201);
+      expect(await delivered.json()).toEqual({ success: true, order_number: "ORD-1" });
     } finally {
       socket.close();
       await app.stop(true);
     }
-  });
+  }, 25_000);
 });

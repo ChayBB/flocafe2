@@ -10,7 +10,10 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
   const headers = { Authorization: `Bearer ${managerToken}` };
   const run = Math.random().toString(36).slice(2, 7);
   const makeTable = async (label: string) => {
-    const res = await page.request.post(`${E2E_BASE_URL}/api/tables`, { headers, data: { number: label, capacity: 2 } });
+    const res = await page.request.post(`${E2E_BASE_URL}/api/tables`, {
+      headers,
+      data: { number: label, capacity: 2 },
+    });
     expect(res.status()).toBe(201);
     return (await res.json()).table.id as string;
   };
@@ -42,7 +45,9 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
   await makeOrder(mergeIntoId, `stay ${run}`);
 
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');
@@ -70,8 +75,17 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
     data: { target_table_id: moveToId, order_id: moving.id },
   });
   expect(moved.ok(), await moved.text()).toBeTruthy();
-  const moveNotice = bar.locator('[data-testid="kds-message"][data-kind="move"]', { hasText: moveFrom });
-  await expect(moveNotice).toContainText(`Moved Table ${moveFrom} to Table ${moveTo}`, { timeout: 15000 });
+  const moveNotice = bar.locator('[data-testid="kds-message"][data-kind="move"]', {
+    hasText: moveFrom,
+  });
+  await expect(moveNotice).toContainText(`Moved Table ${moveFrom} to Table ${moveTo}`, {
+    timeout: 15000,
+  });
+  const movedBadge = page.getByText(`Moved from table ${moveFrom}`, { exact: true });
+  await expect(movedBadge).toHaveCount(1);
+  await expect(
+    movedBadge.locator('..').getByText(`Table ${moveTo}`, { exact: true }),
+  ).toBeVisible();
 
   // Merging one table's order into another table's order.
   const merged = await page.request.post(`${E2E_BASE_URL}/api/orders/${merging.id}/merge-table`, {
@@ -79,8 +93,12 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
     data: { target_table_id: mergeIntoId },
   });
   expect(merged.ok(), await merged.text()).toBeTruthy();
-  const mergeNotice = bar.locator('[data-testid="kds-message"][data-kind="merge"]', { hasText: mergeFrom });
-  await expect(mergeNotice).toContainText(`Merged Table ${mergeFrom} into Table ${mergeInto}`, { timeout: 15000 });
+  const mergeNotice = bar.locator('[data-testid="kds-message"][data-kind="merge"]', {
+    hasText: mergeFrom,
+  });
+  await expect(mergeNotice).toContainText(`Merged Table ${mergeFrom} into Table ${mergeInto}`, {
+    timeout: 15000,
+  });
 
   // Switching an item to take-away.
   const serverToken = getE2eToken('e2e-server', 'server@flo.local', 'server');
@@ -89,7 +107,9 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
     { headers: { Authorization: `Bearer ${serverToken}` } },
   );
   expect(takeaway.status()).toBe(200);
-  const takeawayNotice = bar.locator('[data-testid="kds-message"][data-kind="takeaway"]', { hasText: moveTo });
+  const takeawayNotice = bar.locator('[data-testid="kds-message"][data-kind="takeaway"]', {
+    hasText: moveTo,
+  });
   await expect(takeawayNotice).toContainText('changed to take-away', { timeout: 15000 });
 
   // An emergency call reaching the Server App's alert endpoint.
@@ -98,8 +118,12 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
     data: { message: `Spill ${run}`, table: moveTo },
   });
   expect(alert.ok(), await alert.text()).toBeTruthy();
-  const emergencyNotice = bar.locator('[data-testid="kds-message"][data-kind="emergency"]', { hasText: `Spill ${run}` });
-  await expect(emergencyNotice).toContainText(`Emergency · Table ${moveTo} · Spill ${run}`, { timeout: 15000 });
+  const emergencyNotice = bar.locator('[data-testid="kds-message"][data-kind="emergency"]', {
+    hasText: `Spill ${run}`,
+  });
+  await expect(emergencyNotice).toContainText(`Emergency · Table ${moveTo} · Spill ${run}`, {
+    timeout: 15000,
+  });
   await expect(notices).toHaveCount(startCount + 4);
 
   // Acknowledged notices stay gone after a reload; the rest stay, and the emergency does not come back.
@@ -120,11 +144,32 @@ test('the KDS message bar lists table moves, merges, take-away changes and emerg
     { headers: { Authorization: `Bearer ${serverToken}` }, data: {} },
   );
   expect(cancel.status(), await cancel.text()).toBe(200);
-  const cancelledNotice = bar.locator('[data-testid="kds-message"][data-kind="cancelled"]', { hasText: moveTo });
+  const cancelledNotice = bar.locator('[data-testid="kds-message"][data-kind="cancelled"]', {
+    hasText: moveTo,
+  });
   await expect(cancelledNotice).toContainText(`Table ${moveTo}:`, { timeout: 15000 });
   await expect(cancelledNotice).toContainText('cancelled');
   await expect(takeawayNotice).toHaveCount(0);
   await expect(notices).toHaveCount(startCount + 2);
+
+  await page.goto(`${E2E_BASE_URL}/auth/login`);
+  await page.locator('#email').fill('manager@flo.local');
+  await page.locator('#password').fill('E2ePass123!');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL('**/pos/**');
+  await page.goto(`${E2E_BASE_URL}/orders`);
+  const orderList = page.getByTestId('orders-master-pane');
+  const posMoveBadge = orderList.getByText(`Moved from table ${moveFrom}`, { exact: true });
+  await expect(posMoveBadge).toBeVisible();
+  await expect(
+    orderList.getByText(`Merged from table ${mergeFrom}`, { exact: true }),
+  ).toBeVisible();
+  await posMoveBadge.click();
+  await expect(
+    page
+      .getByTestId('orders-detail-panel')
+      .getByText(`Moved from table ${moveFrom}`, { exact: true }),
+  ).toBeVisible();
 });
 
 test('the message box switch in display settings hides the message bar, leaving only the bell when it is shown', async ({
@@ -132,7 +177,9 @@ test('the message box switch in display settings hides the message bar, leaving 
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${E2E_KDS_BASE_URL}/kds-standalone`);
-  await expect(page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace'))).toBeVisible();
+  await expect(
+    page.getByTestId('kds-login-form').or(page.getByTestId('kds-workspace')),
+  ).toBeVisible();
   if (await page.getByTestId('kds-login-form').isVisible()) {
     await page.getByTestId('kds-login-email').fill('manager@flo.local');
     await page.getByTestId('kds-login-password').fill('E2ePass123!');

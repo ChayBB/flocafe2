@@ -3,13 +3,16 @@ import { isIP } from "node:net";
 import { Elysia } from "elysia";
 import { isRelayPathAllowed } from "./relay-policy";
 import { verifyEd25519 } from "./crypto";
-import type { RelayRepository } from "./repository";
+import type { OrderOutbox, QueuedOrderRequest, QueuedOrderResult, RelayRepository } from "./repository";
 
 const PAIRING_TTL_MS = 10 * 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 const MAX_IN_FLIGHT_PER_STORE = 20;
+// The seventh attempt runs after at least 315 seconds of backoff.
+const MAX_ORDER_ATTEMPTS = 7;
+const ORDER_WORKER_INTERVAL_MS = 1000;
 /** A signed pairing or unpair call is accepted this long after it was signed, and only once. */
 const SIGNED_CALL_WINDOW_MS = 5 * 60_000;
 /** Content-hashed page chunks are kept here, so a guest's page load mostly skips the POS tunnel. */
@@ -21,6 +24,7 @@ const RESPONSE_HEADERS = ["content-type", "cache-control", "etag", "last-modifie
 
 type RelayOptions = {
   repository: RelayRepository;
+  outbox?: OrderOutbox;
   adminToken: string;
   publicBaseUrl: string;
   logger?: boolean;
@@ -161,6 +165,77 @@ export function createRelayApp(options: RelayOptions) {
     return isIP(value) ? value : "";
   };
 
+  const sendToPos = (storeId: string, method: string, payload: QueuedOrderRequest): Promise<Response> => {
+    const ws = sockets.get(storeId);
+    if (!ws) return Promise.resolve(json(503, { error: "POS is offline", code: "pos_offline" }));
+    const current = pendingByStore.get(storeId) || 0;
+    if (current >= MAX_IN_FLIGHT_PER_STORE) {
+      return Promise.resolve(json(503, { error: "Store is busy", code: "pos_busy" }));
+    }
+    const id = randomUUID();
+    pendingByStore.set(storeId, current + 1);
+    return new Promise<Response>((resolve) => {
+      const finish = (response: Response) => {
+        clearTimeout(timer);
+        pending.delete(id);
+        pendingByStore.set(storeId, Math.max(0, (pendingByStore.get(storeId) || 1) - 1));
+        resolve(response);
+      };
+      const timer = setTimeout(() => {
+        finish(json(504, { error: "POS did not answer in time", code: "pos_timeout" }));
+      }, REQUEST_TIMEOUT_MS);
+      pending.set(id, { storeId, timer, finish });
+      try {
+        ws.send(JSON.stringify({ type: "request", id, method, ...payload }));
+      } catch {
+        finish(json(503, { error: "POS connection failed", code: "pos_disconnected" }));
+      }
+    });
+  };
+
+  const outbox = options.outbox;
+  const reviewResult = { status: 409, body: { code: "order_needs_review" } };
+  let orderWorkerBusy = false;
+  const deliverOrder = async () => {
+    if (!outbox || orderWorkerBusy) return;
+    orderWorkerBusy = true;
+    try {
+      const order = await outbox.claimOrder();
+      if (!order) return;
+      let result: QueuedOrderResult | null = null;
+      if (order.attempts <= MAX_ORDER_ATTEMPTS) {
+        const response = await sendToPos(order.storeId, "POST", order.payload);
+        const body = record(await response.json().catch(() => null));
+        if (
+          response.status === 201 && body.success === true &&
+          body.idempotency_key === order.key &&
+          typeof body.order_number === "string" && body.order_number.trim()
+        ) {
+          result = { status: 201, body: { success: true, order_number: body.order_number } };
+        } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          // A later validation failure may follow a committed attempt whose reply was lost.
+          result = order.attempts === 1 || body.code === "order_rejected"
+            ? { status: response.status, body }
+            : reviewResult;
+        }
+      }
+      if (!result && order.attempts >= MAX_ORDER_ATTEMPTS) result = reviewResult;
+      const delay = 5_000 * 2 ** Math.min(order.attempts - 1, MAX_ORDER_ATTEMPTS - 1);
+      await outbox.settleOrder(order, result, delay + randomInt(0, 1_000));
+    } catch {
+      console.error("QR order outbox worker failed");
+    } finally {
+      orderWorkerBusy = false;
+    }
+  };
+  let orderWorker: ReturnType<typeof setInterval> | undefined;
+  if (outbox) {
+    app.onStart(() => {
+      orderWorker = setInterval(() => void deliverOrder(), ORDER_WORKER_INTERVAL_MS);
+    });
+    app.onStop(() => clearInterval(orderWorker));
+  }
+
   const forwardGuestRequest = async ({
     request,
     set,
@@ -171,7 +246,8 @@ export function createRelayApp(options: RelayOptions) {
     server?: RequestIpServer;
   }) => {
     const url = new URL(request.url);
-    if (!isRelayPathAllowed(request.method, url.pathname)) {
+    const orderStatus = request.method === "POST" && url.pathname === "/api/guest/order/status";
+    if ((!orderStatus || !outbox) && !isRelayPathAllowed(request.method, url.pathname)) {
       set.status = 404;
       return { error: "Not found" };
     }
@@ -194,16 +270,6 @@ export function createRelayApp(options: RelayOptions) {
     if (cached) {
       return new Response(cached.body, { status: cached.status, headers: cached.headers });
     }
-    const ws = sockets.get(store.storeId);
-    if (!ws) {
-      set.status = 503;
-      return { error: "POS is offline", code: "pos_offline" };
-    }
-    const current = pendingByStore.get(store.storeId) || 0;
-    if (current >= MAX_IN_FLIGHT_PER_STORE) {
-      set.status = 503;
-      return { error: "Store is busy", code: "pos_busy" };
-    }
     const declaredLength = Number(request.headers.get("content-length") || 0);
     if (declaredLength > MAX_REQUEST_BYTES) {
       set.status = 413;
@@ -214,39 +280,45 @@ export function createRelayApp(options: RelayOptions) {
       set.status = 413;
       return { error: "Request too large" };
     }
-    const id = randomUUID();
     const allowedHeaders: Record<string, string> = {};
     for (const name of FORWARDED_HEADERS) {
       const value = request.headers.get(name);
       if (value) allowedHeaders[name] = value;
     }
-    const message = {
-      type: "request",
-      id,
-      method: request.method.toUpperCase(),
+    const payload = {
       path: `${url.pathname}${url.search}`,
       headers: allowedHeaders,
       client_ip: clientIp,
       body: Buffer.from(body).toString("base64"),
     };
 
-    pendingByStore.set(store.storeId, current + 1);
-    return new Promise<Response>((resolve) => {
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        pendingByStore.set(store.storeId, Math.max(0, (pendingByStore.get(store.storeId) || 1) - 1));
-        resolve(json(504, { error: "POS did not answer in time", code: "pos_timeout" }));
-      }, REQUEST_TIMEOUT_MS);
-      pending.set(id, { storeId: store.storeId, timer, finish: resolve });
-      try {
-        ws.send(JSON.stringify(message));
-      } catch {
-        clearTimeout(timer);
-        pending.delete(id);
-        pendingByStore.set(store.storeId, Math.max(0, (pendingByStore.get(store.storeId) || 1) - 1));
-        resolve(json(503, { error: "POS connection failed", code: "pos_disconnected" }));
+    const method = request.method.toUpperCase();
+    if (outbox && method === "POST" && (orderStatus || url.pathname === "/api/guest/order")) {
+      const raw = Buffer.from(body).toString("utf8");
+      let input: Record<string, unknown>;
+      try { input = record(JSON.parse(raw)); } catch { return json(400, { code: "invalid_order" }); }
+      const key = input.idempotency_key;
+      if (typeof key !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(key) ||
+          typeof input.device_token !== "string" || !input.device_token ||
+          typeof input.table_id !== "string" || !input.table_id ||
+          !Array.isArray(input.items) || input.items.length === 0) {
+        return json(400, { code: "invalid_order" });
       }
-    }).then(async (response) => {
+      const hash = sha256(raw);
+      if (orderStatus) {
+        const existing = await outbox.findOrder(store.storeId, key, hash);
+        if (!existing || existing.conflict) return json(404, { code: "order_not_found" });
+        return existing.result
+          ? json(existing.result.status, existing.result.body)
+          : json(202, { code: "order_queued" });
+      }
+      const queued = await outbox.enqueueOrder(store.storeId, key, hash, payload);
+      if (!queued) return json(503, { code: "order_queue_full" });
+      if (queued.conflict) return json(409, { code: "order_key_conflict" });
+      if (queued.result) return json(queued.result.status, queued.result.body);
+      return json(202, { code: "order_queued" });
+    }
+    return sendToPos(store.storeId, method, payload).then(async (response) => {
       if (!response.ok && response.status >= 500) return response;
       const payload = await response.arrayBuffer();
       if (payload.byteLength > MAX_RESPONSE_BYTES) return json(502, { error: "POS response too large" });
@@ -262,6 +334,11 @@ export function createRelayApp(options: RelayOptions) {
   };
 
   app.get("/healthz", () => ({ status: "ok", service: "qr-ordering-relay" }));
+  app.get("/api/admin/order-review", async ({ request }) => {
+    if (!adminAuthorized(request, options.adminToken)) return json(401, { error: "Unauthorized" });
+    if (!outbox) return json(503, { error: "Order outbox unavailable" });
+    return json(200, { orders: await outbox.listOrdersForReview() });
+  });
   app.get("/admin/pair", () => new Response(pairingAdminPage(options.publicBaseUrl), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }));
 
   app.post("/api/pos/pair/start", async ({ body, set }) => {
@@ -381,9 +458,6 @@ export function createRelayApp(options: RelayOptions) {
       if (message.type !== "response" || typeof message.id !== "string") return;
       const item = pending.get(message.id);
       if (!item || item.storeId !== state.storeId) return;
-      clearTimeout(item.timer);
-      pending.delete(message.id);
-      pendingByStore.set(state.storeId, Math.max(0, (pendingByStore.get(state.storeId) || 1) - 1));
       const status = typeof message.status === "number" && message.status >= 100 && message.status <= 599 ? message.status : 502;
       const headers = new Headers();
       const suppliedHeaders = record(message.headers);
@@ -416,6 +490,7 @@ export function createRelayApp(options: RelayOptions) {
   app.all("/api/guest/table", forwardGuestRequest);
   app.all("/api/guest/menu", forwardGuestRequest);
   app.all("/api/guest/order", forwardGuestRequest);
+  app.post("/api/guest/order/status", forwardGuestRequest);
   app.all("/api/server-app/info", forwardGuestRequest);
   app.all("/server-standalone/*", forwardGuestRequest);
   app.all("/_next/static/*", forwardGuestRequest);

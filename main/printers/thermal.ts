@@ -1165,6 +1165,7 @@ export async function printKOT(
       return { ok: false, detail: 'No printer configured' };
     }
     console.log('[Printer] Using printer:', printer.name, printer.connection_type);
+    const ticketStationName = String(printer.name ?? '').trim() || stationName;
 
     const {
       profile,
@@ -1189,7 +1190,7 @@ export async function printKOT(
     const nativeCapabilities = nativeFallbackCapabilities(capabilities);
     let data: Buffer;
     if (rasterCapabilityEnabled(capabilities)) {
-      const documentResult = renderKotViaDocument(order, items, stationName, {
+      const documentResult = renderKotViaDocument(order, items, ticketStationName, {
         columns: cols,
         language: normalizePrintLanguage(language ?? biz?.language),
         locale,
@@ -1199,7 +1200,7 @@ export async function printKOT(
         cutMode: profile.cutMode,
         capabilities,
       });
-      const nativeResult = renderKotViaDocument(order, items, stationName, {
+      const nativeResult = renderKotViaDocument(order, items, ticketStationName, {
         columns: cols,
         language: normalizePrintLanguage(language ?? biz?.language),
         locale,
@@ -1231,7 +1232,7 @@ export async function printKOT(
       data = formatKOT(
         order,
         items,
-        stationName,
+        ticketStationName,
         cols,
         useUnicode,
         profile.cutMode,
